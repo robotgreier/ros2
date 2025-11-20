@@ -1,10 +1,10 @@
 # ROS 2
 
 >
->**Terminal commands**
+>## Terminal commands
 >
->source ....
+>**Source code:** source ....
 >
->launc....
+>**Launch code:** launc ....
 >
 

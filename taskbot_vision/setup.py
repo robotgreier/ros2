@@ -39,6 +39,9 @@ setup(
 
             # mock_camera_node simulates a camera for testing purposes
             'mock_camera_node = taskbot_vision.mock_camera_node:main',
+
+            # occupancy_grid_node generates and publises an occupancy grid from the detected features and the aruco markers
+            'occupancy_grid_node = taskbot_vision.occupancy_grid_node:main',
         ],
     },
 )

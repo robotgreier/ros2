@@ -13,7 +13,7 @@ C922 Camera → Vision Node → Grid Features → FPGA SNN → Motor Commands
 ### Components
 
 1. **vision_node.py** - Main ROS2 node
-   - Camera capture (640x360 @ 30fps)
+   - Camera capture (640x480 @ 30fps)
    - ORB feature detection
    - Grid-based feature encoding
    - ArUco marker detection
@@ -61,8 +61,8 @@ pip3 install --break-system-packages \
 
 ```bash
 # Create workspace
-mkdir -p ~/taskbot_ws/src
-cd ~/taskbot_ws/src
+mkdir -p ~/robot_ws/src
+cd ~/robot_ws/src
 
 # Create package
 ros2 pkg create --build-type ament_python taskbot_vision \
@@ -92,7 +92,7 @@ source install/setup.bash
 v4l2-ctl --list-devices
 
 # Test camera
-v4l2-ctl -d /dev/video0 --set-fmt-video=width=640,height=360,pixelformat=MJPG
+v4l2-ctl -d /dev/video0 --set-fmt-video=width=640,height=480,pixelformat=MJPG
 ffplay /dev/video0
 
 # Grant permissions (if needed)
@@ -342,7 +342,7 @@ calibrator = CameraCalibrator(
 # Capture calibration images
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 print("Capture 15-20 images of checkerboard from different angles")
 print("Press SPACE to capture, 'q' to finish")
@@ -365,7 +365,7 @@ cv2.destroyAllWindows()
 
 # Perform calibration
 if len(calibrator.objpoints) >= 10:
-    camera_matrix, dist_coeffs, error = calibrator.calibrate((640, 360))
+    camera_matrix, dist_coeffs, error = calibrator.calibrate((640, 480))
     print(f"Calibration complete! Error: {error:.4f}")
     print(f"Camera matrix:\n{camera_matrix}")
     print(f"Distortion coefficients:\n{dist_coeffs}")

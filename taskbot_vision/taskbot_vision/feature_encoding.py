@@ -13,7 +13,8 @@ class GridFeatureEncoder:
     Supports multiple encoding schemes optimized for LIF SNNs
     """
     
-    def __init__(self, grid_rows=8, grid_cols=8, frame_width=640, frame_height=360):
+    #
+    def __init__(self, grid_rows=8, grid_cols=8, frame_width=640, frame_height=480):
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
         self.frame_width = frame_width
@@ -171,6 +172,7 @@ class GridFeatureEncoder:
             'raw_grid': feature_grid.flatten()
         }
     
+    # Main function to create SNN input vector, change encoding type by changing the value of encoding_type
     def create_snn_input_vector(self, feature_grid, encoding_type='rate', **kwargs):
         """
         Create input vector for FPGA SNN based on encoding type

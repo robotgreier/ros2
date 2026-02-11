@@ -19,7 +19,7 @@ class MockCameraNode(Node):
         
         # Parameters
         self.declare_parameter('frame_width', 640)
-        self.declare_parameter('frame_height', 360)
+        self.declare_parameter('frame_height', 480)
         self.declare_parameter('fps', 30)
         self.declare_parameter('add_features', True)
         self.declare_parameter('add_aruco', True)

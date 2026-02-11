@@ -4,21 +4,21 @@
   <name>taskbot_vision</name>
   <version>0.0.1</version>
   <description>Vision system for energy-aware autonomous taskbot with neuromorphic FPGA navigation</description>
-  <maintainer email="your.email@example.com">Your Team</maintainer>
+  <maintainer email="henrik.torkildsen@gmail.com">Henrik Torkildsen</maintainer>
   <license>Apache License 2.0</license>
 
-  <depend>rclpy</depend>
-  <depend>std_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>geometry_msgs</depend>
-  <depend>cv_bridge</depend>
+  <depend>rclpy</depend>          <!-- ROS 2 Python client library --> 
+  <depend>std_msgs</depend>       <!-- Standard ROS 2 message types -->
+  <depend>sensor_msgs</depend>    <!-- ROS 2 message types for sensors (e.g., images) -->
+  <depend>geometry_msgs</depend>  <!-- ROS 2 message types for geometry (e.g., poses, twists) -->
+  <depend>cv_bridge</depend>      <!-- ROS 2 package for converting between ROS images and OpenCV images -->
   
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
+  <test_depend>ament_copyright</test_depend>  <!-- Copyright and license checking -->
+  <test_depend>ament_flake8</test_depend>     <!-- Style guide control and linting -->
+  <test_depend>ament_pep257</test_depend>     <!-- Docstring style guide control and linting -->
+  <test_depend>python3-pytest</test_depend>   <!-- Testing framework for Python -->
 
   <export>
-    <build_type>ament_python</build_type>
+    <build_type>ament_python</build_type>   <!-- Specifies that this package is built using ament_python -->
   </export>
 </package>

@@ -25,6 +25,8 @@ class KeypointGrid(Node):
         self.declare_parameter('fast_threshold', 20) # FAST only
         self.declare_parameter('publish_debug_image', True)
         self.declare_parameter('debug_topic', '/debug/keypoint_grid')
+        self.declare_parameter('debug_width', 320)
+        self.declare_parameter('debug_height', 240)
 
         self.bridge = CvBridge()
 
@@ -55,7 +57,18 @@ class KeypointGrid(Node):
         self.sub = self.create_subscription(Image, self.in_topic, self.cb, 10)
 
         self.publish_debug = bool(self.get_parameter('publish_debug_image').value)
-        self.debug_pub = self.create_publisher(Image, self.get_parameter('debug_topic').value, 10) if self.publish_debug else None
+        self.debug_width = int(self.get_parameter('debug_width').value)
+        self.debug_height = int(self.get_parameter('debug_height').value)
+
+        if self.publish_debug:
+            self.debug_pub = self.create_publisher(
+                Image,
+                self.get_parameter('debug_topic').value,
+                10
+            )
+        else:
+            self.debug_pub = None
+
 
         self.get_logger().info(
             f"KeypointGrid: {self.detector_name} | in={self.in_topic} out={self.out_topic} grid={self.rows}x{self.cols}"
@@ -111,6 +124,17 @@ class KeypointGrid(Node):
             if self.debug_resize_width > 0 and vis.shape[1] != self.debug_resize_width:
                 scale = self.debug_resize_width / vis.shape[1]
                 vis = cv2.resize(vis, (self.debug_resize_width, int(vis.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+
+            # Ensure 3-channel uint8 for debug
+            if vis.dtype != np.uint8:
+                vis = vis.astype(np.uint8)
+            if len(vis.shape) != 3 or vis.shape[2] != 3:
+                vis = cv2.cvtColor(vis, cv2.COLOR_GRAY2BGR)
+
+            # Force constant debug size (prevents viewer resizing/blinking)
+            vis = cv2.resize(vis, (self.debug_width, self.debug_height), interpolation=cv2.INTER_AREA)
+            vis = np.ascontiguousarray(vis)  # stable memory layout -> stable 'step'
+
 
             dbg = self.bridge.cv2_to_imgmsg(vis, encoding='bgr8')
             dbg.header = msg.header

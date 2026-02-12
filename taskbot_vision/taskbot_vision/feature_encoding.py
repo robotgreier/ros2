@@ -13,7 +13,8 @@ class GridFeatureEncoder:
     Supports multiple encoding schemes optimized for LIF SNNs
     """
     
-    def __init__(self, grid_rows=8, grid_cols=8, frame_width=640, frame_height=360):
+    #
+    def __init__(self, grid_rows=8, grid_cols=8, frame_width=640, frame_height=480):
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
         self.frame_width = frame_width
@@ -55,6 +56,10 @@ class GridFeatureEncoder:
                 self.direction_maps['top'][row, col] = 1.0 - (row / (self.grid_rows - 1))
                 self.direction_maps['bottom'][row, col] = row / (self.grid_rows - 1)
     
+
+    # ---------------------------------------------------------------------------------
+    # Encoding strategy: rate based: cells are mapped to single neurons with thresholded firing rates based on feature count in that cell
+    # ---------------------------------------------------------------------------------
     def encode_rate_based(self, feature_grid, normalize=True, max_features=50):
         """
         Rate-based encoding: feature count maps to spike rate
@@ -73,7 +78,10 @@ class GridFeatureEncoder:
             grid = np.clip(grid / max_features, 0.0, 1.0)
         
         return grid.flatten()
-    
+
+    # ---------------------------------------------------------------------------------
+    # Encoding strategy: population: cells are mapped to multiple neurons with different thresholds
+    # ---------------------------------------------------------------------------------   
     def encode_population(self, feature_grid, num_neurons_per_cell=4):
         """
         Population encoding: each cell maps to multiple neurons
@@ -102,7 +110,10 @@ class GridFeatureEncoder:
                         encoded[base_idx + i] = 1.0 if count >= thresh else count / thresh
         
         return encoded
-    
+
+    # ---------------------------------------------------------------------------------
+    # Encoding strategy: directional: cells are mapped to single neurons with weights based on their position in the grid (left, right, top, bottom)
+    # ---------------------------------------------------------------------------------    
     def encode_directional(self, feature_grid, normalize=True):
         """
         Directional encoding: provides separate channels for each direction
@@ -128,7 +139,10 @@ class GridFeatureEncoder:
         directional_features['center'] = np.sum(grid * self.center_bias)
         
         return directional_features
-    
+
+    # ---------------------------------------------------------------------------------
+    # Encoding strategy: navigation: combination of rate, directional and directional encoding with additional bias toward center and target location
+    # ---------------------------------------------------------------------------------    
     def encode_for_navigation(self, feature_grid, target_position=None):
         """
         Navigation-specific encoding combining multiple strategies
@@ -170,7 +184,10 @@ class GridFeatureEncoder:
             'target_bias': target_bias.flatten(),
             'raw_grid': feature_grid.flatten()
         }
-    
+    # ---------------------------------------------------------------------------------
+    # Main function to create SNN input vector based on encoding type
+    # change encoding type by changing the value of encoding_type="..." when calling the function
+    # ---------------------------------------------------------------------------------
     def create_snn_input_vector(self, feature_grid, encoding_type='rate', **kwargs):
         """
         Create input vector for FPGA SNN based on encoding type

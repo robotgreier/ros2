@@ -191,7 +191,7 @@ pip3 install --break-system-packages opencv-contrib-python
 ## Expected Performance
 
 On Raspberry Pi 5:
-- **FPS**: 25-30 fps at 640x360
+- **FPS**: 25-30 fps at 640x480
 - **Features**: 200-500 ORB features per frame
 - **Grid**: 8x8 grid (64 cells)
 - **Latency**: ~30-40ms per frame

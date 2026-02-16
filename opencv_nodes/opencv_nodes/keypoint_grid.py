@@ -21,8 +21,8 @@ class KeypointGrid(Node):
 
         # Keypoint detector settings
         self.declare_parameter('detector', 'ORB')   # 'ORB' or 'FAST'
-        self.declare_parameter('max_features', 800) # ORB only
-        self.declare_parameter('fast_threshold', 20) # FAST only
+        self.declare_parameter('max_features', 1500) # ORB only
+        self.declare_parameter('fast_threshold', 5) # FAST only
         self.declare_parameter('publish_debug_image', True)
         self.declare_parameter('debug_topic', '/debug/keypoint_grid')
         self.declare_parameter('debug_width', 320)
@@ -78,6 +78,11 @@ class KeypointGrid(Node):
         # Convert ROS -> OpenCV
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
         h, w = frame.shape[:2]
+
+        # Apply CLAHE
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        frame = clahe.apply(frame)
+
 
         # Detect keypoints
         if self.detector_name == 'FAST':

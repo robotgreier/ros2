@@ -74,20 +74,19 @@ class ProximityBracketEvent(Node):
         return bisect_right(self.bin_edges, r)
 
     def _on_scan(self, msg: LaserScan):
-        if not msg.ranges:
-            return
-
-        r = msg.ranges[0]
-
-        invalid = (not math.isfinite(r)) or (r <= 0.0)
-        if invalid and self.ignore_invalid:
-            return
+        # Robust: works for 1-ray or multi-ray
+        vals = [r for r in msg.ranges if math.isfinite(r) and r > 0.0]
+        if not vals:
+            if self.ignore_invalid:
+                return
+            r = float('inf')
+        else:
+            r = min(vals)
 
         current_bin = self._range_to_bin(r)
 
         event = 0
         if self._prev_bin is None:
-            # initialize state without firing an event
             self._prev_bin = current_bin
         elif current_bin != self._prev_bin:
             event = 1
@@ -102,6 +101,7 @@ class ProximityBracketEvent(Node):
             out = UInt8()
             out.data = event
             self.pub.publish(out)
+
 
 
 def main():

@@ -1,0 +1,9 @@
+python_snn_node:
+  ros__parameters:
+    keypoint_size: 10
+    object_size: 4
+    timer_hz: 50.0
+    dopamine_correct: 1.0
+    dopamine_wrong: 0.5
+    dopamine_nofire: 0.1
+    seed: 42

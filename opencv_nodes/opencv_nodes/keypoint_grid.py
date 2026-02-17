@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int32MultiArray, MultiArrayDimension
 from cv_bridge import CvBridge
+from std_msgs.msg import Float32MultiArray
 import cv2
 import numpy as np
 
@@ -44,6 +45,10 @@ class KeypointGrid(Node):
         self.debug_period = 1.0 / float(self.get_parameter('publish_debug_hz').value)
         self.debug_resize_width = int(self.get_parameter('debug_resize_width').value)
         self._last_debug_time = 0.0
+
+        self.declare_parameter('response_topic', '/features/keypoints_response')
+        self.response_topic = self.get_parameter('response_topic').value
+        self.response_pub = self.create_publisher(Float32MultiArray, self.response_topic, 10)
 
 
         if detector == 'FAST':
@@ -89,23 +94,32 @@ class KeypointGrid(Node):
             kps = self.detector.detect(frame, None)
         else:
             kps = self.detector.detect(frame, None)
-
-        # Bin counts
+        
+        # Count keypoints/bin and collect response/bin
         counts = np.zeros((self.rows, self.cols), dtype=np.int32)
+        resp_sum = np.zeros((self.rows, self.cols), dtype=np.float32)
 
         cell_w = w / self.cols
         cell_h = h / self.rows
 
         for kp in kps:
-            x, y = kp.pt  # float pixel coords
+            x, y = kp.pt
             c = int(x / cell_w)
             r = int(y / cell_h)
-            # clamp to valid range in case of boundary conditions
+
             if c < 0: c = 0
             if c >= self.cols: c = self.cols - 1
             if r < 0: r = 0
             if r >= self.rows: r = self.rows - 1
+
             counts[r, c] += 1
+            resp_sum[r, c] += float(kp.response)
+
+        # Calculate the mean response
+        mean_resp = np.zeros((self.rows, self.cols), dtype=np.float32)
+        mask = counts > 0
+        mean_resp[mask] = resp_sum[mask] / counts[mask]
+
 
         # Publish Int32MultiArray row-major
         out = Int32MultiArray()
@@ -118,6 +132,13 @@ class KeypointGrid(Node):
 
         out.data = counts.flatten().tolist()
         self.pub.publish(out)
+
+        # Publish mean response (same layout, same indexing)
+        out_resp = Float32MultiArray()
+        out_resp.layout.dim = [dim_row, dim_col]
+        out_resp.layout.data_offset = 0
+        out_resp.data = mean_resp.flatten().tolist()
+        self.response_pub.publish(out_resp)
 
         now = self.get_clock().now().nanoseconds * 1e-9
         if self.publish_debug and self.debug_pub is not None and (now - self._last_debug_time) >= self.debug_period:

@@ -1,37 +1,87 @@
+# encoding_node/encoding_node.py
 import rclpy
 from rclpy.node import Node
-from fpga_msgs.msg import SpikingGrid   # custom message type for spiking grid data
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import UInt8MultiArray
+
+
+from .proximity_bracket_encoder import ProximityBracketEncoder
+
 
 class EncodingNode(Node):
     def __init__(self):
-        super().__init__('encoding_node')
+        super().__init__("encoding_node")
 
-        self.subscription = self.create_subscription(
-            SpikingGrid,
-            '/keypoint_grid',   # ropic to subscribe to for keypoint grid data
-            self.grid_callback, 
+        self.declare_parameter("proximity_topic", "/ultrasonic/front/scan")
+        self.declare_parameter("proximity_bin_edges", [1.0, 2.0, 3.0])
+        #!temp
+        self.declare_parameter("output_topic", "/snn/input")
+        #/temp
+
+        prox_topic = self.get_parameter("proximity_topic").value
+        bin_edges = list(self.get_parameter("proximity_bin_edges").value)
+        #!temp
+        output_topic = self.get_parameter("output_topic").value
+        #/temp
+
+        self.prox_encoder = ProximityBracketEncoder(
+            bin_edges=bin_edges,
+            inf_as_far=True,   # important in enclosed worlds / no-hit cases
+        )
+
+        self.create_subscription(LaserScan, prox_topic, self.on_proximity_scan, 10)
+
+        # TODO: your encoding array publisher for the SNN goes here
+
+        # !Temporary publisher for testing!
+
+        # Publisher (1 element array for now)
+        
+        
+        self.pub = self.create_publisher(UInt8MultiArray, output_topic, 10)
+
+        # Internal encoding vector (expand later)
+        self.encoding = [0]   # index 0 = proximity spike
+
+        # Subscriber
+        self.create_subscription(
+            LaserScan,
+            prox_topic,
+            self.on_proximity_scan,
             10
         )
-        self.subscription   # prevents unused variable warning
 
-        self.get_logger().info("Encoding node subscribed to /keypoint_grid")
+        #/Temporary
 
-    def grid_callback(self, msg: SpikingGrid):
-        self.get_logger().info(
-            f"Got grid {msg.grid_width}x{msg.grid_height} with {len(msg.spikes)} spike entries"
-        ) 
-        
-        '''
-        TODO: add encoding logic to convert the keypoint_grid data into a suitable format for the topic /input_snn.
-        '''
+    def on_proximity_scan(self, msg: LaserScan):
+        # Robust: use min finite range; treat all-inf as inf
+        vals = [r for r in msg.ranges if r > 0.0 and r != float("inf")]
+        d = min(vals) if vals else float("inf")
 
-def main(args=None):
-    rclpy.init(args=args)
+        spike = self.prox_encoder.update(d)
+
+        # TODO: write spike into your encoding array
+        # e.g. self.encoding[IDX_PROX] = spike
+        # and publish the array message
+
+        #!Temporary!
+        # Update encoding vector
+        self.encoding[0] = spike
+
+        # Publish
+        out = UInt8MultiArray()
+        out.data = self.encoding
+        self.pub.publish(out)
+        #/Temporary
+
+def main():
+    rclpy.init()
     node = EncodingNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

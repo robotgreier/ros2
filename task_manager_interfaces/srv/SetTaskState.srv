@@ -1,0 +1,4 @@
+uint8 new_state
+---
+bool success
+string message

@@ -1,9 +1,33 @@
 python_snn_node:
   ros__parameters:
-    keypoint_size: 10
-    object_size: 4
-    timer_hz: 50.0
+    # Input from encoder_node
+    input_mode: "packed"
+    input_topic: "/snn/input"
+    pack_order: ["proximity", "keypoints_grid"] # add more channels here when they are implemented in encoder_node (proximity_stop, etc.)
+
+    # Channel sizes, must match encoder_node's output
+    proximity_size: 1
+    keypoints_grid_size: 12   # <-- adjust to match encoder_node's number of cells in grid
+
+    # Output actions from SNN
+    num_actions: 3   # LEFT, FORWARD, RIGHT
+
+    # Timer and stop conditions
+    timer_hz: 30.0
+    idle_timeout_sec: 1.0
+
+    # proximity stop logic
+    use_proximity_for_stop: false # if true, proximity=1 means "emergency stop, too close to obstacle"
+    proximity_stop_active_high: true # no effect as long as use_proximity_for_stop=false
+
+    # Robot speed settings
+    forward_speed: 0.25 # m/s
+    turn_speed: 0.6 # rad/s
+
+    # Learning (dopamin)
+    training_mode: true
     dopamine_correct: 1.0
     dopamine_wrong: 0.5
-    dopamine_nofire: 0.1
-    seed: 42
+    dopamine_nofire: 0.1 # punish "no decision" to prevent deadlock
+
+    seed: 42 # for reproducibility, or null for random.

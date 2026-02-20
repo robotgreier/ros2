@@ -24,8 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-        'image_preprocess = opencv_nodes.image_preprocess:main',
         'img_kp_grid = opencv_nodes.img_kp_grid:main',
+        'img_recog = opencv_nodes.img_recog:main',
     ],
 
     },

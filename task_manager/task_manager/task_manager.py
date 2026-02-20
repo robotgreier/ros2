@@ -15,19 +15,32 @@ class TaskState:
 
 
 VALID_TRANSITIONS = {
-    TaskState.SEARCH_ITEM: [TaskState.APPROACH_ITEM],
-    TaskState.APPROACH_ITEM: [TaskState.SEARCH_DROPOFF],
-    TaskState.SEARCH_DROPOFF: [TaskState.APPROACH_DROPOFF],
-    TaskState.APPROACH_DROPOFF: [TaskState.SEARCH_ITEM],
-}
-
+    TaskState.SEARCH_ITEM: [
+        TaskState.SEARCH_ITEM,
+        TaskState.APPROACH_ITEM,      # found item tag
+    ],
+    TaskState.APPROACH_ITEM: [
+        TaskState.APPROACH_ITEM,
+        TaskState.SEARCH_ITEM,        # lost item tag → search again
+        TaskState.SEARCH_DROPOFF,     # pick completed → start dropoff search
+    ],
+    TaskState.SEARCH_DROPOFF: [
+        TaskState.SEARCH_DROPOFF,
+        TaskState.APPROACH_DROPOFF,   # found dropoff tag
+    ],
+    TaskState.APPROACH_DROPOFF: [
+        TaskState.APPROACH_DROPOFF,
+        TaskState.SEARCH_DROPOFF,     # lost dropoff tag → search again
+        TaskState.SEARCH_ITEM,        # drop completed → start new cycle
+    ],
+    }
 
 STATE_NAMES = {
     TaskState.SEARCH_ITEM: "SEARCH_ITEM",
     TaskState.APPROACH_ITEM: "APPROACH_ITEM",
     TaskState.SEARCH_DROPOFF: "SEARCH_DROPOFF",
     TaskState.APPROACH_DROPOFF: "APPROACH_DROPOFF",
-}
+    }
 
 
 class TaskManager(Node):
@@ -58,16 +71,33 @@ class TaskManager(Node):
             self.get_logger().warn(response.message)
             return response
 
-        if new_state in VALID_TRANSITIONS.get(self.current_state, []):
-            old = self.current_state
+        allowed = VALID_TRANSITIONS.get(self.current_state, [])
+
+        if new_state in allowed:
+            old_state = self.current_state
             self.current_state = new_state
+
             response.success = True
-            response.message = f"Transitioned {STATE_NAMES[old]} -> {STATE_NAMES[new_state]}"
+            response.message = (
+                f"Transition OK: "
+                f"{STATE_NAMES[old_state]} -> {STATE_NAMES[new_state]}"
+            )
+
             self.get_logger().info(response.message)
+
         else:
+            allowed_names = [STATE_NAMES[s] for s in allowed]
+
             response.success = False
-            response.message = f"Rejected transition {STATE_NAMES[self.current_state]} -> {STATE_NAMES[new_state]}"
-            self.get_logger().warn(response.message)
+            response.message = (
+                f"Rejected transition: "
+                f"{STATE_NAMES[self.current_state]} -> {STATE_NAMES[new_state]} | "
+                f"Allowed: {allowed_names}"
+            )
+
+            self.get_logger().warn(
+                f"Client: {request.requester}, {response.message}"
+            )
 
         return response
 

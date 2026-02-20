@@ -1,4 +1,3 @@
-
 import numpy as np
 from .LIF import LIF
 

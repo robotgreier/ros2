@@ -8,7 +8,6 @@ from std_msgs.msg import (
     Int32MultiArray, 
     UInt8MultiArray, 
     String,
-    float32,
 )
 
 from geometry_msgs.msg import Twist
@@ -34,7 +33,7 @@ class SNNNode(Node):
         # Params
         self.declare_parameter('input_mode', 'packed') # 'packed' default, 'separate' if we change the input topics to separate.
         self.declare_parameter('input_topic', '/snn/input') # Topic published by encoding_node
-        self.declare_parameter('pack_order', ['proximety', 'keypoints_grid']) # Order of input features, must match encoder_node's packing
+        self.declare_parameter('pack_order', ['proximity', 'keypoints_grid']) # Order of input features, must match encoder_node's packing
 
         # Channel sizes, must match encoder_node's output sizes
         self.declare_parameter('proximity_size', 1) # If distance changes from one bin to another.
@@ -142,42 +141,42 @@ class SNNNode(Node):
             f"use_proximity_for_stop={self.use_proximity_for_stop}"
         )
 
-        # Helpers 
-        def _compute_offsets(self, order, sizes):
-            offsets = {}
-            pos = 0
-            for name in order:
-                size = sizes.get(name, 0)
-                offsets[name] = (pos, pos + size)
-                pos += size
-            return offsets
+    # Helpers 
+    def _compute_offsets(self, order, sizes):
+        offsets = {}
+        pos = 0
+        for name in order:
+            size = sizes.get(name, 0)
+            offsets[name] = (pos, pos + size)
+            pos += size
+        return offsets
 
-        # Callbacks
-        def cb_packed(self, msg: UInt8MultiArray):
-            data = np.array(msg.data, dtype=np.uint8)
-            if data.size != self.input_size:
-                self.get_logger().warn(
-                    f"/snn/input len={data.size} != expected {self.input_size} "
-                    f"(pack_order={self.pack_order}, sizes={self.channel_sizes})"
-                )
-                return
+    # Callbacks
+    def cb_packed(self, msg: UInt8MultiArray):
+        data = np.array(msg.data, dtype=np.uint8)
+        if data.size != self.input_size:
+            self.get_logger().warn(
+                f"/snn/input len={data.size} != expected {self.input_size} "
+                f"(pack_order={self.pack_order}, sizes={self.channel_sizes})"
+            )
+            return
 
-            # Convert 0/1 uint8 spikes to float32 and store in last_vector
-            self.last_vector[:] = data.astype(np.float32)
-            self.last_input_stamp = self.get_clock().now()
+        # Convert 0/1 uint8 spikes to float32 and store in last_vector
+        self.last_vector[:] = data.astype(np.float32)
+        self.last_input_stamp = self.get_clock().now()
 
-        def cb_correct(self, msg: Int32):
-            self.correct_output = int(msg.data)
+    def cb_correct(self, msg: Int32):
+        self.correct_output = int(msg.data)
 
-        # Timer
-        def on_timer(self):
-            age_sec = (self.get_clock().now() - self.last_input_stamp).nanoseconds * 1e-9
-            if age_sec > self.idle_timeout_sec:
-                self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
-                return
+    # Timer
+    def on_timer(self):
+        age_sec = (self.get_clock().now() - self.last_input_stamp).nanoseconds * 1e-9
+        if age_sec > self.idle_timeout_sec:
+            self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
+            return
 
-            input_vec = self.last_vector.tolist()
-            correct = self.correct_output if self.training_mode else -1
+        input_vec = self.last_vector.tolist()
+        correct = self.correct_output if self.training_mode else -1
 
         # Run SNN one step
         winner, dop = self.net.step(
@@ -219,7 +218,7 @@ class SNNNode(Node):
         Use topic name "proximity_stop" to get this part of the code to work 
         """
         # First check if "proximity_stop" is defined, otherwise fall back to 'proximity'
-        name = 'proximity_stop' if 'proximity_stop' in self.segment.offsets else 'proximity'
+        name = 'proximity_stop' if 'proximity_stop' in self.segment._offsets else 'proximity'
 
         if name not in self.segment_offsets:
             return False

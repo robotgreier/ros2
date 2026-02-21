@@ -11,6 +11,7 @@ from std_msgs.msg import (
 )
 
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Bool
 
 from python_snn_node.network import LIFNetwork
 
@@ -33,11 +34,12 @@ class SNNNode(Node):
         # Params
         self.declare_parameter('input_mode', 'packed') # 'packed' default, 'separate' if we change the input topics to separate.
         self.declare_parameter('input_topic', '/snn/input') # Topic published by encoding_node
-        self.declare_parameter('pack_order', ['proximity', 'keypoints_grid']) # Order of input features, must match encoder_node's packing
+        self.declare_parameter('pack_order', ['keypoints_grid', 'proximity', "aruco_dir"]) # Order of input features, must match encoder_node's packing
 
         # Channel sizes, must match encoder_node's output sizes
         self.declare_parameter('proximity_size', 1) # If distance changes from one bin to another.
         self.declare_parameter('keypoints_grid_size', 12) # 4x3 grid
+        self.declare_parameter('aruco_dir_size', 3) # 3 bits: left, center, right
 
         # Action parameters / output neurons
         self.declare_parameter('num_actions', 3) # LEFT, FORWARD, RIGHT (0, 1, 2)
@@ -46,10 +48,12 @@ class SNNNode(Node):
         self.declare_parameter('timer_hz', 30.0) # Rate of main loop, and publishing cmd_vel
         self.declare_parameter('idle_timeout_sec', 1.0) # stop if no input received for this amount of seconds
         
-        # We should consider this emergency stop logic. If proximity sensor detects something close, we want to stop the robot immediately, regardless of the SNN output.
+        # If proximity sensor detects something close, we want to stop the robot immediately, regardless of the SNN output.
         self.declare_parameter('use_proximity_for_stop', False) # if True: emergency stop is activated based on proximity sensor. Need new topic for this.
         self.declare_parameter('proximity_stop_active_high', True) # True: stop (close) is 1, False: stop (close) is 0. Emergency stop logic.
-        
+        self.proximity_stop = False
+
+        self.prox_stop_sub = self.create_subscription(Bool, "/proximity_stop", self.cb_proximity_stop, 10)
 
         # Robot speed parameters
         self.declare_parameter('forward_speed', 0.25) # m/s 
@@ -71,6 +75,7 @@ class SNNNode(Node):
         self.channel_sizes = {
             'proximity': int(self.get_parameter('proximity_size').value),
             'keypoints_grid': int(self.get_parameter('keypoints_grid_size').value),
+            'aruco_dir': int(self.get_parameter('aruco_dir_size').value)
             # add more channels here when we add more input features to /snn/input
         }    
 
@@ -78,7 +83,7 @@ class SNNNode(Node):
         self.timer_hz = float(self.get_parameter('timer_hz').value)
         self.idle_timeout_sec = float(self.get_parameter('idle_timeout_sec').value)
 
-        # We should consider this emergency stop logic. Need a new topic for this.
+        # This is for the emergency stop logic.
         self.use_proximity_for_stop = bool(self.get_parameter('use_proximity_for_stop').value)
         self.proximity_stop_active_high = bool(self.get_parameter('proximity_stop_active_high').value)
         
@@ -168,6 +173,11 @@ class SNNNode(Node):
     def cb_correct(self, msg: Int32):
         self.correct_output = int(msg.data)
 
+    def cb_proximity_stop(self, msg: Bool):
+        # msg.data == True means "stop" if active_high
+        val = bool(msg.data)
+        self.proximity_stop = val if self.proximity_stop_active_high else (not val)
+
     # Timer
     def on_timer(self):
         age_sec = (self.get_clock().now() - self.last_input_stamp).nanoseconds * 1e-9
@@ -175,10 +185,13 @@ class SNNNode(Node):
             self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
             return
 
+        # Read emergency stop input (topic-based)
+        force_stop = (self.use_proximity_for_stop and self.proximity_stop)
+
         input_vec = self.last_vector.tolist()
         correct = self.correct_output if self.training_mode else -1
 
-        # Run SNN one step
+        # Run SNN one step (keep timing consistent even if we stop)
         winner, dop = self.net.step(
             input_vec,
             correct_output=correct,
@@ -194,11 +207,25 @@ class SNNNode(Node):
         spk_msg.data = self._get_output_spikes_safe()
         self.pub_spikes.publish(spk_msg)
 
-        # We should consider this emergency stop logic
-        force_stop = self._proximity_stop() if self.use_proximity_for_stop else False
-        
-        # publish cmd_vel based on winner, or stop if proximity stop is activated
-        self.publish_cmd_from_winner(int(winner), force_stop=force_stop)
+        # If emergency stop triggers: override action AND punish (if training)
+        if force_stop:
+            self.publish_cmd_from_winner(winner_idx=-1, force_stop=True)
+
+            # ----- PENALTY HOOK -----
+            if self.training_mode:
+                self.on_proximity_penalty(winner_idx=int(winner))
+            # ------------------------
+            return
+
+        # Normal actuation
+        self.publish_cmd_from_winner(int(winner), force_stop=False)
+
+    def on_proximity_penalty(self, winner_idx: int):
+        """
+        Called when /proximity_stop triggers. winner_idx is what the policy wanted to do.
+        Implement your punishment here once we confirm how net.step applies dopamine.
+        """
+        pass
 
     def _get_output_spikes_safe(self):
         """
@@ -212,23 +239,6 @@ class SNNNode(Node):
             # winner published in /snn/winner, to avoid mismatch with internal SNN state.
             return out
 
-    def _proximity_stop(self) -> bool:
-        """
-        Reads the proximity channel (if defined) and activates emergency stop
-        Use topic name "proximity_stop" to get this part of the code to work 
-        """
-        # First check if "proximity_stop" is defined, otherwise fall back to 'proximity'
-        name = 'proximity_stop' if 'proximity_stop' in self.segment._offsets else 'proximity'
-
-        if name not in self.segment_offsets:
-            return False
-        s, e = self.segment_offsets[name]
-        chunk = self.last_vector[s:e]
-        if chunk.size == 0:
-            return False
-
-        val = chunk[0] > 0.5  # 0/1
-        return bool(val) if self.proximity_stop_active_high else (not bool(val))
 
     def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):
         cmd = Twist()
@@ -273,4 +283,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()   
+    main()

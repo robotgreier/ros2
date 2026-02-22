@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'proximity_events'
+package_name = 'grab_node'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'proximity_bracket_event = proximity_events.bracket_event_node:main',
+           'grab_node = grab_node.grab_node:main',
         ],
     },
 )

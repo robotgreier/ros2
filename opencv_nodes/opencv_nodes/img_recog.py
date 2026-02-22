@@ -302,9 +302,6 @@ class ImgRecog(Node):
         req = SetTaskState.Request()
         req.new_state = int(new_state)
 
-        # If your srv includes requester, uncomment:
-        # req.requester = "img_recog"
-
         self._pending_request = True
         future = self.set_state_client.call_async(req)
         future.add_done_callback(self._on_set_state_done)

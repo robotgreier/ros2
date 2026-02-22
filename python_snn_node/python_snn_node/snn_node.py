@@ -11,7 +11,7 @@ from std_msgs.msg import (
 )
 
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool
+
 
 from python_snn_node.network import LIFNetwork
 
@@ -22,7 +22,7 @@ class SNNNode(Node):
     Python SNN node:
     - Reads packed spikes (0/1) from /snn/input (UInt8MultiArray)
     - Runs LIF SNN with dopamine learning and publishes:
-        * /cmd_vel (geometry_msgs/Twist) for robot control
+        * /cmd_vel/snn (geometry_msgs/Twist) for robot control
         * /snn/decision (string) with the action name (LEFT, FORWARD, RIGHT)
         * /snn/winner (Int32)
         * /snn/spikes (INT32MuliArray) for debugging (spikes of output neurons)
@@ -47,13 +47,6 @@ class SNNNode(Node):
         # Driving parameters / robustness
         self.declare_parameter('timer_hz', 30.0) # Rate of main loop, and publishing cmd_vel
         self.declare_parameter('idle_timeout_sec', 1.0) # stop if no input received for this amount of seconds
-        
-        # If proximity sensor detects something close, we want to stop the robot immediately, regardless of the SNN output.
-        self.declare_parameter('use_proximity_for_stop', False) # if True: emergency stop is activated based on proximity sensor. Need new topic for this.
-        self.declare_parameter('proximity_stop_active_high', True) # True: stop (close) is 1, False: stop (close) is 0. Emergency stop logic.
-        self.proximity_stop = False
-
-        self.prox_stop_sub = self.create_subscription(Bool, "/proximity_stop", self.cb_proximity_stop, 10)
 
         # Robot speed parameters
         self.declare_parameter('forward_speed', 0.25) # m/s 
@@ -82,10 +75,6 @@ class SNNNode(Node):
         self.num_actions = int(self.get_parameter('num_actions').value)
         self.timer_hz = float(self.get_parameter('timer_hz').value)
         self.idle_timeout_sec = float(self.get_parameter('idle_timeout_sec').value)
-
-        # This is for the emergency stop logic.
-        self.use_proximity_for_stop = bool(self.get_parameter('use_proximity_for_stop').value)
-        self.proximity_stop_active_high = bool(self.get_parameter('proximity_stop_active_high').value)
         
         self.forward_speed = float(self.get_parameter('forward_speed').value)
         self.turn_speed = float(self.get_parameter('turn_speed').value)
@@ -132,7 +121,10 @@ class SNNNode(Node):
         self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10) # publish the winner output neuron index for debugging and visualization
         self.pub_spikes = self.create_publisher(Int32MultiArray, '/snn/spikes', 10) # publish spikes of output neurons for debugging and visualization
         self.pub_decision = self.create_publisher(String, '/snn/decision', 10) # publish the action name LEFT, FORWARD, RIGHT for debugging and visualization
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10) # publish motor commands to the robot
+        self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn') # publish motor commands to the robot
+        cmd_topic = self.get_parameter('cmd_vel_topic').value
+        self.cmd_vel_pub = self.create_publisher(Twist, cmd_topic, 10)
+
 
         # Timer for main loop and cmd_vel publishing
         period = 1.0 / max(self.timer_hz, 1.0)
@@ -142,8 +134,7 @@ class SNNNode(Node):
         self.get_logger().info(
             f"SNN init: mode=packed, input_topic={self.input_topic}, "
             f"input_size={self.input_size}, pack_order={self.pack_order}, "
-            f"channel_sizes={self.channel_sizes}, num_actions={self.num_actions}, "
-            f"use_proximity_for_stop={self.use_proximity_for_stop}"
+            f"channel_sizes={self.channel_sizes}, num_actions={self.num_actions} "
         )
 
     # Helpers 
@@ -173,23 +164,12 @@ class SNNNode(Node):
     def cb_correct(self, msg: Int32):
         self.correct_output = int(msg.data)
 
-    def cb_proximity_stop(self, msg: Bool):
-        # msg.data == True means "stop" if active_high
-        val = bool(msg.data)
-        self.proximity_stop = val if self.proximity_stop_active_high else (not val)
-
     # Timer
     def on_timer(self):
         age_sec = (self.get_clock().now() - self.last_input_stamp).nanoseconds * 1e-9
         if age_sec > self.idle_timeout_sec:
             self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
             return
-
-        # Read emergency stop input (topic-based)
-        force_stop = (self.use_proximity_for_stop and self.proximity_stop)
-
-        input_vec = self.last_vector.tolist()
-        correct = self.correct_output if self.training_mode else -1
 
         # Run SNN one step (keep timing consistent even if we stop)
         winner, dop = self.net.step(
@@ -206,16 +186,6 @@ class SNNNode(Node):
         spk_msg = Int32MultiArray()
         spk_msg.data = self._get_output_spikes_safe()
         self.pub_spikes.publish(spk_msg)
-
-        # If emergency stop triggers: override action AND punish (if training)
-        if force_stop:
-            self.publish_cmd_from_winner(winner_idx=-1, force_stop=True)
-
-            # ----- PENALTY HOOK -----
-            if self.training_mode:
-                self.on_proximity_penalty(winner_idx=int(winner))
-            # ------------------------
-            return
 
         # Normal actuation
         self.publish_cmd_from_winner(int(winner), force_stop=False)

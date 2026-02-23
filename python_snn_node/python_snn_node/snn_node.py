@@ -36,11 +36,12 @@ class SNNNode(Node):
         # Input/Output Setup
         self.declare_parameter('input_mode', 'packed')
         self.declare_parameter('input_topic', '/snn/input')
-        self.declare_parameter('pack_order', ['proximity', 'keypoints_grid'])
+        self.declare_parameter('pack_order', ['proximity', 'keypoints_grid', 'object_rec'])
 
         # Channel sizes (matches YAML)
         self.declare_parameter('proximity_size', 1)
         self.declare_parameter('keypoints_grid_size', 12)
+        self.declare_parameter('object_rec_size', 3)
 
         # Action parameters
         self.declare_parameter('num_actions', 3)

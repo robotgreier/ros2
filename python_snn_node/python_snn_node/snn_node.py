@@ -13,7 +13,7 @@ from std_msgs.msg import (
 from geometry_msgs.msg import Twist
 
 
-from python_snn_node.network import LIFNetwork
+from LIF_SNN_network import SNNLayer
 
 ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT"] # index 0=LEFT, 1=FORWARD, 2=RIGHT
 
@@ -31,111 +31,137 @@ class SNNNode(Node):
     """
     def __init__(self):
         super().__init__('python_snn_node')
-        # Params
-        self.declare_parameter('input_mode', 'packed') # 'packed' default, 'separate' if we change the input topics to separate.
-        self.declare_parameter('input_topic', '/snn/input') # Topic published by encoding_node
-        self.declare_parameter('pack_order', ['keypoints_grid', 'proximity', "aruco_dir"]) # Order of input features, must match encoder_node's packing
 
-        # Channel sizes, must match encoder_node's output sizes
-        self.declare_parameter('proximity_size', 1) # If distance changes from one bin to another.
-        self.declare_parameter('keypoints_grid_size', 12) # 4x3 grid
-        self.declare_parameter('aruco_dir_size', 3) # 3 bits: left, center, right
+        # --- Parameters ---
+        # Input/Output Setup
+        self.declare_parameter('input_mode', 'packed')
+        self.declare_parameter('input_topic', '/snn/input')
+        self.declare_parameter('pack_order', ['proximity', 'keypoints_grid'])
 
-        # Action parameters / output neurons
-        self.declare_parameter('num_actions', 3) # LEFT, FORWARD, RIGHT (0, 1, 2)
+        # Channel sizes (matches YAML)
+        self.declare_parameter('proximity_size', 1)
+        self.declare_parameter('keypoints_grid_size', 12)
 
-        # Driving parameters / robustness
-        self.declare_parameter('timer_hz', 30.0) # Rate of main loop, and publishing cmd_vel
-        self.declare_parameter('idle_timeout_sec', 1.0) # stop if no input received for this amount of seconds
+        # Action parameters
+        self.declare_parameter('num_actions', 3)
+
+        # Driving parameters
+        self.declare_parameter('timer_hz', 30.0)
+        self.declare_parameter('idle_timeout_sec', 1.0)
+        self.declare_parameter('use_proximity_for_stop', False)
+        self.declare_parameter('proximity_stop_active_high', True)
 
         # Robot speed parameters
-        self.declare_parameter('forward_speed', 0.25) # m/s 
-        self.declare_parameter('turn_speed', 0.6) # rad/s 
+        self.declare_parameter('forward_speed', 0.25)
+        self.declare_parameter('turn_speed', 0.6)
 
-        # Learning parameters
-        self.declare_parameter('training_mode', True) # If True: listen to /snn/correct_output and update weight. If False: run SNN without learning (evaluation)
-        self.declare_parameter('dopamine_correct', 1.0) # Reward for correct action
-        self.declare_parameter('dopamine_wrong', 0.5) # punishment for wrong action
-        self.declare_parameter('dopamine_nofire', 0.1) # punishment for not firing any output neurons (prevent inactivity)
-        self.declare_parameter('seed', 42) # Random seed for reproducibility
+        # Neuron parameters (Changed to lowercase 'threshold')
+        self.declare_parameter('decay', 0.75)
+        self.declare_parameter('threshold', 4.0)
+        self.declare_parameter('reset', 0.0)
 
-        # Read parameters
+        # Synapse & Learning parameters
+        self.declare_parameter('training_mode', True)
+        self.declare_parameter('learning_rate', 0.250)
+        self.declare_parameter('initial_weight', 0.3)
+        self.declare_parameter('t_pre', 3.0)
+        self.declare_parameter('t_post', 3.0)
+        self.declare_parameter('tau_e_shift', 4.0)
+        self.declare_parameter('dw_pos', 0.25)
+        self.declare_parameter('dw_neg', 0.03125)
+        self.declare_parameter('min_weight', 0.03125)
+        self.declare_parameter('max_weight', 1.0)
+        self.declare_parameter('dopamine_correct', 1.0)
+        self.declare_parameter('dopamine_wrong', -0.5)
+        self.declare_parameter('seed', 42)
+
+        # --- Read Parameters ---
         self.input_mode = str(self.get_parameter('input_mode').value).lower().strip()
         self.input_topic = str(self.get_parameter('input_topic').value)
         self.pack_order = list(self.get_parameter('pack_order').value)
 
-        # Channel sizes
         self.channel_sizes = {
             'proximity': int(self.get_parameter('proximity_size').value),
             'keypoints_grid': int(self.get_parameter('keypoints_grid_size').value),
-            'aruco_dir': int(self.get_parameter('aruco_dir_size').value)
-            # add more channels here when we add more input features to /snn/input
-        }    
+            'object_rec_size': int(self.get_parameter('object_rec_size').value)
+        }
 
-        self.num_actions = int(self.get_parameter('num_actions').value)
         self.timer_hz = float(self.get_parameter('timer_hz').value)
         self.idle_timeout_sec = float(self.get_parameter('idle_timeout_sec').value)
-        
         self.forward_speed = float(self.get_parameter('forward_speed').value)
         self.turn_speed = float(self.get_parameter('turn_speed').value)
-        
-        self.training_mode = bool(self.get_parameter('training_mode').value)
-        self.dop_correct = float(self.get_parameter('dopamine_correct').value)
-        self.dop_wrong   = float(self.get_parameter('dopamine_wrong').value)
-        self.dop_nofire  = float(self.get_parameter('dopamine_nofire').value)
-        seed = int(self.get_parameter('seed').value)
 
-        # Derived input and output sizes
-        self.segment_offsets = self._compute_offsets(self.pack_order, self.channel_sizes)
-        self.input_size = sum(self.channel_sizes.get(name, 0) for name in self.pack_order)
+        self.num_actions = int(self.get_parameter('num_actions').value)
         self.output_size = self.num_actions
 
-        # SNN initialization
-        self.net = LIFNetwork(self.input_size, self.output_size, seed=seed)
+        # Neuron params
+        self.decay = float(self.get_parameter('decay').value)
+        self.threshold = float(self.get_parameter('threshold').value)
+        self.reset = float(self.get_parameter('reset').value)
 
-        # State variables
+        # Synapse params
+        self.training_mode = bool(self.get_parameter('training_mode').value)
+        self.learning_rate = float(self.get_parameter('learning_rate').value)
+        self.initial_weight = float(self.get_parameter('initial_weight').value)
+        self.t_pre = float(self.get_parameter('t_pre').value)
+        self.t_post = float(self.get_parameter('t_post').value)
+        self.tau_e_shift = float(self.get_parameter('tau_e_shift').value)
+        self.dw_pos = float(self.get_parameter('dw_pos').value)
+        self.dw_neg = float(self.get_parameter('dw_neg').value)
+        self.max_weight = float(self.get_parameter('max_weight').value)
+        self.min_weight = float(self.get_parameter('min_weight').value)
+        self.dopamine_correct = float(self.get_parameter('dopamine_correct').value)
+        self.dopamine_wrong = float(self.get_parameter('dopamine_wrong').value)
+        
+        seed = self.get_parameter('seed').value
+        if seed is not None:
+            np.random.seed(int(seed))
+
+        # --- Derived Logic ---
+        self.segment_offsets = self._compute_offsets(self.pack_order, self.channel_sizes)
+        self.input_size = sum(self.channel_sizes.get(name, 0) for name in self.pack_order)
+
+        neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset}
+        synapse_params = {
+            "learning_rate": self.learning_rate, "w_init": self.initial_weight, 
+            "t_pre": self.t_pre, "t_post": self.t_post, "tau_e_shift": self.tau_e_shift, 
+            "dw_pos": self.dw_pos, "dw_neg": self.dw_neg, 
+            "w_min": self.min_weight, "w_max": self.max_weight
+        }
+
+        self.network = SNNLayer(
+            n_inputs=self.input_size, 
+            n_outputs=self.output_size, 
+            neuron_params=neuron_params, 
+            synapse_params=synapse_params
+        )
+
+        # --- State and Communication ---
         self.last_input_stamp = self.get_clock().now()
         self.last_vector = np.zeros(self.input_size, dtype=np.float32)
-        self.correct_output = -1 # -1 means no correct output available
+        self.correct_output = -1
 
-        # Quality of Service QoS for subscribers and publishers
         qos_sensor = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
 
-        # Subscriptions - check input mode and subscribe to the appropriate topic 
-        if self.input_mode != 'packed':
-            self.get_logger().warn("input_mode != 'packed' er ikke aktivert i denne implementasjonen. "
-                                   "Bytter til 'packed'.")
-            self.input_mode = 'packed'
-        
-        # encoder_node publishes packed spikes as UInt8MultiArray
         self.create_subscription(UInt8MultiArray, self.input_topic, self.cb_packed, qos_sensor)
-
-        # Training signal for dopamine learning
         self.create_subscription(Int32, '/snn/correct_output', self.cb_correct, 10)
 
-        # Publishers
-        self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10) # publish the winner output neuron index for debugging and visualization
-        self.pub_spikes = self.create_publisher(Int32MultiArray, '/snn/spikes', 10) # publish spikes of output neurons for debugging and visualization
-        self.pub_decision = self.create_publisher(String, '/snn/decision', 10) # publish the action name LEFT, FORWARD, RIGHT for debugging and visualization
-        self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn') # publish motor commands to the robot
+        self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10)
+        self.pub_spikes = self.create_publisher(Int32MultiArray, '/snn/spikes', 10)
+        self.pub_decision = self.create_publisher(String, '/snn/decision', 10)
+        
+        self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn')
         cmd_topic = self.get_parameter('cmd_vel_topic').value
         self.cmd_vel_pub = self.create_publisher(Twist, cmd_topic, 10)
 
-
-        # Timer for main loop and cmd_vel publishing
         period = 1.0 / max(self.timer_hz, 1.0)
         self.timer = self.create_timer(period, self.on_timer)
 
-        # Log parameters at startup
-        self.get_logger().info(
-            f"SNN init: mode=packed, input_topic={self.input_topic}, "
-            f"input_size={self.input_size}, pack_order={self.pack_order}, "
-            f"channel_sizes={self.channel_sizes}, num_actions={self.num_actions} "
-        )
+        self.get_logger().info(f"SNN Node initialized: {self.input_size} in -> {self.output_size} out")
 
     # Helpers 
     def _compute_offsets(self, order, sizes):
@@ -171,24 +197,28 @@ class SNNNode(Node):
             self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
             return
 
-        # Run SNN one step (keep timing consistent even if we stop)
-        winner, dop = self.net.step(
-            input_vec,
-            correct_output=correct,
-            dopamine_correct=self.dop_correct,
-            dopamine_wrong=self.dop_wrong,
-            dopamine_nofire=self.dop_nofire
-        )
 
-        # Debug publish winners and spikes
-        self.pub_winner.publish(Int32(data=int(winner)))
 
-        spk_msg = Int32MultiArray()
-        spk_msg.data = self._get_output_spikes_safe()
-        self.pub_spikes.publish(spk_msg)
+        ##### Run network #####
+
+        # Forward pass
+        output_spikes = self.network.forward(input_spikes=input_vec)
+
+        # Find idx of winning neuron
+        winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
+        
+        """# Apply reward, uncomment for reward based training
+        self.network.apply_reward(dopamine=0, winner_idx=winner_idx)"""
+
 
         # Normal actuation
-        self.publish_cmd_from_winner(int(winner), force_stop=False)
+        self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
+
+        # Debug publish winners and spikes
+        self.pub_winner.publish(Int32(data=int(winner_idx)))
+
+        spk_msg = Int32MultiArray()
+        self.pub_spikes.publish(spk_msg)
 
     def on_proximity_penalty(self, winner_idx: int):
         """
@@ -196,18 +226,6 @@ class SNNNode(Node):
         Implement your punishment here once we confirm how net.step applies dopamine.
         """
         pass
-
-    def _get_output_spikes_safe(self):
-        """
-        Get spikes from output neurons, but catch exceptions, or return "winner-only" spikes if something goes wrong.
-        """
-        try:
-            return [int(n.spk) for n in self.net.output_neurons]
-        except Exception:
-            # fallback: winner=1, others=0
-            out = [0] * self.output_size
-            # winner published in /snn/winner, to avoid mismatch with internal SNN state.
-            return out
 
 
     def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):

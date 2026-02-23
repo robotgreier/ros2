@@ -8,6 +8,7 @@ python_snn_node:
     # Channel sizes, must match encoder_node's output
     proximity_size: 1
     keypoints_grid_size: 12   # <-- adjust to match encoder_node's number of cells in grid
+    object_rec_size: 3
 
     # Output actions from SNN
     num_actions: 3   # LEFT, FORWARD, RIGHT
@@ -24,10 +25,24 @@ python_snn_node:
     forward_speed: 0.25 # m/s
     turn_speed: 0.6 # rad/s
 
-    # Learning (dopamin)
-    training_mode: true
+    ##### Neuron parameters #####
+    decay: 0.75
+    threshold: 4.0
+    reset: 0.0
+
+    ##### Synapse parameters #####
+    training_mode: true # Remove?
+    learning_rate: 0.250
+    initial_weight: 0.3
+    t_pre: 3
+    t_post: 3
+    tau_e_shift: 4
+    dw_pos: 0.25
+    dw_neg: 0.03125
+    min_weight: 0.03125
+    max_weight: 1.0
     dopamine_correct: 1.0
-    dopamine_wrong: 0.5
-    dopamine_nofire: 0.1 # punish "no decision" to prevent deadlock
+    dopamine_wrong: -0.5
+
 
     seed: 42 # for reproducibility, or null for random.

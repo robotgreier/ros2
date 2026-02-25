@@ -32,17 +32,18 @@ python_snn_node:
 
     ##### Synapse parameters #####
     training_mode: true # Remove?
-    learning_rate: 0.250
+    learning_rate: 0.125
     initial_weight: 0.3
-    t_pre: 3
+    t_pre: 2
     t_post: 3
     tau_e_shift: 4
     dw_pos: 0.25
     dw_neg: 0.03125
     min_weight: 0.03125
     max_weight: 1.0
-    dopamine_correct: 1.0
-    dopamine_wrong: -0.5
+    dopamine_correct: 0.5
+    dopamine_wrong: -1.0
+    mode: 'rstdp'
 
 
     seed: 42 # for reproducibility, or null for random.

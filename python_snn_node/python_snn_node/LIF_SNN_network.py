@@ -7,22 +7,24 @@ class LIF:
 
     Args:
             decay: Membrane decay (subtraction based)
-            threshold: Magnutude of membrane potential needed to produce a spike
+            threshold: Magnitude of membrane potential needed to produce a spike
             reset: Value the membrane potential is reset to after spike
     """
 
-    def __init__(self, decay=0.2, threshold=2.0, reset=0.0):
+    def __init__(self, decay=0.75, threshold=4.0, reset=0.0):
         # --- Neuron dynamics ---
         self.decay = decay              # Membrane decay
         self.threshold = threshold
         self.reset = reset
         self.mem = 0.0
+        self.pre_reset_mem = 0.0       # Membrane potential before reset, used for WTA
         self.spk = 0
 
     def update(self, synaptic_input):
         """Membrane update. Returns spike (0 or 1)."""
         self.spk = 0
-        self.mem = max(0.0, self.mem - self.decay + synaptic_input)
+        self.mem = self.mem - self.decay + synaptic_input
+        self.pre_reset_mem = self.mem  # Cache membrane potential before reset for WTA
 
         if self.mem >= self.threshold:
             self.spk = 1
@@ -35,7 +37,17 @@ class RSTDPSynapse:
     """
     Reward-modulated STDP synapse with rectangular window.
 
+    Supports two modes:
+        'rstdp': Weight updates only when apply_reward() is called externally
+                 with a dopamine signal. Eligibility trace accumulates STDP
+                 events and decays over time, acting as a credit assignment window.
+        'stdp':  Weight updates immediately on each spike pairing (dopamine=1.0).
+                 Eligibility still decays each step, so the effective update is
+                 lr * eligibility at the moment of each spike — not a pure
+                 instantaneous step, but a short-window trace-based update.
+
     Args:
+            mode: 'rstdp' (default) or 'stdp'
             learning_rate: Scales the weight update
             w_init: Initial weight (random if None)
             t_pre/t_post: Rectangular STDP window widths (timesteps)
@@ -51,11 +63,13 @@ class RSTDPSynapse:
     # Eligibility traces start as disabled/inactive
     DISABLED = -1
 
-    def __init__(self, learning_rate=0.1, w_init=None,
-                 t_pre=5, t_post=5, tau_e_shift=4,
-                 dw_pos=0.125, dw_neg=0.125,
-                 w_min=0.05, w_max=1.0):
+    def __init__(self, learning_rate=0.125, w_init=0.3,
+                 t_pre=2, t_post=3, tau_e_shift=4,
+                 dw_pos=0.25, dw_neg=0.03125,
+                 w_min=0.03125, w_max=1.0,
+                 mode='rstdp'):
 
+        self.mode = mode
         self.learning_rate = learning_rate
         self.weight = w_init if w_init is not None else np.random.uniform(0.3, 0.8)
 
@@ -75,16 +89,21 @@ class RSTDPSynapse:
         self.w_min = w_min
         self.w_max = w_max
 
-    def update_traces_and_eligibility(self, pre_spike, post_spike):
+    def update_eligibility(self, pre_spike, post_spike):
         """
         Update spike timing counters and eligibility each timestep.
-        
+
         Uses rectangular STDP windows: if a spike pair occurs within
         the window, eligibility is incremented/decremented by dw_pos/dw_neg.
-        
+        Timers run independently so multiple pairings within a window
+        are detected — equivalent to parallel trace registers in HDL.
+
+        In 'stdp' mode, weight is updated immediately after eligibility update
+        (dopamine=1.0), so no external apply_reward() call is needed.
+
         Args:
             pre_spike: 1 if pre-synaptic neuron fired, 0 otherwise
-            post_spike: 1 if post-synaptic neuron fired, 0 otherwise  
+            post_spike: 1 if post-synaptic neuron fired, 0 otherwise
         """
         # STDP causality timers
         if self.pre_timer >= 0:
@@ -101,25 +120,31 @@ class RSTDPSynapse:
         if pre_spike:
             if self.post_timer >= 0 and self.post_timer <= self.t_post:
                 self.eligibility -= self.dw_neg
-                self.post_timer = self.DISABLED
             self.pre_timer = 0
 
         # STDP on post-spike: start post timer, check for causality (LTP)
         if post_spike:
             if self.pre_timer >= 0 and self.pre_timer <= self.t_pre:
                 self.eligibility += self.dw_pos
-                self.pre_timer = self.DISABLED
             self.post_timer = 0
 
-        # Decay eligibility via right-shift (FPGA: subtract eligibility >> tau_e_shift)
+        # Decay eligibility via right-shift
         self.eligibility = self.eligibility - self.eligibility / (1 << self.tau_e_shift)
+
+        # Clamp eligibility
+        self.eligibility = np.clip(self.eligibility, -1.0, 1.0)
+
+        # In stdp mode, apply weight update immediately
+        if self.mode == 'stdp':
+            self.apply_reward(dopamine=1.0)
 
     def apply_reward(self, dopamine):
         """
         Apply reward-modulated weight update.
-        
+
         Args:
             dopamine: Reward signal. Positive reinforces correlated activity, negative punishes it.
+                      In 'stdp' mode this is always 1.0 (called internally).
         """
         delta_w = self.learning_rate * dopamine * self.eligibility
         self.weight = np.clip(self.weight + delta_w, self.w_min, self.w_max)
@@ -130,10 +155,11 @@ class SNNLayer:
     A fully-connected SNN with STDP/R-STDP learning.
 
     Args:
-            n_input: Number of pre-synaptic input neurons
-            n_output: Number of post-synaptic output neurons
+            n_inputs: Number of pre-synaptic input neurons
+            n_outputs: Number of post-synaptic output neurons
             neuron_params: Dict passed to LIF constructor
             synapse_params: Dict passed to RSTDPSynapse constructor
+                            Include 'mode': 'stdp' or 'rstdp' (default)
     """
 
     def __init__(self, n_inputs, n_outputs, neuron_params=None, synapse_params=None):
@@ -142,11 +168,12 @@ class SNNLayer:
 
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
+        self.mode = synapse_params.get('mode', 'rstdp')
 
         # Create output neurons
         self.neurons = [LIF(**neuron_params) for _ in range(n_outputs)]
 
-        # Create synapse matrix: synapses[post]x[pre]
+        # Create synapse matrix: synapses[post][pre]
         self.synapses = [
             [RSTDPSynapse(**synapse_params) for _ in range(n_inputs)]
             for _ in range(n_outputs)
@@ -154,13 +181,13 @@ class SNNLayer:
 
     def forward(self, input_spikes):
         """
-        Process one timestep/frams.
-        
+        Process one timestep/frame.
+
         Args:
-            input_spikes: List/array of length n_input (0s and 1s)
-            
+            input_spikes: List/array of length n_inputs (0s and 1s)
+
         Returns:
-            List of output spikes (length n_output)
+            List of output spikes (length n_outputs)
         """
         output_spikes = []
 
@@ -175,12 +202,31 @@ class SNNLayer:
             spike = neuron.update(synaptic_input)
             output_spikes.append(spike)
 
-            # Update all incoming synapse traces and eligibility
-            for i in range(self.n_inputs):
-                self.synapses[j][i].update_traces_and_eligibility(
-                    pre_spike=input_spikes[i],
-                    post_spike=spike,
-                )
+        # Update synapses after all neurons have been evaluated
+        if self.mode == 'stdp':
+            # Lateral inhibition: only winner's synapses receive LTP/LTD,
+            # but all eligibility traces decay each step
+            winner = self.winner_takes_all(output_spikes)
+            for j in range(self.n_outputs):
+                if j != winner:
+                    self.neurons[j].mem = self.neurons[j].reset  # suppress losers
+            for j in range(self.n_outputs):
+                for i in range(self.n_inputs):
+                    # Winner gets full pre/post spike events; losers only decay
+                    pre = input_spikes[i] if j == winner else 0
+                    post = output_spikes[j] if j == winner else 0
+                    self.synapses[j][i].update_eligibility(
+                        pre_spike=pre,
+                        post_spike=post,
+                    )
+        else:
+            # R-STDP: update all synapses, weight updates happen externally via apply_reward()
+            for j in range(self.n_outputs):
+                for i in range(self.n_inputs):
+                    self.synapses[j][i].update_eligibility(
+                        pre_spike=input_spikes[i],
+                        post_spike=output_spikes[j],
+                    )
 
         return output_spikes
 
@@ -188,33 +234,46 @@ class SNNLayer:
         """
         Returns index of winning neuron.
         Spiking neurons always beat non-spiking ones.
-        Magnitude of membrane potential breaks ties.
+        Pre-reset membrane potential breaks ties, ensuring index-independent
+        results equivalent to a parallel hardware comparator on FPGA.
         """
         spiking = [i for i, s in enumerate(output_spikes) if s == 1]
 
         if len(spiking) == 1:
             return spiking[0]
         elif len(spiking) > 1:
-            return spiking[0]
+            # Multiple spikes: highest pre-reset membrane potential wins
+            return max(spiking, key=lambda i: self.neurons[i].pre_reset_mem)
         else:
-            # No spikes: highest membrane potential
-            return int(np.argmax([n.mem for n in self.neurons]))
+            # No spikes: highest pre-reset membrane potential
+            return int(np.argmax([n.pre_reset_mem for n in self.neurons]))
 
     def apply_reward(self, dopamine, winner_idx):
-        """Apply reward only to the winning neuron's synapses."""
+        """
+        Apply reward only to the winning neuron's synapses.
+        No-op in 'stdp' mode (weights already updated in forward()).
+        """
+        if self.mode == 'stdp':
+            return
         for i in range(self.n_inputs):
             # Reinforce/punish winner
             self.synapses[winner_idx][i].apply_reward(dopamine)
 
     def get_weights(self):
-        """Return weight matrix as numpy array [n_output x n_input]."""
+        """Return weight matrix as numpy array [n_outputs x n_inputs]."""
         return np.array([
             [self.synapses[j][i].weight for i in range(self.n_inputs)]
             for j in range(self.n_outputs)
         ])
 
     def reset_state(self):
-        """Reset the state of all neurons in the network."""
+        """Reset the state of all neurons and synaptic traces in the network."""
         for n in self.neurons:
             n.mem = 0.0
             n.spk = 0
+            n.pre_reset_mem = 0.0
+        for j in range(self.n_outputs):
+            for i in range(self.n_inputs):
+                self.synapses[j][i].eligibility = 0.0
+                self.synapses[j][i].pre_timer = RSTDPSynapse.DISABLED
+                self.synapses[j][i].post_timer = RSTDPSynapse.DISABLED

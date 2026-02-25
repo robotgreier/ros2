@@ -224,12 +224,12 @@ class SNNNode(Node):
         spk_msg = Int32MultiArray()
         self.pub_spikes.publish(spk_msg)
 
-    def on_proximity_penalty(self, winner_idx: int, dopamine: float):
+    def on_proximity_penalty(self, winner_idx: int):
         """
         Called when /proximity_stop triggers. winner_idx is what the policy wanted to do.
         Implement your punishment here once we confirm how net.step applies dopamine.
         """
-        self.network.apply_reward(dopamine=dopamine, winner_idx=winner_idx)
+        self.network.apply_reward(dopamine=self.dopamine_wrong, winner_idx=winner_idx)
 
 
     def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):

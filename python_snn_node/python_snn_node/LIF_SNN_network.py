@@ -146,8 +146,9 @@ class RSTDPSynapse:
             dopamine: Reward signal. Positive reinforces correlated activity, negative punishes it.
                       In 'stdp' mode this is always 1.0 (called internally).
         """
-        delta_w = self.learning_rate * dopamine * self.eligibility
-        self.weight = np.clip(self.weight + delta_w, self.w_min, self.w_max)
+        if self.mode == "rstdp":
+            delta_w = self.learning_rate * dopamine * self.eligibility
+            self.weight = np.clip(self.weight + delta_w, self.w_min, self.w_max)
 
 
 class SNNLayer:
@@ -219,7 +220,7 @@ class SNNLayer:
                         pre_spike=pre,
                         post_spike=post,
                     )
-        else:
+        elif self.mode == "rstdp":
             # R-STDP: update all synapses, weight updates happen externally via apply_reward()
             for j in range(self.n_outputs):
                 for i in range(self.n_inputs):
@@ -265,6 +266,27 @@ class SNNLayer:
             [self.synapses[j][i].weight for i in range(self.n_inputs)]
             for j in range(self.n_outputs)
         ])
+    
+
+    def load_weights(self, weight_file="weights.mem", scale=127):
+        """Loads and sets the weights of the current model from file"""
+        # Load file
+        with open(weight_file, "r") as f:
+            lines = f.readlines()
+        
+        idx = 0
+        # Iterate over each synapse
+        for i in range(self.n_outputs):
+            for j in range(self.n_inputs):
+                # Extract weight from file and convert to uint8
+                w = int(lines[idx].strip(), 16)
+                # Convert from uint8 back to signed int8
+                if w > 127:
+                    w -= 256
+                # Update weight
+                self.synapses[i][j].weight = w / scale
+                idx += 1
+
 
     def reset_state(self):
         """Reset the state of all neurons and synaptic traces in the network."""

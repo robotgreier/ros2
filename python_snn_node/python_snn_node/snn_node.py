@@ -140,6 +140,8 @@ class SNNNode(Node):
             synapse_params=synapse_params
         )
 
+        self.network.load_weights(weight_file="weights.mem", scale=127)
+
         # --- State and Communication ---
         self.last_input_stamp = self.get_clock().now()
         self.last_vector = np.zeros(self.input_size, dtype=np.float32)

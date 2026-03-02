@@ -76,7 +76,7 @@ class RSTDPSynapse:
         # STDP window parameters
         self.t_pre = t_pre
         self.t_post = t_post
-        self.tau_e_shift = tau_e_shift
+        self.tau_e_shift = int(tau_e_shift)
         self.dw_pos = dw_pos
         self.dw_neg = dw_neg
 

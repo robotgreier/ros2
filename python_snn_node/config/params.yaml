@@ -3,11 +3,11 @@ python_snn_node:
     # Input from encoder_node
     input_mode: "packed"
     input_topic: "/snn/input"
-    pack_order: ["proximity", "keypoints_grid"] # add more channels here when they are implemented in encoder_node (proximity_stop, etc.)
+    pack_order: ["keypoints_grid", "proximity", "object_rec"] # add more channels here when they are implemented in encoder_node (proximity_stop, etc.)
 
     # Channel sizes, must match encoder_node's output
-    proximity_size: 1
     keypoints_grid_size: 12   # <-- adjust to match encoder_node's number of cells in grid
+    proximity_size: 1
     object_rec_size: 3
 
     # Output actions from SNN
@@ -16,10 +16,6 @@ python_snn_node:
     # Timer and stop conditions
     timer_hz: 30.0
     idle_timeout_sec: 1.0
-
-    # proximity stop logic
-    use_proximity_for_stop: false # if true, proximity=1 means "emergency stop, too close to obstacle"
-    proximity_stop_active_high: true # no effect as long as use_proximity_for_stop=false
 
     # Robot speed settings
     forward_speed: 0.25 # m/s
@@ -33,7 +29,7 @@ python_snn_node:
     ##### Synapse parameters #####
     training_mode: true # Remove?
     learning_rate: 0.125
-    initial_weight: 0.3
+    initial_weight: None
     t_pre: 2
     t_post: 3
     tau_e_shift: 4
@@ -43,7 +39,7 @@ python_snn_node:
     max_weight: 1.0
     dopamine_correct: 0.5
     dopamine_wrong: -1.0
-    mode: 'rstdp'
+    mode: 'stdp'
 
 
     seed: 42 # for reproducibility, or null for random.

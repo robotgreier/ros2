@@ -13,7 +13,7 @@ from std_msgs.msg import (
 from geometry_msgs.msg import Twist
 
 
-from LIF_SNN_network import SNNLayer
+from .LIF_SNN_network import SNNLayer
 
 ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT"] # index 0=LEFT, 1=FORWARD, 2=RIGHT
 
@@ -36,11 +36,11 @@ class SNNNode(Node):
         # Input/Output Setup
         self.declare_parameter('input_mode', 'packed')
         self.declare_parameter('input_topic', '/snn/input')
-        self.declare_parameter('pack_order', ['proximity', 'keypoints_grid', 'object_rec'])
+        self.declare_parameter('pack_order', ['keypoints_grid','proximity', 'object_rec'])
 
         # Channel sizes (matches YAML)
-        self.declare_parameter('proximity_size', 1)
         self.declare_parameter('keypoints_grid_size', 12)
+        self.declare_parameter('proximity_size', 1)
         self.declare_parameter('object_rec_size', 3)
 
         # Action parameters
@@ -85,7 +85,7 @@ class SNNNode(Node):
         self.channel_sizes = {
             'proximity': int(self.get_parameter('proximity_size').value),
             'keypoints_grid': int(self.get_parameter('keypoints_grid_size').value),
-            'object_rec_size': int(self.get_parameter('object_rec_size').value)
+            'object_rec': int(self.get_parameter('object_rec_size').value)
         }
 
         self.timer_hz = float(self.get_parameter('timer_hz').value)
@@ -206,7 +206,7 @@ class SNNNode(Node):
         ##### Run network #####
 
         # Forward pass
-        output_spikes = self.network.forward(input_spikes=input_vec)
+        output_spikes = self.network.forward(input_spikes=self.last_vector)
 
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)

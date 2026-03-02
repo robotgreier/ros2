@@ -67,9 +67,9 @@ class RSTDPSynapse:
                  t_pre=2, t_post=3, tau_e_shift=4,
                  dw_pos=0.25, dw_neg=0.03125,
                  w_min=0.03125, w_max=1.0,
-                 mode='rstdp'):
+                 learning_mode='rstdp'):
 
-        self.mode = mode
+        self.learning_mode = learning_mode
         self.learning_rate = learning_rate
         self.weight = w_init if w_init is not None else np.random.uniform(0.3, 0.8)
 
@@ -135,7 +135,7 @@ class RSTDPSynapse:
         self.eligibility = np.clip(self.eligibility, -1.0, 1.0)
 
         # In stdp mode, apply weight update immediately
-        if self.mode == 'stdp':
+        if self.learning_mode == 'stdp':
             self.apply_reward(dopamine=1.0)
 
     def apply_reward(self, dopamine):
@@ -146,7 +146,7 @@ class RSTDPSynapse:
             dopamine: Reward signal. Positive reinforces correlated activity, negative punishes it.
                       In 'stdp' mode this is always 1.0 (called internally).
         """
-        if self.mode == "rstdp":
+        if self.learning_mode == "rstdp":
             delta_w = self.learning_rate * dopamine * self.eligibility
             self.weight = np.clip(self.weight + delta_w, self.w_min, self.w_max)
 
@@ -169,7 +169,7 @@ class SNNLayer:
 
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.mode = synapse_params.get('mode', 'rstdp')
+        self.learning_mode = synapse_params.get('learning_mode', 'rstdp')
 
         # Create output neurons
         self.neurons = [LIF(**neuron_params) for _ in range(n_outputs)]
@@ -204,7 +204,7 @@ class SNNLayer:
             output_spikes.append(spike)
 
         # Update synapses after all neurons have been evaluated
-        if self.mode == 'stdp':
+        if self.learning_mode == 'stdp':
             # Lateral inhibition: only winner's synapses receive LTP/LTD,
             # but all eligibility traces decay each step
             winner = self.winner_takes_all(output_spikes)
@@ -220,7 +220,7 @@ class SNNLayer:
                         pre_spike=pre,
                         post_spike=post,
                     )
-        elif self.mode == "rstdp":
+        elif self.learning_mode == "rstdp":
             # R-STDP: update all synapses, weight updates happen externally via apply_reward()
             for j in range(self.n_outputs):
                 for i in range(self.n_inputs):
@@ -254,7 +254,7 @@ class SNNLayer:
         Apply reward only to the winning neuron's synapses.
         No-op in 'stdp' mode (weights already updated in forward()).
         """
-        if self.mode == 'stdp':
+        if self.learning_mode == 'stdp':
             return
         for i in range(self.n_inputs):
             # Reinforce/punish winner

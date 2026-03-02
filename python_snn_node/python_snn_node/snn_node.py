@@ -74,7 +74,7 @@ class SNNNode(Node):
         self.declare_parameter('max_weight', 1.0)
         self.declare_parameter('dopamine_correct', 1.0)
         self.declare_parameter('dopamine_wrong', -0.5)
-        self.declare_parameter('mode', 'rstdp')
+        self.declare_parameter('learning_mode', 'rstdp')
         self.declare_parameter('seed', 42)
 
         # --- Read Parameters ---
@@ -114,7 +114,7 @@ class SNNNode(Node):
         self.min_weight = float(self.get_parameter('min_weight').value)
         self.dopamine_correct = float(self.get_parameter('dopamine_correct').value)
         self.dopamine_wrong = float(self.get_parameter('dopamine_wrong').value)
-        self.mode = str(self.get_parameter('mode').value)
+        self.learning_mode = str(self.get_parameter('learning_mode').value)
         
         seed = self.get_parameter('seed').value
         if seed is not None:
@@ -130,7 +130,7 @@ class SNNNode(Node):
             "t_pre": self.t_pre, "t_post": self.t_post, "tau_e_shift": self.tau_e_shift, 
             "dw_pos": self.dw_pos, "dw_neg": self.dw_neg, 
             "w_min": self.min_weight, "w_max": self.max_weight, 
-            "mode": self.mode
+            "learning_mode": self.learning_mode
         }
 
         self.network = SNNLayer(

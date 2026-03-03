@@ -1,5 +1,6 @@
 import numpy as np
-
+import os
+from ament_index_python.packages import get_package_share_directory
 
 class LIF:
     """
@@ -269,22 +270,21 @@ class SNNLayer:
     
 
     def load_weights(self, weight_file="weights.mem", scale=127):
-        """Loads and sets the weights of the current model from file"""
-        # Load file
+        """Loads and sets the weights of the current model from file."""
         with open(weight_file, "r") as f:
-            lines = f.readlines()
-        
+            lines = [ln.strip() for ln in f if ln.strip()]
+
+        expected = self.n_outputs * self.n_inputs
+        if len(lines) < expected:
+            raise ValueError(f"weights file has {len(lines)} lines, expected {expected}")
+
         idx = 0
-        # Iterate over each synapse
-        for i in range(self.n_outputs):
-            for j in range(self.n_inputs):
-                # Extract weight from file and convert to uint8
-                w = int(lines[idx].strip(), 16)
-                # Convert from uint8 back to signed int8
+        for post in range(self.n_outputs):
+            for pre in range(self.n_inputs):
+                w = int(lines[idx], 16)          # 0..255
                 if w > 127:
-                    w -= 256
-                # Update weight
-                self.synapses[i][j].weight = w / scale
+                    w -= 256                     # -> -128..127
+                self.synapses[post][pre].weight = w / float(scale)
                 idx += 1
 
 

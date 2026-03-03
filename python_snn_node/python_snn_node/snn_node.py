@@ -12,10 +12,117 @@ from std_msgs.msg import (
 
 from geometry_msgs.msg import Twist
 
-
 from .LIF_SNN_network import SNNLayer
 
+from ament_index_python.packages import get_package_share_directory
+import os
+
+import csv
+import queue
+import threading
+from datetime import datetime
+
 ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT"] # index 0=LEFT, 1=FORWARD, 2=RIGHT
+
+"""
+CSV LOGGING MODES
+
+The SNN node supports three logging modes controlled by the ROS2 parameter:
+    log_mode := "A" | "B" | "C"
+
+Mode A — Input-triggered logging (Input → Next Output pairing)
+---------------------------------------------------------------
+• One CSV row per NEW input message.
+• The input vector is paired with the NEXT network output
+  produced by the timer loop.
+• Best for supervised-style analysis:
+    "Given this input, what did the network do?"
+
+Mode B — Timer-based logging (Fixed rate, e.g., 30 Hz)
+-------------------------------------------------------
+• One CSV row per timer tick.
+• Logs the latest input state and the current output.
+• Produces steady-rate data (e.g., 30 rows/sec).
+• Best for time-series analysis and plotting behavior over time.
+
+Mode C — Event-based logging (Change detection)
+-----------------------------------------------
+• Logs only when something changes.
+• Default change criteria:
+    - Input vector changes OR
+    - Winner neuron changes OR
+    - Decision string changes
+• Produces compact datasets.
+• Best for event-driven / sparse SNN analysis.
+
+All modes log:
+    t_input_ns
+    input_0 ... input_15
+    t_output_ns
+    winner
+    decision
+    spikes_0 ... spikes_N
+
+CSV files are written asynchronously (non-blocking) to:
+    ~/.ros/snn_logs/
+One file is created per run with timestamped filename.
+"""
+
+class CsvAsyncLogger:
+    def __init__(self, filepath: str, header: list[str], queue_size: int = 5000, flush_hz: float = 10.0):
+        self.filepath = filepath
+        self.header = header
+        self.q = queue.Queue(maxsize=queue_size)
+        self.flush_hz = max(flush_hz, 0.1)
+
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self.dropped = 0
+
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        self._f = open(filepath, "w", newline="")
+        self._w = csv.writer(self._f)
+        self._w.writerow(self.header)
+        self._f.flush()
+
+        self._thread.start()
+
+    def push(self, row: list):
+        try:
+            self.q.put_nowait(row)
+        except queue.Full:
+            self.dropped += 1
+
+    def _run(self):
+        # Flush every 1/flush_hz seconds
+        period = 1.0 / self.flush_hz
+        next_flush = datetime.now().timestamp() + period
+
+        while not self._stop.is_set():
+            try:
+                row = self.q.get(timeout=0.1)
+                self._w.writerow(row)
+            except queue.Empty:
+                pass
+
+            now = datetime.now().timestamp()
+            if now >= next_flush:
+                self._f.flush()
+                next_flush = now + period
+
+        # Final drain + close
+        while True:
+            try:
+                row = self.q.get_nowait()
+                self._w.writerow(row)
+            except queue.Empty:
+                break
+        self._f.flush()
+        self._f.close()
+
+    def close(self):
+        self._stop.set()
+        self._thread.join(timeout=2.0)
 
 class SNNNode(Node):
     """
@@ -76,6 +183,13 @@ class SNNNode(Node):
         self.declare_parameter('dopamine_wrong', -0.5)
         self.declare_parameter('learning_mode', 'rstdp')
         self.declare_parameter('seed', 42)
+
+        # ---- CSV logging ----
+        self.declare_parameter('log_enable', False)
+        self.declare_parameter('log_mode', 'A')  # 'A', 'B', or 'C'
+        self.declare_parameter('log_dir', '')    # default resolved to ~/.ros/snn_logs
+        self.declare_parameter('log_queue_size', 5000)
+        self.declare_parameter('log_flush_hz', 10.0)
 
         # --- Read Parameters ---
         self.input_mode = str(self.get_parameter('input_mode').value).lower().strip()
@@ -140,7 +254,10 @@ class SNNNode(Node):
             synapse_params=synapse_params
         )
 
-        self.network.load_weights(weight_file="weights.mem", scale=127)
+        share_dir = get_package_share_directory('python_snn_node')
+        weight_path = os.path.join(share_dir, 'config', 'weights.mem')
+
+        self.network.load_weights(weight_file=weight_path, scale=127)
 
         # --- State and Communication ---
         self.last_input_stamp = self.get_clock().now()
@@ -169,6 +286,39 @@ class SNNNode(Node):
 
         self.get_logger().info(f"SNN Node initialized: {self.input_size} in -> {self.output_size} out")
 
+        # ---- Logging setup ----
+        self.log_enable = bool(self.get_parameter('log_enable').value)
+        self.log_mode = str(self.get_parameter('log_mode').value).upper().strip()
+        log_dir = str(self.get_parameter('log_dir').value).strip()
+        if log_dir == '':
+            log_dir = os.path.expanduser('~/.ros/snn_logs')
+
+        self.logger_csv = None
+        self.pending_input = None  # (t_input_ns, input_vector_list)
+        self.last_logged = None    # used by mode C
+
+        if self.log_enable:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = os.path.join(log_dir, f"snn_log_{ts}.csv")
+
+            # Build header
+            header = []
+            header.append("t_input_ns")
+            header += [f"input_{i}" for i in range(self.input_size)]
+            header.append("t_output_ns")
+            header.append("winner")
+            header.append("decision")
+            header += [f"spikes_{i}" for i in range(self.output_size)]
+
+            self.logger_csv = CsvAsyncLogger(
+                filepath=filepath,
+                header=header,
+                queue_size=int(self.get_parameter('log_queue_size').value),
+                flush_hz=float(self.get_parameter('log_flush_hz').value),
+            )
+
+            self.get_logger().info(f"CSV logging enabled -> {filepath} (mode {self.log_mode})")
+
     # Helpers 
     def _compute_offsets(self, order, sizes):
         offsets = {}
@@ -192,6 +342,11 @@ class SNNNode(Node):
         # Convert 0/1 uint8 spikes to float32 and store in last_vector
         self.last_vector[:] = data.astype(np.float32)
         self.last_input_stamp = self.get_clock().now()
+
+        if self.logger_csv is not None and self.log_mode == "A":
+            t_input_ns = int(self.last_input_stamp.nanoseconds)
+            # store as plain Python list so it won't change later
+            self.pending_input = (t_input_ns, self.last_vector.astype(int).tolist())
 
     def cb_correct(self, msg: Int32):
         self.correct_output = int(msg.data)
@@ -218,13 +373,47 @@ class SNNNode(Node):
 
 
         # Normal actuation
-        self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
+        decision = self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
 
         # Debug publish winners and spikes
         self.pub_winner.publish(Int32(data=int(winner_idx)))
 
         spk_msg = Int32MultiArray()
+        spk_msg.data = [int(x) for x in output_spikes]
         self.pub_spikes.publish(spk_msg)
+
+        if self.logger_csv is not None:
+            t_output_ns = int(self.get_clock().now().nanoseconds)
+            winner = int(winner_idx)
+            spikes_list = [int(x) for x in output_spikes]  # length = output_size
+
+            # Choose input to log depending on mode
+            if self.log_mode == "A":
+                if self.pending_input is None:
+                    return  # no new input since last log
+                t_input_ns, input_list = self.pending_input
+                self.pending_input = None  # consume it
+
+                row = [t_input_ns] + input_list + [t_output_ns, winner, decision] + spikes_list
+                self.logger_csv.push(row)
+
+            elif self.log_mode == "B":
+                # always log latest input (even if unchanged)
+                t_input_ns = int(self.last_input_stamp.nanoseconds)
+                input_list = self.last_vector.astype(int).tolist()
+                row = [t_input_ns] + input_list + [t_output_ns, winner, decision] + spikes_list
+                self.logger_csv.push(row)
+
+            elif self.log_mode == "C":
+                # log only when something changes (simple default: winner OR any input bit change)
+                t_input_ns = int(self.last_input_stamp.nanoseconds)
+                input_list = self.last_vector.astype(int).tolist()
+
+                signature = (tuple(input_list), winner, decision, tuple(spikes_list))
+                if self.last_logged != signature:
+                    row = [t_input_ns] + input_list + [t_output_ns, winner, decision] + spikes_list
+                    self.logger_csv.push(row)
+                    self.last_logged = signature
 
     def on_proximity_penalty(self, winner_idx: int):
         """
@@ -259,11 +448,19 @@ class SNNNode(Node):
         self.cmd_vel_pub.publish(cmd)
         self.pub_decision.publish(String(data=decision))
 
+        return decision
+
     def publish_stop(self, reason: str = ""):
         if reason:
             self.get_logger().warn(f"STOP: {reason}")
         self.cmd_vel_pub.publish(Twist())
         self.pub_decision.publish(String(data="IDLE"))
+
+    def destroy_node(self):
+        if self.logger_csv is not None:
+            self.logger_csv.close()
+            self.get_logger().info(f"CSV logger closed (dropped_rows={self.logger_csv.dropped})")
+        super().destroy_node()
 
 
 def main():

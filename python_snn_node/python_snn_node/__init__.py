@@ -1,2 +1,1 @@
-from .LIF import LIF
-from .network import LIFNetwork
+from .LIF_SNN_network import SNNLayer

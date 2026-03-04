@@ -25,7 +25,7 @@ class EncodingNode(Node):
         # ---- Parameters ----
         self.declare_parameter("output_topic", "/snn/input")
 
-        self.declare_parameter("pack_order", ["proximity", "keypoints_grid", "aruco_dir"])
+        self.declare_parameter("pack_order", ["keypoints_grid", "proximity", "aruco_dir"])
 
         self.declare_parameter("proximity_topic", "/ultrasonic/front/scan")
         self.declare_parameter("proximity_bin_edges", [1.0, 2.0, 3.0])

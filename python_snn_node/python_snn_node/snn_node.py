@@ -38,7 +38,7 @@ SEARCH_DROPOFF = 2
 APPROACH_DROPOFF = 3
 
 
-class RewardComputer:
+class DopamineComputer:
     """
     Reward shaping for continuous pick-deliver-repeat:
 
@@ -95,7 +95,7 @@ class RewardComputer:
     ):
         seen, pos = self.decode_object_bits(obj_bits)
 
-        reward = 0.0
+        dopamine = 0.0
         comps: dict[str, float] = {}
 
         # (1) Alignment shaping: prefer target centered, mild penalty if unseen
@@ -105,7 +105,7 @@ class RewardComputer:
             comps["align"] = +0.05
         else:
             comps["align"] = +0.01
-        reward += comps["align"]
+        dopamine += comps["align"]
 
         # (2) Action-match shaping: reward actions that correct alignment / approach
         act = 0.0
@@ -120,7 +120,7 @@ class RewardComputer:
             if action_idx in (0, 2):
                 act += 0.02  # turning while searching
         comps["action_match"] = act
-        reward += act
+        dopamine += act
 
         # (3) Lost-target penalty: if target disappears after being seen
         if seen:
@@ -131,10 +131,10 @@ class RewardComputer:
                 self.lost_ticks += 1
                 if self.lost_ticks > self.lost_grace_ticks:
                     if not self._lost_penalized:
-                        reward -= 0.25
+                        dopamine -= 0.25
                         comps["lost_once"] = -0.25
                         self._lost_penalized = True
-                    reward -= 0.01
+                    dopamine -= 0.01
                     comps["lost_tick"] = comps.get("lost_tick", 0.0) - 0.01
 
         # (4) State transition rewards (loop-aware): 3->0 reset is allowed
@@ -147,10 +147,10 @@ class RewardComputer:
                 regress = {(1, 0), (3, 2)}
 
                 if (prev, curr) in forward:
-                    reward += 0.5
+                    dopamine += 0.5
                     comps["state_progress"] = +0.5
                 elif (prev, curr) in regress:
-                    reward -= 0.5
+                    dopamine -= 0.5
                     comps["state_regress"] = -0.5
                 elif (prev, curr) in reset_ok:
                     comps["state_reset_ok"] = 0.0
@@ -161,15 +161,15 @@ class RewardComputer:
 
         # (5) Grab/drop success rewards (big, sparse)
         if grab_event == EVENT_GRABBED:
-            reward += 2.0
+            dopamine += 2.0
             comps["grabbed"] = +2.0
         elif grab_event == EVENT_DROPPED:
-            reward += 2.0
+            dopamine += 2.0
             comps["dropped"] = +2.0
 
         # (6) Proximity stop penalty: near collision / unsafe driving
         if proximity_stop:
-            reward -= 0.4
+            dopamine -= 0.4
             comps["proximity_stop"] = -0.4
 
         # (7) Gated proximity spike reward: only during APPROACH + target centered
@@ -180,11 +180,11 @@ class RewardComputer:
             and (not proximity_stop)
         )
         if gated and proximity_spike == 1:
-            reward += 0.08
+            dopamine += 0.08
             comps["prox_spike_gated"] = +0.08
 
         self.prev_seen = seen
-        return reward, comps
+        return dopamine, comps
 
 
 """
@@ -383,10 +383,10 @@ class SNNNode(Node):
             10
         )
 
-        # Reward publisher for plotting/debugging
-        self.pub_reward = self.create_publisher(Float32, '/snn/reward', 10)
+        # Dopamine publisher for plotting/debugging
+        self.pub_dopamine = self.create_publisher(Float32, '/snn/dopamine', 10)
 
-        self.rewarder = RewardComputer(
+        self.rewarder = DopamineComputer(
             lost_grace_ticks=int(self.get_parameter('lost_grace_ticks').value)
         )
 
@@ -621,7 +621,7 @@ class SNNNode(Node):
         obj_bits = self._extract_object_bits_from_last()
         prox_spike = self._extract_proximity_spike_from_last()
 
-        reward, reward_comps = self.rewarder.step(
+        dopamine, reward_comps = self.rewarder.step(
             obj_bits=obj_bits,
             proximity_spike=prox_spike,
             action_idx=int(winner_idx),
@@ -630,16 +630,16 @@ class SNNNode(Node):
             proximity_stop=self.proximity_stop
         )
 
-        self.pub_reward.publish(Float32(data=float(reward)))
+        self.pub_dopamine.publish(Float32(data=float(dopamine)))
 
-        # ---- Optional: apply reward to learning rule (when you enable training) ----
-        # self.network.apply_reward(dopamine=reward, winner_idx=int(winner_idx))
+        # ---- Optional: apply dopamine to learning rule (when you enable training) ----
+        # self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
 
         # ---- Add to your existing logger ----
         # Recommended: store reward + some context so you can tune later.
         # If you already log pending_input, just append these fields to the same row.
         # Example (pseudo):
-        # self.logger_csv.write_row(..., reward=reward, state=self.task_state,
+        # self.logger_csv.write_row(..., reward=dopamine, state=self.task_state,
         #                           grab_event=self.grab_event,
         #                           proximity_stop=int(self.proximity_stop),
         #                           **reward_comps)

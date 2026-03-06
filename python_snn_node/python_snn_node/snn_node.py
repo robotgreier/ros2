@@ -14,278 +14,14 @@ from std_msgs.msg import (UInt8,
 from geometry_msgs.msg import Twist
 
 from .LIF_SNN_network import SNNLayer
+from .reward_system import DopamineComputer, EVENT_IDLE
+from .csv_logger import CsvAsyncLogger
 
 from ament_index_python.packages import get_package_share_directory
 import os
-
-import csv
-import queue
-import threading
 from datetime import datetime
 
 ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT"] # index 0=LEFT, 1=FORWARD, 2=RIGHT
-
-# ---- Grab event codes (match grab_node) ----
-EVENT_IDLE = 0
-EVENT_GRABBED = 1
-EVENT_DROPPED = 2
-EVENT_BUSY = 3
-
-# ---- Task states (match task_manager) ----
-SEARCH_ITEM = 0
-APPROACH_ITEM = 1
-SEARCH_DROPOFF = 2
-APPROACH_DROPOFF = 3
-
-
-class DopamineComputer:
-    """
-    Reward shaping for continuous pick-deliver-repeat:
-
-    - Dense shaping:
-      * alignment reward from object_rec (L/C/R/none)
-      * action-match reward (turn toward target; go forward when centered)
-      * gated proximity-bracket spike reward during APPROACH + centered
-
-    - Sparse rewards:
-      * state progress reward (0->1->2->3)
-      * grab/drop success reward (from grab_node event)
-
-    - Penalties:
-      * losing target after having it (after grace ticks)
-      * proximity_stop (near collision / unsafe)
-      * regressions that indicate failure (1->0, 3->2)
-      * IMPORTANT: 3->0 reset is allowed (no penalty).
-    """
-
-    def __init__(self, lost_grace_ticks: int = 5):
-        self.prev_task_state: int | None = None
-        self.prev_seen: bool = False
-        self.lost_ticks: int = 0
-        self.lost_grace_ticks = lost_grace_ticks
-        self._lost_penalized = False
-
-    @staticmethod
-    def decode_object_bits(obj_bits: list[int]):
-        """
-        Encoding:
-          000 = none
-          001 = right
-          010 = center
-          100 = left
-        Returns: (seen: bool, pos: -1/0/+1/None)
-        """
-        l, c, r = obj_bits
-        if l == 1 and c == 0 and r == 0:
-            return True, -1
-        if l == 0 and c == 1 and r == 0:
-            return True, 0
-        if l == 0 and c == 0 and r == 1:
-            return True, +1
-        return False, None
-
-    def step(
-        self,
-        obj_bits: list[int],         # [L,C,R]
-        proximity_spike: int,        # 0/1 (distance bracket change spike)
-        action_idx: int,             # 0=LEFT, 1=FORWARD, 2=RIGHT
-        task_state: int | None,      # UInt8 or None if not yet received
-        grab_event: int,             # UInt8
-        proximity_stop: bool         # Bool
-    ):
-        seen, pos = self.decode_object_bits(obj_bits)
-
-        dopamine = 0.0
-        comps: dict[str, float] = {}
-
-        # (1) Alignment shaping: prefer target centered, mild penalty if unseen
-        if not seen:
-            comps["align"] = -0.02
-        elif pos == 0:
-            comps["align"] = +0.05
-        else:
-            comps["align"] = +0.01
-        dopamine += comps["align"]
-
-        # (2) Action-match shaping: reward actions that correct alignment / approach
-        act = 0.0
-        if seen:
-            if pos == 0 and action_idx == 1:
-                act += 0.10  # centered + forward
-            elif pos == -1 and action_idx == 0:
-                act += 0.06  # left-of-center + turn left
-            elif pos == +1 and action_idx == 2:
-                act += 0.06  # right-of-center + turn right
-        else:
-            if action_idx in (0, 2):
-                act += 0.02  # turning while searching
-        comps["action_match"] = act
-        dopamine += act
-
-        # (3) Lost-target penalty: if target disappears after being seen
-        if seen:
-            self.lost_ticks = 0
-            self._lost_penalized = False
-        else:
-            if self.prev_seen:
-                self.lost_ticks += 1
-                if self.lost_ticks > self.lost_grace_ticks:
-                    if not self._lost_penalized:
-                        dopamine -= 0.25
-                        comps["lost_once"] = -0.25
-                        self._lost_penalized = True
-                    dopamine -= 0.01
-                    comps["lost_tick"] = comps.get("lost_tick", 0.0) - 0.01
-
-        # (4) State transition rewards (loop-aware): 3->0 reset is allowed
-        if task_state is not None:
-            if self.prev_task_state is not None:
-                prev, curr = self.prev_task_state, task_state
-
-                forward = {(0, 1), (1, 2), (2, 3)}
-                reset_ok = {(3, 0)}
-                regress = {(1, 0), (3, 2)}
-
-                if (prev, curr) in forward:
-                    dopamine += 0.5
-                    comps["state_progress"] = +0.5
-                elif (prev, curr) in regress:
-                    dopamine -= 0.5
-                    comps["state_regress"] = -0.5
-                elif (prev, curr) in reset_ok:
-                    comps["state_reset_ok"] = 0.0
-                else:
-                    comps["state_other"] = 0.0
-
-            self.prev_task_state = task_state
-
-        # (5) Grab/drop success rewards (big, sparse)
-        if grab_event == EVENT_GRABBED:
-            dopamine += 2.0
-            comps["grabbed"] = +2.0
-        elif grab_event == EVENT_DROPPED:
-            dopamine += 2.0
-            comps["dropped"] = +2.0
-
-        # (6) Proximity stop penalty: near collision / unsafe driving
-        if proximity_stop:
-            dopamine -= 0.4
-            comps["proximity_stop"] = -0.4
-
-        # (7) Gated proximity spike reward: only during APPROACH + target centered
-        # This uses your "higher spike frequency when close" idea, but avoids wall-farming.
-        gated = (
-            (task_state in (APPROACH_ITEM, APPROACH_DROPOFF))
-            and seen and (pos == 0)
-            and (not proximity_stop)
-        )
-        if gated and proximity_spike == 1:
-            dopamine += 0.08
-            comps["prox_spike_gated"] = +0.08
-
-        self.prev_seen = seen
-        return dopamine, comps
-
-
-"""
-CSV LOGGING MODES
-
-The SNN node supports three logging modes controlled by the ROS2 parameter:
-    log_mode := "A" | "B" | "C"
-
-Mode A — Input-triggered logging (Input → Next Output pairing)
----------------------------------------------------------------
-• One CSV row per NEW input message.
-• The input vector is paired with the NEXT network output
-  produced by the timer loop.
-• Best for supervised-style analysis:
-    "Given this input, what did the network do?"
-
-Mode B — Timer-based logging (Fixed rate, e.g., 30 Hz)
--------------------------------------------------------
-• One CSV row per timer tick.
-• Logs the latest input state and the current output.
-• Produces steady-rate data (e.g., 30 rows/sec).
-• Best for time-series analysis and plotting behavior over time.
-
-Mode C — Event-based logging (Change detection)
------------------------------------------------
-• Logs only when something changes.
-• Default change criteria:
-    - Input vector changes OR
-    - Winner neuron changes OR
-    - Decision string changes
-• Produces compact datasets.
-• Best for event-driven / sparse SNN analysis.
-
-All modes log:
-    t_input_ns
-    input_0 ... input_15
-    t_output_ns
-    winner
-    decision
-    spikes_0 ... spikes_N
-
-CSV files are written asynchronously (non-blocking) to:
-    ~/.ros/snn_logs/
-One file is created per run with timestamped filename.
-"""
-
-class CsvAsyncLogger:
-    def __init__(self, filepath: str, header: list[str], queue_size: int = 5000, flush_hz: float = 10.0):
-        self.filepath = filepath
-        self.header = header
-        self.q = queue.Queue(maxsize=queue_size)
-        self.flush_hz = max(flush_hz, 0.1)
-
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self.dropped = 0
-
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        self._f = open(filepath, "w", newline="")
-        self._w = csv.writer(self._f)
-        self._w.writerow(self.header)
-        self._f.flush()
-
-        self._thread.start()
-
-    def push(self, row: list):
-        try:
-            self.q.put_nowait(row)
-        except queue.Full:
-            self.dropped += 1
-
-    def _run(self):
-        # Flush every 1/flush_hz seconds
-        period = 1.0 / self.flush_hz
-        next_flush = datetime.now().timestamp() + period
-
-        while not self._stop.is_set():
-            try:
-                row = self.q.get(timeout=0.1)
-                self._w.writerow(row)
-            except queue.Empty:
-                pass
-
-            now = datetime.now().timestamp()
-            if now >= next_flush:
-                self._f.flush()
-                next_flush = now + period
-
-        # Final drain + close
-        while True:
-            try:
-                row = self.q.get_nowait()
-                self._w.writerow(row)
-            except queue.Empty:
-                break
-        self._f.flush()
-        self._f.close()
-
-    def close(self):
-        self._stop.set()
-        self._thread.join(timeout=2.0)
 
 class SNNNode(Node):
     """
@@ -386,7 +122,7 @@ class SNNNode(Node):
         # Dopamine publisher for plotting/debugging
         self.pub_dopamine = self.create_publisher(Float32, '/snn/dopamine', 10)
 
-        self.rewarder = DopamineComputer(
+        self.dopamine_computer = DopamineComputer(
             lost_grace_ticks=int(self.get_parameter('lost_grace_ticks').value)
         )
 
@@ -519,6 +255,14 @@ class SNNNode(Node):
             header.append("t_output_ns")
             header.append("winner")
             header.append("decision")
+            header.append("dopamine_total")
+            header.append("dop_align")
+            header.append("dop_action")
+            header.append("dop_lost")
+            header.append("dop_state")
+            header.append("dop_grabdrop")
+            header.append("dop_prox_stop")
+            header.append("dop_prox_approach")
             header += [f"spikes_{i}" for i in range(self.output_size)]
 
             self.logger_csv = CsvAsyncLogger(
@@ -529,6 +273,17 @@ class SNNNode(Node):
             )
 
             self.get_logger().info(f"CSV logging enabled -> {filepath} (mode {self.log_mode})")
+
+    def _on_task_state(self, msg: UInt8):
+        self.task_state = int(msg.data)
+
+
+    def _on_grab_event(self, msg: UInt8):
+        self.grab_event = int(msg.data)
+
+
+    def _on_proximity_stop(self, msg: Bool):
+        self.proximity_stop = bool(msg.data)
 
     ### For training ###
     def _extract_object_bits_from_last(self) -> list[int]:
@@ -583,6 +338,13 @@ class SNNNode(Node):
             # store as plain Python list so it won't change later
             self.pending_input = (t_input_ns, self.last_vector.astype(int).tolist())
 
+        ###Temporary
+        if self.logger_csv is not None and self.log_mode == "A":
+            t_input_ns = int(self.last_input_stamp.nanoseconds)
+            self.pending_input = (t_input_ns, self.last_vector.astype(int).tolist())
+            self.get_logger().info("Mode A: pending_input stored")
+        ###/Temporary
+
     def cb_correct(self, msg: Int32):
         self.correct_output = int(msg.data)
 
@@ -593,7 +355,9 @@ class SNNNode(Node):
             self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
             return
 
-
+        ###Temporary
+        self.get_logger().warn(f"Timer returned early: stale input {age_sec:.2f}s")
+        ###/Temporary
 
         ##### Run network #####
 
@@ -621,7 +385,7 @@ class SNNNode(Node):
         obj_bits = self._extract_object_bits_from_last()
         prox_spike = self._extract_proximity_spike_from_last()
 
-        dopamine, reward_comps = self.rewarder.step(
+        dopamine, dopamine_comps = self.dopamine_computer.step(
             obj_bits=obj_bits,
             proximity_spike=prox_spike,
             action_idx=int(winner_idx),
@@ -629,6 +393,30 @@ class SNNNode(Node):
             grab_event=self.grab_event,
             proximity_stop=self.proximity_stop
         )
+
+        # ---- Dopamine component breakdown for logging ----
+        dop_align = float(dopamine_comps.get("align", 0.0))
+        dop_action = float(dopamine_comps.get("action_match", 0.0))
+
+        dop_lost = (
+            float(dopamine_comps.get("lost_once", 0.0)) +
+            float(dopamine_comps.get("lost_tick", 0.0))
+        )
+
+        dop_state = (
+            float(dopamine_comps.get("state_progress", 0.0)) +
+            float(dopamine_comps.get("state_regress", 0.0)) +
+            float(dopamine_comps.get("state_reset_ok", 0.0)) +
+            float(dopamine_comps.get("state_other", 0.0))
+        )
+
+        dop_grabdrop = (
+            float(dopamine_comps.get("grabbed", 0.0)) +
+            float(dopamine_comps.get("dropped", 0.0))
+        )
+
+        dop_prox_stop = float(dopamine_comps.get("proximity_stop", 0.0))
+        dop_prox_approach = float(dopamine_comps.get("prox_spike_gated", 0.0))
 
         self.pub_dopamine.publish(Float32(data=float(dopamine)))
 
@@ -649,31 +437,104 @@ class SNNNode(Node):
             winner = int(winner_idx)
             spikes_list = [int(x) for x in output_spikes]  # length = output_size
 
+            self.get_logger().info(f"Mode A check: pending_input is None? {self.pending_input is None}")
+
             # Choose input to log depending on mode
             if self.log_mode == "A":
+                self.get_logger().info(f"Mode A check: pending_input is None? {self.pending_input is None}")
                 if self.pending_input is None:
                     return  # no new input since last log
                 t_input_ns, input_list = self.pending_input
                 self.pending_input = None  # consume it
 
-                row = [t_input_ns] + input_list + [t_output_ns, winner, decision] + spikes_list
+                row = (
+                        [t_input_ns]
+                        + input_list
+                        + [
+                            t_output_ns,
+                            winner,
+                            decision,
+                            float(dopamine),
+                            dop_align,
+                            dop_action,
+                            dop_lost,
+                            dop_state,
+                            dop_grabdrop,
+                            dop_prox_stop,
+                            dop_prox_approach,
+                        ]
+                        + spikes_list
+                    )
+                self.get_logger().info(f"Pushing CSV row with len={len(row)}")
                 self.logger_csv.push(row)
 
             elif self.log_mode == "B":
                 # always log latest input (even if unchanged)
                 t_input_ns = int(self.last_input_stamp.nanoseconds)
                 input_list = self.last_vector.astype(int).tolist()
-                row = [t_input_ns] + input_list + [t_output_ns, winner, decision] + spikes_list
+                row = (
+                    [t_input_ns]
+                    + input_list
+                    + [
+                        t_output_ns,
+                        winner,
+                        decision,
+                        float(dopamine),
+                        dop_align,
+                        dop_action,
+                        dop_lost,
+                        dop_state,
+                        dop_grabdrop,
+                        dop_prox_stop,
+                        dop_prox_approach,
+                    ]
+                    + spikes_list
+                )
+
+                self.get_logger().info(f"Pushing CSV row with len={len(row)}")
                 self.logger_csv.push(row)
 
             elif self.log_mode == "C":
-                # log only when something changes (simple default: winner OR any input bit change)
+                # log only when something changes
                 t_input_ns = int(self.last_input_stamp.nanoseconds)
                 input_list = self.last_vector.astype(int).tolist()
 
-                signature = (tuple(input_list), winner, decision, tuple(spikes_list))
+                signature = (
+                    tuple(input_list),
+                    winner,
+                    decision,
+                    round(float(dopamine), 6),
+                    dop_align,
+                    dop_action,
+                    dop_lost,
+                    dop_state,
+                    dop_grabdrop,
+                    dop_prox_stop,
+                    dop_prox_approach,
+                    tuple(spikes_list),
+                )
+
                 if self.last_logged != signature:
-                    row = [t_input_ns] + input_list + [t_output_ns, winner, decision] + spikes_list
+                    row = (
+                        [t_input_ns]
+                        + input_list
+                        + [
+                            t_output_ns,
+                            winner,
+                            decision,
+                            float(dopamine),
+                            dop_align,
+                            dop_action,
+                            dop_lost,
+                            dop_state,
+                            dop_grabdrop,
+                            dop_prox_stop,
+                            dop_prox_approach,
+                        ]
+                        + spikes_list
+                    )
+
+                    self.get_logger().info(f"Pushing CSV row with len={len(row)}")
                     self.logger_csv.push(row)
                     self.last_logged = signature
 

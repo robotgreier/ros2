@@ -5,6 +5,7 @@ from enum import Enum
 
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
 from std_msgs.msg import UInt8
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist
@@ -50,18 +51,28 @@ class GrabNode(Node):
 
         # -------- Parameters --------
         self.declare_parameter("center_threshold", 0.1)
-        self.declare_parameter("item_distance_threshold", 0.10)
-        self.declare_parameter("dropoff_distance_threshold", 0.10)
+        self.declare_parameter("item_distance_threshold", 1.0)
+        self.declare_parameter("dropoff_distance_threshold", 2.0)
 
         self.declare_parameter("approach_speed", 0.05)
-        self.declare_parameter("approach_distance_item", 0.10)
-        self.declare_parameter("approach_distance_dropoff", 0.10)
+        self.declare_parameter("approach_distance_item", 1.0)
+        self.declare_parameter("approach_distance_dropoff", 1.0)
 
         self.declare_parameter("backup_speed", 0.05)
-        self.declare_parameter("backup_distance", 0.10)
+        self.declare_parameter("backup_distance", 1.0)
 
+        self.declare_parameter("motion_publish_rate_hz", 20.0)
+
+        self.declare_parameter("item_final_distance", 0.10)
+        self.declare_parameter("dropoff_final_distance", 0.15)
+
+        self.declare_parameter("min_forward_distance", 0.0)
+        self.declare_parameter("max_forward_distance", 2.0)
+
+        # For simulation
         self.declare_parameter("use_sim_gripper", True)
         self.use_sim_gripper = self.get_parameter("use_sim_gripper").value 
+        #/ For simulation
 
         self.center_threshold = self.get_parameter("center_threshold").value
         self.item_dist_thresh = self.get_parameter("item_distance_threshold").value
@@ -73,6 +84,14 @@ class GrabNode(Node):
 
         self.backup_speed = self.get_parameter("backup_speed").value
         self.backup_distance = self.get_parameter("backup_distance").value
+
+        self.motion_publish_rate_hz = self.get_parameter("motion_publish_rate_hz").value
+
+        self.item_final_distance = self.get_parameter("item_final_distance").value
+        self.dropoff_final_distance = self.get_parameter("dropoff_final_distance").value
+
+        self.min_forward_distance = self.get_parameter("min_forward_distance").value
+        self.max_forward_distance = self.get_parameter("max_forward_distance").value
 
         # -------- Publishers --------
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel/grab", 10)
@@ -93,6 +112,10 @@ class GrabNode(Node):
         # -------- Service Client --------
         self.cli = self.create_client(SetTaskState, "/task/set_state")
 
+        # This starts the repeating publisher timer once,
+        #  and it will only actively publish during movement states.
+        self.start_cmd_stream()
+
         # -------- Internal State --------
         self.state = GrabState.IDLE
         self.current_task_state = SEARCH_ITEM
@@ -104,6 +127,12 @@ class GrabNode(Node):
         self.service_future = None
 
         self.get_logger().info("Grab node initialized.")
+
+        # Motion 
+        self.motion_end_time = None # when the current motion should end
+        self.active_cmd = Twist() # the command to keep publishing
+        self.motion_timer = None # optional, if you still want to keep the name
+        self.cmd_stream_timer = None # a repeating timer that publishes /cmd_vel/grab
 
         # For simulation
         if self.use_sim_gripper:
@@ -122,6 +151,10 @@ class GrabNode(Node):
                 self.state = GrabState.WAITING_ALIGNMENT
                 self.get_logger().info("Entering WAITING_ALIGNMENT")
         else:
+            if self.state in [GrabState.EXECUTING_FORWARD, GrabState.EXECUTING_BACKUP]:
+                self.stop_motion()
+                self.motion_end_time = None
+
             self.state = GrabState.IDLE
 
     def cb_aruco(self, msg: Float32MultiArray):
@@ -135,6 +168,8 @@ class GrabNode(Node):
 
         if self.state == GrabState.WAITING_ALIGNMENT:
             self.check_alignment_and_distance()
+
+    
 
     # =====================================================
     # ------------------ Logic ----------------------------
@@ -159,24 +194,46 @@ class GrabNode(Node):
             self.start_forward_motion()
 
     def start_forward_motion(self):
-
         self.publish_event(EVENT_BUSY)
 
+        if self.distance is None:
+            self.get_logger().warn("No distance available. Cannot start forward motion.")
+            return
+
         if self.current_task_state == APPROACH_ITEM:
-            dist = self.approach_item_dist
+            desired_final_distance = float(self.item_final_distance)
         else:
-            dist = self.approach_drop_dist
+            desired_final_distance = float(self.dropoff_final_distance)
 
-        duration = dist / self.approach_speed
+        remaining_distance = float(self.distance) - desired_final_distance
 
-        self.publish_velocity(self.approach_speed)
+        # Clamp remaining distance
+        remaining_distance = max(float(self.min_forward_distance), remaining_distance)
+        remaining_distance = min(float(self.max_forward_distance), remaining_distance)
 
-        self.state = GrabState.EXECUTING_FORWARD
-        self.motion_timer = self.create_timer(duration, self.finish_forward_motion)
+        if remaining_distance <= 0.0:
+            self.get_logger().info("Already close enough. Skipping forward motion.")
+            self.state = GrabState.ACTUATING
+            self.perform_actuation()
+            return
+
+        duration = remaining_distance / float(self.approach_speed)
+
+        self.get_logger().info(
+            f"Starting forward motion: measured_distance={self.distance:.3f}, "
+            f"target_final_distance={desired_final_distance:.3f}, "
+            f"remaining_distance={remaining_distance:.3f}, duration={duration:.3f}s"
+        )
+
+        self.start_timed_motion(
+            linear_x=float(self.approach_speed),
+            duration=duration,
+            new_state=GrabState.EXECUTING_FORWARD,
+        )
 
     def finish_forward_motion(self):
         self.stop_motion()
-        self.motion_timer.cancel()
+        self.motion_end_time = None
 
         self.state = GrabState.ACTUATING
         self.perform_actuation()
@@ -227,19 +284,45 @@ class GrabNode(Node):
         future.add_done_callback(callback)
 
     def start_backup_motion(self):
+        duration = float(self.backup_distance) / float(self.backup_speed)
 
-        duration = self.backup_distance / self.backup_speed
-        self.publish_velocity(-self.backup_speed)
+        self.get_logger().info(
+            f"Starting backup motion: distance={self.backup_distance:.3f}, "
+            f"speed={self.backup_speed:.3f}, duration={duration:.3f}s"
+        )
 
-        self.state = GrabState.EXECUTING_BACKUP
-        self.motion_timer = self.create_timer(duration, self.finish_backup_motion)
+        self.start_timed_motion(
+            linear_x=-float(self.backup_speed),
+            duration=duration,
+            new_state=GrabState.EXECUTING_BACKUP,
+        )
 
     def finish_backup_motion(self):
         self.stop_motion()
-        self.motion_timer.cancel()
+        self.motion_end_time = None
 
         next_state = SEARCH_ITEM
         self.call_set_state(next_state)
+
+    def start_timed_motion(self, linear_x: float, duration: float, new_state: GrabState):
+        if duration <= 0.0:
+            self.get_logger().warn("Requested motion duration <= 0. Skipping motion.")
+
+            if new_state == GrabState.EXECUTING_FORWARD:
+                self.finish_forward_motion()
+            elif new_state == GrabState.EXECUTING_BACKUP:
+                self.finish_backup_motion()
+            return
+
+        self.active_cmd = Twist()
+        self.active_cmd.linear.x = float(linear_x)
+        self.active_cmd.angular.z = 0.0
+
+        self.state = new_state
+        now = self.get_clock().now()
+        self.motion_end_time = now + Duration(seconds=float(duration))
+
+        self.cmd_pub.publish(self.active_cmd)
 
     # =====================================================
     # ------------------ Service --------------------------
@@ -282,10 +365,33 @@ class GrabNode(Node):
         self.cmd_pub.publish(cmd)
 
     def stop_motion(self):
-        self.cmd_pub.publish(Twist())
+        self.active_cmd = Twist()
+        self.cmd_pub.publish(self.active_cmd)
 
     def publish_event(self, code):
         self.event_pub.publish(UInt8(data=code))
+
+    def publish_velocity(self, linear_x: float, angular_z: float = 0.0):
+        msg = Twist()
+        msg.linear.x = float(linear_x)
+        msg.angular.z = float(angular_z)
+        self.cmd_pub.publish(msg)
+    
+    def start_cmd_stream(self):
+        if self.cmd_stream_timer is None:
+            period = 1.0 / max(1e-6, float(self.motion_publish_rate_hz))
+            self.cmd_stream_timer = self.create_timer(period, self.cmd_stream_callback)
+
+    def cmd_stream_callback(self):
+        if self.state in [GrabState.EXECUTING_FORWARD, GrabState.EXECUTING_BACKUP]:
+            self.cmd_pub.publish(self.active_cmd)
+
+            now = self.get_clock().now()
+            if self.motion_end_time is not None and now >= self.motion_end_time:
+                if self.state == GrabState.EXECUTING_FORWARD:
+                    self.finish_forward_motion()
+                elif self.state == GrabState.EXECUTING_BACKUP:
+                    self.finish_backup_motion()
 
 
 def main(args=None):

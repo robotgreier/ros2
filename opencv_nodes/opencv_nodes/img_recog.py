@@ -55,8 +55,8 @@ class ImgRecog(Node):
         self.declare_parameter("out_topic", "/vision/aruco/target")
 
         self.declare_parameter("aruco_dictionary", "DICT_4X4_50")
-        self.declare_parameter("item_ids", [0])      # change via params/launch
-        self.declare_parameter("dropoff_ids", [1])   # change via params/launch
+        self.declare_parameter("item_ids", [0, 1, 2, 3])      # change via params/launch
+        self.declare_parameter("dropoff_ids", [11])   # change via params/launch
 
         # Pose estimation needs marker_length (meters)
         self.declare_parameter("marker_length_m", 0.08)  # 8cm default; adjust to your printed marker size

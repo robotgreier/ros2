@@ -338,13 +338,6 @@ class SNNNode(Node):
             # store as plain Python list so it won't change later
             self.pending_input = (t_input_ns, self.last_vector.astype(int).tolist())
 
-        ###Temporary
-        if self.logger_csv is not None and self.log_mode == "A":
-            t_input_ns = int(self.last_input_stamp.nanoseconds)
-            self.pending_input = (t_input_ns, self.last_vector.astype(int).tolist())
-            self.get_logger().info("Mode A: pending_input stored")
-        ###/Temporary
-
     def cb_correct(self, msg: Int32):
         self.correct_output = int(msg.data)
 
@@ -354,10 +347,6 @@ class SNNNode(Node):
         if age_sec > self.idle_timeout_sec:
             self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
             return
-
-        ###Temporary
-        self.get_logger().warn(f"Timer returned early: stale input {age_sec:.2f}s")
-        ###/Temporary
 
         ##### Run network #####
 

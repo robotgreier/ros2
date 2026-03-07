@@ -112,6 +112,13 @@ class GrabNode(Node):
         # -------- Service Client --------
         self.cli = self.create_client(SetTaskState, "/task/set_state")
 
+
+        # Motion 
+        self.motion_end_time = None # when the current motion should end
+        self.active_cmd = Twist() # the command to keep publishing
+        self.motion_timer = None # optional, if you still want to keep the name
+        self.cmd_stream_timer = None # a repeating timer that publishes /cmd_vel/grab
+
         # This starts the repeating publisher timer once,
         #  and it will only actively publish during movement states.
         self.start_cmd_stream()
@@ -128,12 +135,6 @@ class GrabNode(Node):
 
         self.get_logger().info("Grab node initialized.")
 
-        # Motion 
-        self.motion_end_time = None # when the current motion should end
-        self.active_cmd = Twist() # the command to keep publishing
-        self.motion_timer = None # optional, if you still want to keep the name
-        self.cmd_stream_timer = None # a repeating timer that publishes /cmd_vel/grab
-
         # For simulation
         if self.use_sim_gripper:
             self.grab_cli = self.create_client(Trigger, "/gripper/grab")
@@ -146,15 +147,24 @@ class GrabNode(Node):
     def cb_task_state(self, msg: UInt8):
         self.current_task_state = msg.data
 
+        # Only enter alignment waiting from IDLE
         if self.current_task_state in [APPROACH_ITEM, APPROACH_DROPOFF]:
             if self.state == GrabState.IDLE:
                 self.state = GrabState.WAITING_ALIGNMENT
                 self.get_logger().info("Entering WAITING_ALIGNMENT")
-        else:
-            if self.state in [GrabState.EXECUTING_FORWARD, GrabState.EXECUTING_BACKUP]:
-                self.stop_motion()
-                self.motion_end_time = None
+            return
 
+        # If we are busy doing a grab/drop routine, ignore external task-state changes
+        if self.state in [
+            GrabState.EXECUTING_FORWARD,
+            GrabState.ACTUATING,
+            GrabState.EXECUTING_BACKUP,
+            GrabState.WAITING_SERVICE,
+        ]:
+            return
+
+        # If we were only waiting for alignment and task changed away, go idle
+        if self.state == GrabState.WAITING_ALIGNMENT:
             self.state = GrabState.IDLE
 
     def cb_aruco(self, msg: Float32MultiArray):
@@ -180,6 +190,10 @@ class GrabNode(Node):
         if self.x_norm is None or self.distance is None:
             return
 
+        if self.distance < 0.0:
+            self.get_logger().warn(f"Ignoring invalid distance: {self.distance:.3f}")
+            return
+
         centered = abs(self.x_norm) < self.center_threshold
 
         if self.current_task_state == APPROACH_ITEM:
@@ -196,8 +210,10 @@ class GrabNode(Node):
     def start_forward_motion(self):
         self.publish_event(EVENT_BUSY)
 
-        if self.distance is None:
-            self.get_logger().warn("No distance available. Cannot start forward motion.")
+        if self.distance is None or self.distance < 0.0:
+            self.get_logger().warn(
+                f"Invalid distance in start_forward_motion: {self.distance}"
+            )
             return
 
         if self.current_task_state == APPROACH_ITEM:
@@ -211,11 +227,24 @@ class GrabNode(Node):
         remaining_distance = max(float(self.min_forward_distance), remaining_distance)
         remaining_distance = min(float(self.max_forward_distance), remaining_distance)
 
+        self.get_logger().info(
+            f"Forward check: task_state={self.current_task_state}, "
+            f"measured_distance={self.distance:.3f}, "
+            f"desired_final_distance={desired_final_distance:.3f}, "
+            f"remaining_distance={remaining_distance:.3f}"
+        )
+
+        # if remaining_distance <= 0.0:
+        #     self.get_logger().info("Already close enough. Skipping forward motion.")
+        #     self.state = GrabState.ACTUATING
+        #     self.perform_actuation()
+        #     return
+
+        ###Temp
         if remaining_distance <= 0.0:
-            self.get_logger().info("Already close enough. Skipping forward motion.")
-            self.state = GrabState.ACTUATING
-            self.perform_actuation()
-            return
+            remaining_distance = 0.3
+            self.get_logger().warn("TEST MODE: forcing 0.3 m forward motion")
+        ###Temp
 
         duration = remaining_distance / float(self.approach_speed)
 
@@ -238,30 +267,41 @@ class GrabNode(Node):
         self.state = GrabState.ACTUATING
         self.perform_actuation()
 
+    # def perform_actuation(self):
+
+    #     if self.current_task_state == APPROACH_ITEM:
+
+    #         self.publish_event(EVENT_GRABBED)
+
+    #         if self.use_sim_gripper:
+    #             self.call_gripper_service(self.grab_cli)
+    #         else:
+    #             self.gripper_pub.publish(UInt8(data=GRIPPER_GRIP))
+
+    #         next_state = SEARCH_DROPOFF
+    #         self.call_set_state(next_state)
+
+    #     elif self.current_task_state == APPROACH_DROPOFF:
+
+    #         self.publish_event(EVENT_DROPPED)
+
+    #         if self.use_sim_gripper:
+    #             self.call_gripper_service(self.drop_cli)
+    #         else:
+    #             self.gripper_pub.publish(UInt8(data=GRIPPER_DROP))
+
+    #         self.start_backup_motion()
+
+    ###Temporary
     def perform_actuation(self):
-
         if self.current_task_state == APPROACH_ITEM:
-
-            self.publish_event(EVENT_GRABBED)
-
-            if self.use_sim_gripper:
-                self.call_gripper_service(self.grab_cli)
-            else:
-                self.gripper_pub.publish(UInt8(data=GRIPPER_GRIP))
-
-            next_state = SEARCH_DROPOFF
-            self.call_set_state(next_state)
+            self.get_logger().info("TEST MODE: would grab now")
+            self.state = GrabState.IDLE
 
         elif self.current_task_state == APPROACH_DROPOFF:
-
-            self.publish_event(EVENT_DROPPED)
-
-            if self.use_sim_gripper:
-                self.call_gripper_service(self.drop_cli)
-            else:
-                self.gripper_pub.publish(UInt8(data=GRIPPER_DROP))
-
+            self.get_logger().info("TEST MODE: would drop now, starting backup")
             self.start_backup_motion()
+    ###/Temporary
 
     def call_gripper_service(self, client):
 

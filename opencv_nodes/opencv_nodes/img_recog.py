@@ -14,7 +14,7 @@ import numpy as np
 
 from task_manager_interfaces.srv import SetTaskState
 
-# Task states (match your task_manager)
+# Task states (match task_manager)
 SEARCH_ITEM = 0
 APPROACH_ITEM = 1
 SEARCH_DROPOFF = 2
@@ -263,6 +263,12 @@ class ImgRecog(Node):
         distance_m = -1.0
         tvec = (0.0, 0.0, 0.0)
         rvec = (0.0, 0.0, 0.0)
+
+        self.get_logger().info(
+            f"K_is_none={self.K is None}, "
+            f"D_is_none={self.D is None}, "
+            f"marker_length_m={self.marker_length_m}"
+            )
 
         if self.K is not None and self.D is not None and self.marker_length_m > 0.0:
             # estimatePoseSingleMarkers expects corners as list/array shaped (N,1,4,2) or (N,4,2)

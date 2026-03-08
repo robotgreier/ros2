@@ -64,6 +64,7 @@ class TaskManager(Node):
 
     def handle_set_state(self, request, response):
         new_state = int(request.new_state)
+        requester = str(request.requester)
 
         if new_state not in STATE_NAMES:
             response.success = False
@@ -71,7 +72,14 @@ class TaskManager(Node):
             self.get_logger().warn(response.message)
             return response
 
-        allowed = VALID_TRANSITIONS.get(self.current_state, [])
+        allowed = list(VALID_TRANSITIONS.get(self.current_state, []))
+
+        # Special-case transitions allowed only for grab_node
+        if requester == "grab_node":
+            if self.current_state == TaskState.SEARCH_ITEM:
+                allowed.append(TaskState.SEARCH_DROPOFF)
+            elif self.current_state == TaskState.SEARCH_DROPOFF:
+                allowed.append(TaskState.SEARCH_ITEM)
 
         if new_state in allowed:
             old_state = self.current_state
@@ -83,7 +91,9 @@ class TaskManager(Node):
                 f"{STATE_NAMES[old_state]} -> {STATE_NAMES[new_state]}"
             )
 
-            self.get_logger().info(response.message)
+            self.get_logger().info(
+                f"Client: {requester}, {response.message}"
+            )
 
         else:
             allowed_names = [STATE_NAMES[s] for s in allowed]
@@ -96,7 +106,7 @@ class TaskManager(Node):
             )
 
             self.get_logger().warn(
-                f"Client: {request.requester}, {response.message}"
+                f"Client: {requester}, {response.message}"
             )
 
         return response

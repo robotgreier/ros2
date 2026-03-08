@@ -10,6 +10,7 @@ from std_msgs.msg import (UInt8,
                                  Int32,
                                    Int32MultiArray,
                                      String)
+from sensor_msgs.msg import LaserScan
 
 from geometry_msgs.msg import Twist
 
@@ -99,6 +100,7 @@ class SNNNode(Node):
         self.task_state: int | None = None
         self.grab_event: int = EVENT_IDLE
         self.proximity_stop: bool = False
+        self.last_distance_m: float = float('nan')
 
         self.create_subscription(
             UInt8,
@@ -118,7 +120,6 @@ class SNNNode(Node):
             self._on_proximity_stop,
             10
         )
-
         # Dopamine publisher for plotting/debugging
         self.pub_dopamine = self.create_publisher(Float32, '/snn/dopamine', 10)
 
@@ -218,6 +219,7 @@ class SNNNode(Node):
         )
 
         self.create_subscription(UInt8MultiArray, self.input_topic, self.cb_packed, qos_sensor)
+        self.create_subscription(LaserScan, '/ultrasonic/front/scan', self._on_scan, qos_sensor)
         self.create_subscription(Int32, '/snn/correct_output', self.cb_correct, 10)
 
         self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10)
@@ -263,6 +265,7 @@ class SNNNode(Node):
             header.append("dop_grabdrop")
             header.append("dop_prox_stop")
             header.append("dop_prox_approach")
+            header.append("distance_m")
             header += [f"spikes_{i}" for i in range(self.output_size)]
 
             self.logger_csv = CsvAsyncLogger(
@@ -284,6 +287,10 @@ class SNNNode(Node):
 
     def _on_proximity_stop(self, msg: Bool):
         self.proximity_stop = bool(msg.data)
+
+    def _on_scan(self, msg: LaserScan):
+        finite = [r for r in msg.ranges if 0.0 < r < float('inf')]
+        self.last_distance_m = min(finite) if finite else float('nan')
 
     ### For training ###
     def _extract_object_bits_from_last(self) -> list[int]:
@@ -451,6 +458,7 @@ class SNNNode(Node):
                             dop_grabdrop,
                             dop_prox_stop,
                             dop_prox_approach,
+                            self.last_distance_m,
                         ]
                         + spikes_list
                     )
@@ -476,6 +484,7 @@ class SNNNode(Node):
                         dop_grabdrop,
                         dop_prox_stop,
                         dop_prox_approach,
+                        self.last_distance_m,
                     ]
                     + spikes_list
                 )
@@ -519,6 +528,7 @@ class SNNNode(Node):
                             dop_grabdrop,
                             dop_prox_stop,
                             dop_prox_approach,
+                            self.last_distance_m,
                         ]
                         + spikes_list
                     )

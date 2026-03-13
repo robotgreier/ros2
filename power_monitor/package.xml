@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>power_monitor</name>
+  <version>0.0.1</version>
+  <description>ROS2 nodes for reading INA219 (DFRobot SEN0291) power sensors and logging/visualization.</description>
+
+  <maintainer email="henrik.torkildsen@gmail.com">henrik</maintainer>
+  <license>MIT</license>
+
+  <!-- Build tools -->
+  <buildtool_depend>ament_python</buildtool_depend>
+  <!-- Needed when generating messages even in Python packages -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Build dependencies (message generation) -->
+  <build_depend>rosidl_default_generators</build_depend>
+
+  <!-- Run-time dependencies -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <!-- System packages used by the nodes (I2C) -->
+  <exec_depend>python3-smbus</exec_depend>
+
+
+  
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- Optional: rqt_plot for live plotting (not required to build the package) -->
+  <!-- You install these with apt, but they don't need to be package deps:
+       ros-jazzy-rqt, ros-jazzy-rqt-plot
+  -->
+
+  <!-- Tests (optional) -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+

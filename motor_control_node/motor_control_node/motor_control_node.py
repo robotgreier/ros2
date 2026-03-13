@@ -76,16 +76,16 @@ class MotorControlNode(Node):
         super().__init__('motor_control_node')
 
         # Parameters (declare with defaults; override in launch)
-        self.declare_parameter('wheel_separation', 0.30)       # meters
-        self.declare_parameter('wheel_radius', 0.05)           # meters
+        self.declare_parameter('wheel_separation', 0.013)      # meters
+        self.declare_parameter('wheel_radius', 0.0275)         # meters
         self.declare_parameter('max_wheel_linear_speed', 0.8)  # m/s per wheel
         self.declare_parameter('i2c_address', 0x60)            # DRI0054 default
         self.declare_parameter('left_motor_id', 1)             # 1..4
         self.declare_parameter('right_motor_id', 2)            # 1..4
-        self.declare_parameter('invert_left', False)
-        self.declare_parameter('invert_right', False)
+        self.declare_parameter('invert_left', False)           # Invert left motor direction
+        self.declare_parameter('invert_right', False)          # Invert right motor direction
         self.declare_parameter('cmd_vel_timeout', 0.5)         # seconds
-        self.declare_parameter('slew_rate', 5.0)               # throttle units/sec
+        self.declare_parameter('slew_rate', 5.0)               # How fast will the trhottle change speed (units/s); disable with "0"
         self.declare_parameter('stop_mode', 'brake')           # 'brake' or 'coast'
 
         self.L = float(self.get_parameter('wheel_separation').value)

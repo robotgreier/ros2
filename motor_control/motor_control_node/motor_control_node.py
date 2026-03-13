@@ -6,7 +6,9 @@ import time
 import atexit
 
 # Lokale Emakefun-filer (samme mappe)
-from Emakefun_MotorHAT import Emakefun_MotorHAT
+from .Emakefun_MotorHAT import Emakefun_MotorHAT
+from .Emakefun_MotorDriver import PWM
+from .Emakefun_I2C import Emakefun_I2C
 
 class MotorControlNode(Node):
     def __init__(self):

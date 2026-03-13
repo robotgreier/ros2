@@ -19,13 +19,22 @@ def generate_launch_description():
             package='encoding_node',
             executable='encoding_node',
             name='encoding_node',
-            output='screen'
+            output='screen',
+            parameters=[{
+            "proximity_topic": "/ultrasonic/front/scan",
+            "output_topic": "/snn/input",
+            "proximity_bin_edges": [0.02, 0.04, 0.08, 0.16, 0.32, 0.64],
+        }],
         ),
         Node(
             package='opencv_nodes',
             executable='img_kp_grid',
             name='img_kp_grid',
-            output='screen'
+            output='screen',
+            parameters=[{
+            "response_threshold": 0.0,
+            "use_clahe": False,
+        }],
         ),
         Node(
             package='opencv_nodes',

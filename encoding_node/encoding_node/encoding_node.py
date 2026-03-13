@@ -28,7 +28,7 @@ class EncodingNode(Node):
         self.declare_parameter("pack_order", ["keypoints_grid", "proximity", "aruco_dir"])
 
         self.declare_parameter("proximity_topic", "/ultrasonic/front/scan")
-        self.declare_parameter("proximity_bin_edges", [1.0, 2.0, 3.0])
+        self.declare_parameter("proximity_bin_edges", [0.02, 0.04, 0.08, 0.16, 0.32, 0.64])
         self.declare_parameter("proximity_inf_as_far", True)
 
         self.declare_parameter("keypoints_topic", "/features/keypoints_grid")
@@ -75,8 +75,8 @@ class EncodingNode(Node):
         # --- ArUco / state parameters ---
         self.declare_parameter("aruco_topic", "/vision/aruco/target")
         self.declare_parameter("task_state_topic", "/task/state")
-        self.declare_parameter("center_tol_item", 0.10)     # x_norm tolerance (example)
-        self.declare_parameter("center_tol_dropoff", 0.20)  # looser
+        self.declare_parameter("center_tol_item", 0.02)     # x_norm tolerance (example)
+        self.declare_parameter("center_tol_dropoff", 0.1)  # looser
 
         aruco_topic = self.get_parameter("aruco_topic").value
         task_state_topic = self.get_parameter("task_state_topic").value

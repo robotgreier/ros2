@@ -59,7 +59,7 @@ class ImgRecog(Node):
         self.declare_parameter("dropoff_ids", [11])   # change via params/launch
 
         # Pose estimation needs marker_length (meters)
-        self.declare_parameter("marker_length_m", 0.08)  # 8cm default; adjust to your printed marker size
+        self.declare_parameter("marker_length_m", 0.04)  # 4cm default; adjust to your printed marker size
         self.declare_parameter("target_policy", "largest")  # "largest" or "closest_to_center"
 
         # Parameters for state transitions
@@ -73,7 +73,7 @@ class ImgRecog(Node):
         self.lost_frames = int(self.get_parameter("lost_frames").value)
         self.enable_state_auto = bool(self.get_parameter("enable_state_auto").value)
 
-        # Create client for task_master
+        # Create client for task_manager
         self.set_state_client = self.create_client(SetTaskState, self.set_state_service)
         self._consec_found = 0
         self._consec_lost = 0

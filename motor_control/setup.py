@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'motor_control_node'
+package_name = 'motor_control'
 
 setup(
     name=package_name,
@@ -17,7 +17,7 @@ setup(
     maintainer='henrik',
     maintainer_email='henrik.torkildsen@gmail.com',
     description='ROS2 node to drive DFRobot DRI0054 Motor HAT via I2C from /cmd_vel',
-    license='MIT',
+    license='Apache License 2.0',
     extras_require={
         'test': [
             'pytest',
@@ -25,7 +25,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'motor_control_node = motor_control_node.motor_control_node:main',
+            'motor_control_node = motor_control.motor_control_node:main',
         ],
     },
 )

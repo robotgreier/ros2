@@ -2,7 +2,7 @@
 
 import time
 import math
-from Emakefun_I2C import Emakefun_I2C
+from .Emakefun_I2C import Emakefun_I2C
 
 # ============================================================================
 # Raspi PCA9685 16-Channel PWM Servo Driver

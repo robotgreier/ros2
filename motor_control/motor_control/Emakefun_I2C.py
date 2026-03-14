@@ -1,6 +1,11 @@
 #!/usr/bin/python
 import re
-import smbus
+
+try:
+    import smbus2 as smbus
+except ImportError:
+    import smbus  # fallback hvis smbus2 ikke finnes
+
 
 # ===========================================================================
 # Emakefun_I2C Class

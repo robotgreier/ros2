@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from Emakefun_MotorDriver import PWM
+from .Emakefun_MotorDriver import PWM
 import time
 
 class Emakefun_StepperMotor:

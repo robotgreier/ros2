@@ -12,7 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/motor_control.launch.py']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'smbus2'],
     zip_safe=True,
     maintainer='henrik',
     maintainer_email='henrik.torkildsen@gmail.com',

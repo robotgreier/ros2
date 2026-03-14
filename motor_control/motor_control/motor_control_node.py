@@ -6,7 +6,7 @@ import time
 import atexit
 
 # Lokale Emakefun-filer (samme mappe)
-from .Emakefun_MotorHAT import Emakefun_MotorHAT, Emakefun_Motor, Emakefun_Servo
+from .Emakefun_MotorHAT import Emakefun_MotorHAT, Emakefun_DCMotor, Emakefun_Servo
 from .Emakefun_MotorDriver import PWM
 from .Emakefun_I2C import Emakefun_I2C
 

@@ -15,7 +15,7 @@ class MotorControlNode(Node):
         super().__init__('motor_control_node')
 
         # --- ROS-parameteroppsett ---
-        self.declare_parameter('wheel_base', 0.20)       # meter
+        self.declare_parameter('wheel_base', 0.13)       # meter
         self.declare_parameter('max_lin_vel', 0.6)       # m/s → PWM 255
         self.declare_parameter('max_ang_vel', 2.0)       # rad/s
         self.declare_parameter('cmd_vel_timeout', 0.5)   # sekunder
@@ -32,6 +32,10 @@ class MotorControlNode(Node):
         # Vi bruker M1 og M2
         self.m_left  = self.mh.getMotor(1)
         self.m_right = self.mh.getMotor(2)
+        
+        self.left_dir = 1
+        self.right_dir = -1   # inverter høyre motor
+
 
         # Slå av motorer ved avslutning
         atexit.register(self.turn_off_motors)
@@ -71,8 +75,8 @@ class MotorControlNode(Node):
         v_r = v + (w * self.wheel_base / 2.0)
 
         # Konverter til PWM
-        pwm_l = self.velocity_to_pwm(v_l)
-        pwm_r = self.velocity_to_pwm(v_r)
+        pwm_l = self.left_dir * self.velocity_to_pwm(v_l)
+        pwm_r = self.right_dir * self.velocity_to_pwm(v_r)
 
         # Påfør
         self.apply_pwm(self.m_left, pwm_l)

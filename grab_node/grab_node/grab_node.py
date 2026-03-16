@@ -51,7 +51,7 @@ class GrabNode(Node):
 
         # -------- Parameters --------
         self.declare_parameter("center_threshold", 0.1)
-        self.declare_parameter("item_distance_threshold", 0.3)
+        self.declare_parameter("item_distance_threshold", 0.16)
         self.declare_parameter("dropoff_distance_threshold", 0.3)
 
         self.declare_parameter("approach_speed", 0.05)
@@ -63,10 +63,10 @@ class GrabNode(Node):
 
         self.declare_parameter("motion_publish_rate_hz", 20.0)
 
-        self.declare_parameter("item_final_distance", 0.01)
+        self.declare_parameter("item_final_distance", -0.1)
         self.declare_parameter("dropoff_final_distance", 0.15)
 
-        self.declare_parameter("min_forward_distance", 0.0)
+        self.declare_parameter("min_forward_distance", 0.01)
         self.declare_parameter("max_forward_distance", 0.3)
 
         # For simulation
@@ -175,6 +175,12 @@ class GrabNode(Node):
         if self.state == GrabState.WAITING_ALIGNMENT:
             self.check_alignment_and_distance()
 
+        self.get_logger().info(
+            f"Aruco update: x_norm={self.x_norm:.3f}, "
+            f"distance={self.distance:.3f}, "
+            f"tvec=({data[7]:.3f}, {data[8]:.3f}, {data[9]:.3f})"
+        )
+
     
 
     # =====================================================
@@ -239,12 +245,13 @@ class GrabNode(Node):
         #     self.perform_actuation()
         #     return
 
-        ###Temp
-        if remaining_distance <= 0.0:
-            remaining_distance = 0.3
-            self.get_logger().warn("TEST MODE: forcing 0.3 m forward motion")
-        ###Temp
+        # ###Temp
+        # if remaining_distance <= 0.0:
+        #     remaining_distance = 0.3
+        #     self.get_logger().warn("TEST MODE: forcing 0.3 m forward motion")
+        # ###Temp
 
+        self.remaining_distance = remaining_distance
         duration = remaining_distance / float(self.approach_speed)
 
         self.get_logger().info(
@@ -273,6 +280,9 @@ class GrabNode(Node):
             self.publish_event(EVENT_GRABBED)
 
             if self.use_sim_gripper:
+                #temp
+                self.get_logger().info(f"Attempting grip now. Estimated distance to object: {self.remaining_distance}")
+                #/temp
                 self.call_gripper_service(self.grab_cli)
             else:
                 self.gripper_pub.publish(UInt8(data=GRIPPER_GRIP))

@@ -11,24 +11,35 @@ SEARCH_DROPOFF = 2
 APPROACH_DROPOFF = 3
 
 
+def reward_signal(seen, pos, action_idx, reward_shift, punish_shift):
+    """Returns (dopamine_shift, dopamine_sign, dopamine_enable)."""
+    if seen and (
+        (pos == 0  and action_idx == 1) or
+        (pos == -1 and action_idx == 0) or
+        (pos == +1 and action_idx == 2)
+    ):
+        return reward_shift, 1, 1   # correct alignment action: reward
+
+    if not seen and action_idx in (0, 2):
+        return 0, 1, 1              # searching: weak reward
+
+    return punish_shift, 0, 1      # everything else: punish
+
+
 class DopamineComputer:
     """
-    Reward shaping for continuous pick-deliver-repeat:
+    Reward shaping for continuous pick-deliver-repeat.
 
-    - Dense shaping:
-      * alignment reward from object_rec (L/C/R/none)
-      * action-match reward (turn toward target; go forward when centered)
-      * gated proximity-bracket spike reward during APPROACH + centered
+    Returns (dopamine_shift, dopamine_sign, dopamine_enable, comps) per timestep.
 
-    - Sparse rewards:
-      * state progress reward (0->1->2->3)
-      * grab/drop success reward (from grab_node event)
+    Priority (highest overrides lowest):
+      1. Grab/drop events
+      2. State transitions (progress / regression)
+      3. Proximity stop penalty
+      4. Lost-target penalty
+      5. Alignment/action match (base signal via reward_signal())
 
-    - Penalties:
-      * losing target after having it (after grace ticks)
-      * proximity_stop (near collision / unsafe)
-      * regressions that indicate failure (1->0, 3->2)
-      * IMPORTANT: 3->0 reset is allowed (no penalty).
+    Components without a clean shift/sign/enable analog are commented out.
     """
 
     def __init__(self, lost_grace_ticks: int = 5):
@@ -60,42 +71,25 @@ class DopamineComputer:
     def step(
         self,
         obj_bits: list[int],         # [L,C,R]
-        proximity_spike: int,        # 0/1 (distance bracket change spike)
+        proximity_spike: int,        # 0/1 (distance bracket change spike) — unused while prox_spike_gated is commented out
         action_idx: int,             # 0=LEFT, 1=FORWARD, 2=RIGHT
         task_state: int | None,      # UInt8 or None if not yet received
         grab_event: int,             # UInt8
-        proximity_stop: bool         # Bool
+        proximity_stop: bool,        # Bool
+        reward_shift: int = 2,       # left-shift for reward magnitude
+        punish_shift: int = 0,       # left-shift for punishment magnitude
     ):
         seen, pos = self.decode_object_bits(obj_bits)
+        comps: dict[str, tuple] = {}
 
-        dopamine = 0.0
-        comps: dict[str, float] = {}
-
-        # (1) Alignment shaping: prefer target centered, mild penalty if unseen
-        if not seen:
-            comps["align"] = -0.02
-        elif pos == 0:
-            comps["align"] = +0.05
+        # Priority 5 (base): alignment / action match
+        d_shift, d_sign, d_enable = reward_signal(seen, pos, action_idx, reward_shift, punish_shift)
+        if not seen and d_sign == 1:
+            comps["searching"] = (d_shift, d_sign, d_enable)
         else:
-            comps["align"] = +0.01
-        dopamine += comps["align"]
+            comps["align_action"] = (d_shift, d_sign, d_enable)
 
-        # (2) Action-match shaping: reward actions that correct alignment / approach
-        act = 0.0
-        if seen:
-            if pos == 0 and action_idx == 1:
-                act += 0.10  # centered + forward
-            elif pos == -1 and action_idx == 0:
-                act += 0.06  # left-of-center + turn left
-            elif pos == +1 and action_idx == 2:
-                act += 0.06  # right-of-center + turn right
-        else:
-            if action_idx in (0, 2):
-                act += 0.02  # turning while searching
-        comps["action_match"] = act
-        dopamine += act
-
-        # (3) Lost-target penalty: if target disappears after being seen
+        # Priority 4: lost-target penalty
         if seen:
             self.lost_ticks = 0
             self._lost_penalized = False
@@ -103,58 +97,50 @@ class DopamineComputer:
             if self.prev_seen:
                 self.lost_ticks += 1
                 if self.lost_ticks > self.lost_grace_ticks:
-                    if not self._lost_penalized:
-                        dopamine -= 0.25
-                        comps["lost_once"] = -0.25
-                        self._lost_penalized = True
-                    dopamine -= 0.01
-                    comps["lost_tick"] = comps.get("lost_tick", 0.0) - 0.01
+                    d_shift, d_sign, d_enable = punish_shift, 0, 1
+                    comps["lost_target"] = (d_shift, d_sign, d_enable)
 
-        # (4) State transition rewards (loop-aware): 3->0 reset is allowed
+        # Priority 3: proximity stop penalty
+        if proximity_stop:
+            d_shift, d_sign, d_enable = punish_shift, 0, 1
+            comps["proximity_stop"] = (d_shift, d_sign, d_enable)
+
+        # Priority 2: state transitions
         if task_state is not None:
             if self.prev_task_state is not None:
                 prev, curr = self.prev_task_state, task_state
-
                 forward = {(0, 1), (1, 2), (2, 3)}
-                reset_ok = {(3, 0)}
-                regress = {(1, 0), (3, 2)}
+                regress  = {(1, 0), (3, 2)}
+                # reset_ok = {(3, 0)}  # allowed reset, no reward or penalty
 
                 if (prev, curr) in forward:
-                    dopamine += 0.5
-                    comps["state_progress"] = +0.5
+                    d_shift, d_sign, d_enable = reward_shift, 1, 1
+                    comps["state_progress"] = (d_shift, d_sign, d_enable)
                 elif (prev, curr) in regress:
-                    dopamine -= 0.5
-                    comps["state_regress"] = -0.5
-                elif (prev, curr) in reset_ok:
-                    comps["state_reset_ok"] = 0.0
-                else:
-                    comps["state_other"] = 0.0
+                    d_shift, d_sign, d_enable = punish_shift, 0, 1
+                    comps["state_regress"] = (d_shift, d_sign, d_enable)
 
             self.prev_task_state = task_state
 
-        # (5) Grab/drop success rewards (big, sparse)
+        # Priority 1: grab/drop events
         if grab_event == EVENT_GRABBED:
-            dopamine += 2.0
-            comps["grabbed"] = +2.0
+            d_shift, d_sign, d_enable = reward_shift, 1, 1
+            comps["grabbed"] = (d_shift, d_sign, d_enable)
         elif grab_event == EVENT_DROPPED:
-            dopamine += 2.0
-            comps["dropped"] = +2.0
+            d_shift, d_sign, d_enable = reward_shift, 1, 1
+            comps["dropped"] = (d_shift, d_sign, d_enable)
 
-        # (6) Proximity stop penalty: near collision / unsafe driving
-        if proximity_stop:
-            dopamine -= 0.4
-            comps["proximity_stop"] = -0.4
-
-        # (7) Gated proximity spike reward: only during APPROACH + target centered
-        # This uses your "higher spike frequency when close" idea, but avoids wall-farming.
-        gated = (
-            (task_state in (APPROACH_ITEM, APPROACH_DROPOFF))
-            and seen and (pos == 0)
-            and (not proximity_stop)
-        )
-        if gated and proximity_spike == 1:
-            dopamine += 0.08
-            comps["prox_spike_gated"] = +0.08
+        # Commented out: gated proximity spike reward
+        # Does not map cleanly to a single (shift, sign, enable) signal —
+        # multi-condition gating is better handled at the call site if needed.
+        # gated = (
+        #     (task_state in (APPROACH_ITEM, APPROACH_DROPOFF))
+        #     and seen and (pos == 0)
+        #     and (not proximity_stop)
+        # )
+        # if gated and proximity_spike == 1:
+        #     d_shift, d_sign, d_enable = 0, 1, 1
+        #     comps["prox_spike_gated"] = (d_shift, d_sign, d_enable)
 
         self.prev_seen = seen
-        return dopamine, comps
+        return d_shift, d_sign, d_enable, comps

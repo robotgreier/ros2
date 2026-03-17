@@ -384,46 +384,39 @@ class SNNNode(Node):
         obj_bits = self._extract_object_bits_from_last()
         prox_spike = self._extract_proximity_spike_from_last()
 
-        dopamine, dopamine_comps = self.dopamine_computer.step(
+        d_shift, d_sign, d_enable, dopamine_comps = self.dopamine_computer.step(
             obj_bits=obj_bits,
             proximity_spike=prox_spike,
             action_idx=int(winner_idx),
             task_state=self.task_state,
             grab_event=self.grab_event,
-            proximity_stop=self.proximity_stop
+            proximity_stop=self.proximity_stop,
+            reward_shift=self.reward_shift,
+            punish_shift=self.punish_shift,
         )
 
         # ---- Dopamine component breakdown for logging ----
-        dop_align = float(dopamine_comps.get("align", 0.0))
-        dop_action = float(dopamine_comps.get("action_match", 0.0))
+        def _comp(key):
+            c = dopamine_comps.get(key)
+            if c is None:
+                return 0.0
+            shift, sign, enable = c
+            return float(shift + 1) * (1.0 if sign else -1.0) if enable else 0.0
 
-        dop_lost = (
-            float(dopamine_comps.get("lost_once", 0.0)) +
-            float(dopamine_comps.get("lost_tick", 0.0))
-        )
+        dop_align      = _comp("align_action")
+        dop_action     = _comp("searching")
+        dop_lost       = _comp("lost_target")
+        dop_state      = _comp("state_progress") + _comp("state_regress")
+        dop_grabdrop   = _comp("grabbed") + _comp("dropped")
+        dop_prox_stop  = _comp("proximity_stop")
+        dop_prox_approach = 0.0  # prox_spike_gated is commented out
 
-        dop_state = (
-            float(dopamine_comps.get("state_progress", 0.0)) +
-            float(dopamine_comps.get("state_regress", 0.0)) +
-            float(dopamine_comps.get("state_reset_ok", 0.0)) +
-            float(dopamine_comps.get("state_other", 0.0))
-        )
-
-        dop_grabdrop = (
-            float(dopamine_comps.get("grabbed", 0.0)) +
-            float(dopamine_comps.get("dropped", 0.0))
-        )
-
-        dop_prox_stop = float(dopamine_comps.get("proximity_stop", 0.0))
-        dop_prox_approach = float(dopamine_comps.get("prox_spike_gated", 0.0))
-
-        self.pub_dopamine.publish(Float32(data=float(dopamine)))
+        dopamine_float = float(d_shift + 1) * (1.0 if d_sign else -1.0) if d_enable else 0.0
+        self.pub_dopamine.publish(Float32(data=dopamine_float))
 
         # ---- Optional: apply dopamine to learning rule (when you enable training) ----
-        # if dopamine > 0:
-        #     self.network.apply_reward(dopamine_shift=self.reward_shift, dopamine_sign=1, winner_idx=int(winner_idx))
-        # elif dopamine < 0:
-        #     self.network.apply_reward(dopamine_shift=self.punish_shift, dopamine_sign=0, winner_idx=int(winner_idx))
+        # if d_enable:
+        #     self.network.apply_reward(dopamine_shift=d_shift, dopamine_sign=d_sign, winner_idx=int(winner_idx))
 
         # ---- Add to your existing logger ----
         # Recommended: store reward + some context so you can tune later.
@@ -456,7 +449,7 @@ class SNNNode(Node):
                             t_output_ns,
                             winner,
                             decision,
-                            float(dopamine),
+                            dopamine_float,
                             dop_align,
                             dop_action,
                             dop_lost,
@@ -482,7 +475,7 @@ class SNNNode(Node):
                         t_output_ns,
                         winner,
                         decision,
-                        float(dopamine),
+                        dopamine_float,
                         dop_align,
                         dop_action,
                         dop_lost,
@@ -507,7 +500,7 @@ class SNNNode(Node):
                     tuple(input_list),
                     winner,
                     decision,
-                    round(float(dopamine), 6),
+                    round(dopamine_float, 6),
                     dop_align,
                     dop_action,
                     dop_lost,
@@ -526,7 +519,7 @@ class SNNNode(Node):
                             t_output_ns,
                             winner,
                             decision,
-                            float(dopamine),
+                            dopamine_float,
                             dop_align,
                             dop_action,
                             dop_lost,

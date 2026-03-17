@@ -17,15 +17,16 @@ class ImgKpGrid(Node):
         self.declare_parameter('in_topic', '/camera/image_raw')
         self.declare_parameter('out_topic', '/features/keypoints_grid')
         self.declare_parameter('rows', 3)
-        self.declare_parameter('cols', 4)
+        self.declare_parameter('cols', 8)
 
         # Detector
         self.declare_parameter('detector', 'FAST')          # 'ORB' or 'FAST'
-        self.declare_parameter('max_features', 800)        # ORB only
-        self.declare_parameter('fast_threshold', 20)       # FAST only
+        self.declare_parameter('max_features', 500)        # ORB only
+        self.declare_parameter('fast_threshold', 5)       # FAST only
 
         # Keypoint filtering
         self.declare_parameter('response_threshold', 0.0)  # keep kp.response >= this
+        self.declare_parameter('max_keypoints', 500)         # 0 = unlimited; cap after response filter
 
         # Optional contrast boost
         self.declare_parameter('use_clahe', False)
@@ -54,6 +55,7 @@ class ImgKpGrid(Node):
             self.detector = cv2.ORB_create(nfeatures=n)
 
         self.response_threshold = float(self.get_parameter('response_threshold').value)
+        self.max_keypoints = int(self.get_parameter('max_keypoints').value)
 
         self.use_clahe = bool(self.get_parameter('use_clahe').value)
         self.clahe = None
@@ -74,7 +76,8 @@ class ImgKpGrid(Node):
         self.get_logger().info(
             f"img_kp_grid running | in={self.in_topic} out={self.out_topic} "
             f"grid={self.rows}x{self.cols} detector={self.detector_name} "
-            f"resp_thresh={self.response_threshold} clahe={self.use_clahe}"
+            f"resp_thresh={self.response_threshold} max_kp={self.max_keypoints} "
+            f"clahe={self.use_clahe}"
         )
 
     def cb(self, msg: Image):
@@ -86,27 +89,31 @@ class ImgKpGrid(Node):
         if self.clahe is not None:
             frame = self.clahe.apply(frame)
 
-        # Detect keypoints
+        # Detect keypoints, sort by response descending (mirrors training pipeline)
         kps = self.detector.detect(frame, None)
+        kps = sorted(kps, key=lambda kp: kp.response, reverse=True)
 
-        # Filter by response threshold
+        # Filter by response threshold, then cap at max_keypoints
         if self.response_threshold > 0.0:
             kps = [kp for kp in kps if float(kp.response) >= self.response_threshold]
+        if self.max_keypoints > 0:
+            kps = kps[:self.max_keypoints]
 
-        # Bin counts
-        counts = np.zeros((self.rows, self.cols), dtype=np.int32)
+        # Bin counts via histogram2d with fixed frame dimensions
         cell_w = w / self.cols
         cell_h = h / self.rows
-
-        for kp in kps:
-            x, y = kp.pt
-            c = int(x / cell_w)
-            r = int(y / cell_h)
-            if c < 0: c = 0
-            if c >= self.cols: c = self.cols - 1
-            if r < 0: r = 0
-            if r >= self.rows: r = self.rows - 1
-            counts[r, c] += 1
+        if kps:
+            xs = [kp.pt[0] for kp in kps]
+            ys = [kp.pt[1] for kp in kps]
+            hist, _, _ = np.histogram2d(
+                x=xs, y=ys,
+                bins=[self.cols, self.rows],
+                range=[[0, w], [0, h]],
+            )
+            # histogram2d returns (cols, rows); transpose to (rows, cols)
+            counts = hist.T.astype(np.int32)
+        else:
+            counts = np.zeros((self.rows, self.cols), dtype=np.int32)
 
         # Publish Int32MultiArray (row-major)
         out = Int32MultiArray()

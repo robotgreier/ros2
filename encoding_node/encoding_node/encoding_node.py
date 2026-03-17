@@ -32,7 +32,8 @@ class EncodingNode(Node):
         self.declare_parameter("proximity_dist_max_m", 1.5)
 
         self.declare_parameter("keypoints_topic", "/features/keypoints_grid")
-        self.declare_parameter("keypoints_threshold", 5)
+        self.declare_parameter("keypoints_n_threshold_levels", 5)
+        self.declare_parameter("keypoints_threshold_max", 20)
 
         # ---- Read parameters ----
         output_topic = self.get_parameter("output_topic").value
@@ -43,7 +44,8 @@ class EncodingNode(Node):
         proximity_dist_max_m = float(self.get_parameter("proximity_dist_max_m").value)
 
         keypoints_topic = self.get_parameter("keypoints_topic").value
-        keypoints_threshold = int(self.get_parameter("keypoints_threshold").value)
+        keypoints_n_threshold_levels = int(self.get_parameter("keypoints_n_threshold_levels").value)
+        keypoints_threshold_max = int(self.get_parameter("keypoints_threshold_max").value)
 
         # ---- Encoders ----
         self.prox_encoder = ProximityBracketEncoder(
@@ -51,7 +53,10 @@ class EncodingNode(Node):
             dist_max_m=proximity_dist_max_m,
         )
 
-        self.kp_encoder = KeypointsGridEncoder(threshold=keypoints_threshold)
+        self.kp_encoder = KeypointsGridEncoder(
+            n_threshold_levels=keypoints_n_threshold_levels,
+            threshold_max=keypoints_threshold_max,
+        )
 
         # ---- Channels (named chunks) ----
         # Each channel value is a list[int] of 0/1 spikes.
@@ -132,7 +137,7 @@ class EncodingNode(Node):
 
         # If we enter a SEARCH state, force the aruco channel to 000 immediately.
         if self.current_state in (0, 2):
-            self.channels["aruco_dir"] = [0, 0, 0]
+            self.channels["aruco_dir"] = [0] * self.aruco_encoder.n_aruco_bins
             self.publish_vector()
 
 

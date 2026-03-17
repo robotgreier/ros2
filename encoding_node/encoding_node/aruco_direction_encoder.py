@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import numpy as np
 from typing import List
 
 
@@ -11,73 +11,43 @@ SEARCH_DROPOFF = 2
 APPROACH_DROPOFF = 3
 
 
-@dataclass
-class ArucoDirConfig:
-    center_tol_item: float
-    center_tol_dropoff: float
-
-
 class ArucoDirectionEncoder:
     """
-    Produces a 3-bit code (as a list of ints) based on ArUco x_norm and state:
+    One-hot encodes ArUco x_norm into n_aruco_bins lateral zones.
 
-      000 = no aruco in sight (or state is SEARCH)
-      100 = aruco left of center
-      010 = aruco centered (within tolerance)
-      001 = aruco right of center
+    x_norm is expected as a signed value centred at 0 (range [-1, 1]),
+    where -1 is the left edge and +1 is the right edge.  It is remapped
+    to [0, 1] internally before binning.
 
     State gating:
-      SEARCH_ITEM / SEARCH_DROPOFF -> always 000
-      APPROACH_ITEM -> use center_tol_item
-      APPROACH_DROPOFF -> use center_tol_dropoff
+      SEARCH_ITEM / SEARCH_DROPOFF  -> always all-zero
+      APPROACH_ITEM / APPROACH_DROPOFF -> one-hot encode position
+      detect_flag < 0.5             -> all-zero (tag not visible)
     """
 
-    def __init__(self, center_tol_item: float, center_tol_dropoff: float):
-        if center_tol_item < 0.0 or center_tol_dropoff < 0.0:
-            raise ValueError("center tolerances must be >= 0")
-        self.cfg = ArucoDirConfig(
-            center_tol_item=float(center_tol_item),
-            center_tol_dropoff=float(center_tol_dropoff),
-        )
-
-    def set_tolerances(self, center_tol_item: float, center_tol_dropoff: float) -> None:
-        if center_tol_item < 0.0 or center_tol_dropoff < 0.0:
-            raise ValueError("center tolerances must be >= 0")
-        self.cfg.center_tol_item = float(center_tol_item)
-        self.cfg.center_tol_dropoff = float(center_tol_dropoff)
-
-    @staticmethod
-    def _code_none() -> List[int]:
-        return [0, 0, 0]
-
-    @staticmethod
-    def _code_left() -> List[int]:
-        return [1, 0, 0]
-
-    @staticmethod
-    def _code_center() -> List[int]:
-        return [0, 1, 0]
-
-    @staticmethod
-    def _code_right() -> List[int]:
-        return [0, 0, 1]
+    def __init__(self, n_aruco_bins: int):
+        if n_aruco_bins < 1:
+            raise ValueError("n_aruco_bins must be >= 1")
+        self.n_aruco_bins = n_aruco_bins
+        self._bin_edges = np.linspace(0.0, 1.0, n_aruco_bins + 1)
 
     def encode(self, *, state: int, detect_flag: float, x_norm: float) -> List[int]:
-        # Gate by state
         if state in (SEARCH_ITEM, SEARCH_DROPOFF):
-            return self._code_none()
+            return [0] * self.n_aruco_bins
 
         if state not in (APPROACH_ITEM, APPROACH_DROPOFF):
-            return self._code_none()
+            return [0] * self.n_aruco_bins
 
-        # During approach: if no detection, output none
         if detect_flag < 0.5:
-            return self._code_none()
+            return [0] * self.n_aruco_bins
 
-        tol = self.cfg.center_tol_item if state == APPROACH_ITEM else self.cfg.center_tol_dropoff
+        # Remap signed [-1, 1] -> [0, 1]
+        x_01 = x_norm * 0.5 + 0.5
+        x_01 = max(0.0, min(1.0, x_01))
 
-        if abs(x_norm) <= tol:
-            return self._code_center()
-        if x_norm < -tol:
-            return self._code_left()
-        return self._code_right()
+        idx = int(np.digitize(x_01, self._bin_edges)) - 1
+        idx = max(0, min(idx, self.n_aruco_bins - 1))
+
+        spikes = [0] * self.n_aruco_bins
+        spikes[idx] = 1
+        return spikes

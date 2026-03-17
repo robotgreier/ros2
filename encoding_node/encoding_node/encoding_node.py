@@ -75,24 +75,19 @@ class EncodingNode(Node):
         # --- ArUco / state parameters ---
         self.declare_parameter("aruco_topic", "/vision/aruco/target")
         self.declare_parameter("task_state_topic", "/task/state")
-        self.declare_parameter("center_tol_item", 0.02)     # x_norm tolerance (example)
-        self.declare_parameter("center_tol_dropoff", 0.1)  # looser
+        self.declare_parameter("aruco_n_bins", 5)
 
         aruco_topic = self.get_parameter("aruco_topic").value
         task_state_topic = self.get_parameter("task_state_topic").value
-        center_tol_item = float(self.get_parameter("center_tol_item").value)
-        center_tol_dropoff = float(self.get_parameter("center_tol_dropoff").value)
+        aruco_n_bins = int(self.get_parameter("aruco_n_bins").value)
 
-        self.aruco_encoder = ArucoDirectionEncoder(
-            center_tol_item=center_tol_item,
-            center_tol_dropoff=center_tol_dropoff,
-        )
+        self.aruco_encoder = ArucoDirectionEncoder(n_aruco_bins=aruco_n_bins)
 
         # Keep latest state locally (default SEARCH_ITEM)
         self.current_state = 0
 
-        # Add channel (3 bits)
-        self.channels["aruco_dir"] = [0, 0, 0]
+        # Add channel
+        self.channels["aruco_dir"] = [0] * aruco_n_bins
 
         # Subscribe to task state and aruco target
         self.create_subscription(UInt8, task_state_topic, self.on_task_state, 10)
@@ -147,7 +142,7 @@ class EncodingNode(Node):
         data = msg.data
         if data is None or len(data) < 3:
             # Not enough data to read detect_flag and x_norm
-            self.channels["aruco_dir"] = [0, 0, 0]
+            self.channels["aruco_dir"] = [0] * self.aruco_encoder.n_aruco_bins
             self.publish_vector()
             return
 

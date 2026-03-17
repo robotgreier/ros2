@@ -55,7 +55,7 @@ class ImgRecog(Node):
         self.declare_parameter("out_topic", "/vision/aruco/target")
 
         self.declare_parameter("aruco_dictionary", "DICT_4X4_50")
-        self.declare_parameter("item_ids", [0, 1, 2, 3])      # change via params/launch
+        self.declare_parameter("item_ids", [1, 2, 3])      # change via params/launch
         self.declare_parameter("dropoff_ids", [11])   # change via params/launch
 
         # Pose estimation needs marker_length (meters)
@@ -65,13 +65,17 @@ class ImgRecog(Node):
         # Parameters for state transitions
         self.declare_parameter("set_state_service", "/task/set_state")
         self.declare_parameter("found_frames", 2)   # how many consecutive frames required to switch SEARCH->APPROACH
-        self.declare_parameter("lost_frames", 5)    # how many consecutive missing frames to switch APPROACH->SEARCH
+        self.declare_parameter("lost_frames", 12)    # how many consecutive missing frames to switch APPROACH->SEARCH
         self.declare_parameter("enable_state_auto", True)
+        self.declare_parameter("grab_event_topic", "/grab_node/event")
+        self.declare_parameter("episode_reset_delay_sec", 5.0)
 
         self.set_state_service = self.get_parameter("set_state_service").value
         self.found_frames = int(self.get_parameter("found_frames").value)
         self.lost_frames = int(self.get_parameter("lost_frames").value)
         self.enable_state_auto = bool(self.get_parameter("enable_state_auto").value)
+        self.grab_event_topic = self.get_parameter("grab_event_topic").value
+        self.episode_reset_delay_sec = float(self.get_parameter("episode_reset_delay_sec").value)
 
         # Create client for task_manager
         self.set_state_client = self.create_client(SetTaskState, self.set_state_service)
@@ -90,6 +94,12 @@ class ImgRecog(Node):
         self.item_ids = set(int(x) for x in self.get_parameter("item_ids").value)
         self.dropoff_ids = set(int(x) for x in self.get_parameter("dropoff_ids").value)
 
+        # Grab node event codes
+        self.EVENT_IDLE = 0
+        self.EVENT_GRABBED = 1
+        self.EVENT_DROPPED = 2
+        self.EVENT_BUSY = 3
+
         self.marker_length_m = float(self.get_parameter("marker_length_m").value)
         self.target_policy = str(self.get_parameter("target_policy").value).lower().strip()
 
@@ -104,10 +114,20 @@ class ImgRecog(Node):
         self.sub_img = self.create_subscription(Image, self.image_topic, self.cb_img, 10)
         self.sub_info = self.create_subscription(CameraInfo, self.camera_info_topic, self.cb_info, 10)
         self.sub_state = self.create_subscription(UInt8, self.state_topic, self.cb_state, 10)
+        self.sub_grab_event = self.create_subscription(UInt8, self.grab_event_topic, self.cb_grab_event, 10)
         self.pub = self.create_publisher(Float32MultiArray, self.out_topic, 10)
 
         # State
         self.current_state: int = SEARCH_ITEM
+
+        # Episode/item tracking
+        self.delivered_item_ids: set[int] = set()
+        self.held_item_id: Optional[int] = None
+        self.locked_item_id: Optional[int] = None
+
+        # Episode reset timer
+        self.reset_timer = None
+        self.reset_pending = False
 
         # Camera model (filled from CameraInfo)
         self.K: Optional[np.ndarray] = None
@@ -116,13 +136,119 @@ class ImgRecog(Node):
         self.get_logger().info(f"Subscribing image: {self.image_topic}")
         self.get_logger().info(f"Subscribing camera_info: {self.camera_info_topic}")
         self.get_logger().info(f"Subscribing state: {self.state_topic}")
+        self.get_logger().info(f"Subscribing grab events: {self.grab_event_topic}")
         self.get_logger().info(f"Publishing: {self.out_topic}")
         self.get_logger().info(f"Dictionary: {dict_name}")
         self.get_logger().info(f"item_ids={sorted(self.item_ids)} dropoff_ids={sorted(self.dropoff_ids)}")
+        self.get_logger().info(f"episode_reset_delay_sec={self.episode_reset_delay_sec}")
         self.get_logger().info(f"marker_length_m={self.marker_length_m} target_policy={self.target_policy}")
+        # self.get_logger().info("Publishing EVENT_GRABBED")
+        # self.publish_event(EVENT_GRABBED)
+        # self.get_logger().info("Publishing EVENT_DROPPED")
+        # self.publish_event(EVENT_DROPPED)
 
     def cb_state(self, msg: UInt8):
-        self.current_state = int(msg.data)
+        old_state = self.current_state
+        new_state = int(msg.data)
+        self.current_state = new_state
+
+        # If we fall back to SEARCH_ITEM, we are no longer committed to an old target
+        if new_state == SEARCH_ITEM and old_state != SEARCH_ITEM:
+            if self.held_item_id is None:
+                self.locked_item_id = None
+
+        # Once we are searching for dropoff, the item target should stay fixed only as held_item_id
+        if new_state in (SEARCH_DROPOFF, APPROACH_DROPOFF):
+            self.locked_item_id = None
+
+    def cb_grab_event(self, msg: UInt8):
+        event = int(msg.data)
+
+        self.get_logger().info(
+            f"Grab event received: event={event}, "
+            f"locked_item_id={self.locked_item_id}, "
+            f"held_item_id={self.held_item_id}, "
+            f"delivered={sorted(self.delivered_item_ids)}"
+        )
+
+        if event == self.EVENT_GRABBED:
+            if self.locked_item_id is not None:
+                self.held_item_id = int(self.locked_item_id)
+                self.get_logger().info(
+                    f"EVENT_GRABBED -> held_item_id set to {self.held_item_id}"
+                )
+                self.locked_item_id = None
+            else:
+                self.get_logger().warn(
+                    "EVENT_GRABBED received but locked_item_id is None"
+                )
+
+        elif event == self.EVENT_DROPPED:
+            if self.held_item_id is not None:
+                delivered_id = int(self.held_item_id)
+                self.delivered_item_ids.add(delivered_id)
+
+                self.get_logger().info(
+                    f"EVENT_DROPPED -> added item {delivered_id}. "
+                    f"Delivered set now {sorted(self.delivered_item_ids)}"
+                )
+
+                self.held_item_id = None
+                self.locked_item_id = None
+
+                if self.delivered_item_ids == self.item_ids:
+                    self.get_logger().info(
+                        "All items delivered. Starting episode reset timer."
+                    )
+                    self._start_episode_reset_timer()
+            else:
+                self.get_logger().warn(
+                    "EVENT_DROPPED received but held_item_id is None"
+                )
+
+        elif event == self.EVENT_IDLE:
+            self.get_logger().info("EVENT_IDLE received")
+
+        elif event == self.EVENT_BUSY:
+            self.get_logger().info("EVENT_BUSY received")
+
+        else:
+            self.get_logger().warn(f"Unknown grab event code: {event}")
+
+    def _start_episode_reset_timer(self):
+        if self.reset_pending:
+            return
+
+        self.reset_pending = True
+        self.locked_item_id = None
+        self.held_item_id = None
+
+        if self.reset_timer is not None:
+            self.reset_timer.cancel()
+            self.reset_timer = None
+
+        self.reset_timer = self.create_timer(
+            self.episode_reset_delay_sec,
+            self._finish_episode_reset
+        )
+
+
+    def _finish_episode_reset(self):
+        if self.reset_timer is not None:
+            self.reset_timer.cancel()
+            self.destroy_timer(self.reset_timer)
+            self.reset_timer = None
+
+        self.reset_pending = False
+
+        self.delivered_item_ids.clear()
+        self.held_item_id = None
+        self.locked_item_id = None
+
+        self._consec_found = 0
+        self._consec_lost = 0
+
+        self.get_logger().info("Episode reset complete. Delivered-item list cleared.")
 
     def cb_info(self, msg: CameraInfo):
         # Only need to parse once; but safe to update if it changes
@@ -131,10 +257,17 @@ class ImgRecog(Node):
         self.D = np.array(msg.d, dtype=np.float64) if len(msg.d) > 0 else np.zeros((5,), dtype=np.float64)
 
     def _valid_ids_for_state(self) -> set:
+        # During reset delay, ignore all targets
+        if self.reset_pending:
+            return set()
+
         if self.current_state in (SEARCH_ITEM, APPROACH_ITEM):
-            return self.item_ids
+            # Ignore items already delivered in this episode
+            return self.item_ids - self.delivered_item_ids
+
         if self.current_state in (SEARCH_DROPOFF, APPROACH_DROPOFF):
             return self.dropoff_ids
+
         return set()
 
     @staticmethod
@@ -222,30 +355,71 @@ class ImgRecog(Node):
 
         if len(candidates) == 0:
             self.pub.publish(out)
-            
+
             if self.current_state == APPROACH_ITEM:
                 self._consec_lost += 1
                 self._consec_found = 0
                 if self._consec_lost >= self.lost_frames:
+                    self.locked_item_id = None
                     self._request_state(SEARCH_ITEM)
+
             elif self.current_state == APPROACH_DROPOFF:
                 self._consec_lost += 1
                 self._consec_found = 0
                 if self._consec_lost >= self.lost_frames:
                     self._request_state(SEARCH_DROPOFF)
+
             else:
-                # in SEARCH states, no tag visible is normal
                 self._consec_lost = 0
                 self._consec_found = 0
 
             return
 
-        best = self._choose_best(candidates, w, h)
+        # Choose best candidate differently depending on state
+        best = None
+
+        if self.current_state == SEARCH_ITEM:
+            best = self._choose_best(candidates, w, h)
+
+        elif self.current_state == APPROACH_ITEM:
+            # While approaching an item, stay locked to the same ID
+            if self.locked_item_id is not None:
+                locked_candidates = [c for c in candidates if int(c["id"]) == int(self.locked_item_id)]
+                if len(locked_candidates) > 0:
+                    best = locked_candidates[0]
+                else:
+                    # Locked target not visible in this frame
+                    self.pub.publish(out)
+                    self._consec_lost += 1
+                    self._consec_found = 0
+                    if self._consec_lost >= self.lost_frames:
+                        self.locked_item_id = None
+                        self._request_state(SEARCH_ITEM)
+                    return
+            else:
+                # Fallback: choose one and lock it
+                best = self._choose_best(candidates, w, h)
+                self.locked_item_id = int(best["id"])
+                self.get_logger().info(f"Locked item target: {self.locked_item_id}")
+
+        elif self.current_state in (SEARCH_DROPOFF, APPROACH_DROPOFF):
+            best = self._choose_best(candidates, w, h)
+
+        else:
+            best = self._choose_best(candidates, w, h)
+
+        self.get_logger().info(
+            f"STATE={self.current_state} BEST_ID={int(best['id'])} "
+            f"LOCKED={self.locked_item_id} HELD={self.held_item_id} "
+            f"DELIVERED={sorted(self.delivered_item_ids)}"
+            )
 
         if self.current_state == SEARCH_ITEM:
             self._consec_found += 1
             self._consec_lost = 0
             if self._consec_found >= self.found_frames:
+                self.locked_item_id = int(best["id"])
+                self.get_logger().info(f"Locked item target: {self.locked_item_id}")
                 self._request_state(APPROACH_ITEM)
 
         elif self.current_state == SEARCH_DROPOFF:
@@ -307,6 +481,7 @@ class ImgRecog(Node):
 
         req = SetTaskState.Request()
         req.new_state = int(new_state)
+        req.requester = "img_recog"
 
         self._pending_request = True
         future = self.set_state_client.call_async(req)

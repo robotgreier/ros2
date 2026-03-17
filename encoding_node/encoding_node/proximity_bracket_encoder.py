@@ -1,61 +1,48 @@
 # encoding_node/proximity_bracket_encoder.py
-from bisect import bisect_right
 import math
-from typing import List, Optional
+from typing import List
 
 
 class ProximityBracketEncoder:
     """
-    Converts a distance value into a discrete bracket/bin and emits a spike (1)
-    only when the bracket changes.
+    Thermometric distance encoding.
+
+    Produces n_dist_bits spikes with evenly-spaced thresholds from
+    dist_max_m down to dist_max_m / n_dist_bits.  Each bit is 1 when
+    the distance is closer than its threshold, so a near object saturates
+    all bits and a far object fires none.
+
+    n_dist_bits=1 is identical to the old binary encoding with
+    threshold = dist_max_m.
+
+    Returns all-zero on invalid/infinite distance (sensor not available).
     """
 
-    def __init__(
-        self,
-        bin_edges: List[float],
-        *,
-        init_no_spike: bool = True,
-        inf_as_far: bool = True,
-    ):
-        if not bin_edges:
-            raise ValueError("bin_edges must be non-empty")
-        for i in range(1, len(bin_edges)):
-            if bin_edges[i] <= bin_edges[i - 1]:
-                raise ValueError("bin_edges must be strictly ascending")
+    def __init__(self, n_dist_bits: int, dist_max_m: float):
+        if n_dist_bits < 1:
+            raise ValueError("n_dist_bits must be >= 1")
+        if dist_max_m <= 0.0:
+            raise ValueError("dist_max_m must be positive")
 
-        self.bin_edges = list(bin_edges)
-        self.init_no_spike = init_no_spike
-        self.inf_as_far = inf_as_far
-        self._prev_bin: Optional[int] = None
+        self.n_dist_bits = n_dist_bits
+        self.dist_max_m = dist_max_m
+
+        step = dist_max_m / n_dist_bits
+        self.thresholds: List[float] = [
+            dist_max_m - i * step for i in range(n_dist_bits)
+        ]
 
     def reset(self) -> None:
-        self._prev_bin = None
+        pass  # stateless encoding; kept for API compatibility
 
-    def distance_to_bin(self, d: float) -> Optional[int]:
-        # Return None for invalid values unless configured otherwise.
-        if not math.isfinite(d):
-            if math.isinf(d) and d > 0 and self.inf_as_far:
-                # Treat +inf as very far -> last bin
-                return len(self.bin_edges)
-            return None
-        if d <= 0.0:
-            return None
-        return bisect_right(self.bin_edges, d)
-
-    def update(self, d: float) -> int:
+    def update(self, d: float) -> List[int]:
         """
-        Feed one distance reading. Returns 1 only if bracket changes, else 0.
+        Feed one distance reading.
+
+        Returns a list of n_dist_bits bits.  Bit i is 1 when d < thresholds[i].
+        Returns all-zero for invalid (non-finite or non-positive) readings.
         """
-        b = self.distance_to_bin(d)
-        if b is None:
-            return 0
+        if not math.isfinite(d) or d <= 0.0:
+            return [0] * self.n_dist_bits
 
-        if self._prev_bin is None:
-            self._prev_bin = b
-            return 0 if self.init_no_spike else 1
-
-        if b != self._prev_bin:
-            self._prev_bin = b
-            return 1
-
-        return 0
+        return [1 if d < thr else 0 for thr in self.thresholds]

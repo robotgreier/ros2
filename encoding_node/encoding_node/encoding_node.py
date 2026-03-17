@@ -28,8 +28,8 @@ class EncodingNode(Node):
         self.declare_parameter("pack_order", ["keypoints_grid", "proximity", "aruco_dir"])
 
         self.declare_parameter("proximity_topic", "/ultrasonic/front/scan")
-        self.declare_parameter("proximity_bin_edges", [0.02, 0.04, 0.08, 0.16, 0.32, 0.64])
-        self.declare_parameter("proximity_inf_as_far", True)
+        self.declare_parameter("proximity_n_dist_bits", 4)
+        self.declare_parameter("proximity_dist_max_m", 1.5)
 
         self.declare_parameter("keypoints_topic", "/features/keypoints_grid")
         self.declare_parameter("keypoints_threshold", 5)
@@ -39,16 +39,16 @@ class EncodingNode(Node):
         self.pack_order = list(self.get_parameter("pack_order").value)
 
         proximity_topic = self.get_parameter("proximity_topic").value
-        proximity_bin_edges = list(self.get_parameter("proximity_bin_edges").value)
-        proximity_inf_as_far = bool(self.get_parameter("proximity_inf_as_far").value)
+        proximity_n_dist_bits = int(self.get_parameter("proximity_n_dist_bits").value)
+        proximity_dist_max_m = float(self.get_parameter("proximity_dist_max_m").value)
 
         keypoints_topic = self.get_parameter("keypoints_topic").value
         keypoints_threshold = int(self.get_parameter("keypoints_threshold").value)
 
         # ---- Encoders ----
         self.prox_encoder = ProximityBracketEncoder(
-            bin_edges=proximity_bin_edges,
-            inf_as_far=proximity_inf_as_far,
+            n_dist_bits=proximity_n_dist_bits,
+            dist_max_m=proximity_dist_max_m,
         )
 
         self.kp_encoder = KeypointsGridEncoder(threshold=keypoints_threshold)
@@ -56,7 +56,7 @@ class EncodingNode(Node):
         # ---- Channels (named chunks) ----
         # Each channel value is a list[int] of 0/1 spikes.
         self.channels: Dict[str, List[int]] = {
-            "proximity": [0],     # single-bit channel
+            "proximity": [0] * proximity_n_dist_bits,
             "keypoints_grid": [], # variable length, filled on first message
         }
 
@@ -118,8 +118,7 @@ class EncodingNode(Node):
         vals = [r for r in msg.ranges if math.isfinite(r) and r > 0.0]
         d = min(vals) if vals else float("inf")
 
-        spike = self.prox_encoder.update(d)
-        self.channels["proximity"] = [spike]
+        self.channels["proximity"] = self.prox_encoder.update(d)
 
         self.publish_vector()
 

@@ -63,25 +63,26 @@ class SNNNode(Node):
         self.declare_parameter('forward_speed', 0.25)
         self.declare_parameter('turn_speed', 0.6)
 
-        # Neuron parameters (Changed to lowercase 'threshold')
-        self.declare_parameter('decay', 0.75)
-        self.declare_parameter('threshold', 4.0)
-        self.declare_parameter('reset', 0.0)
+        # Neuron parameters (integer-scaled)
+        self.declare_parameter('decay', 64)
+        self.declare_parameter('threshold', 512)
+        self.declare_parameter('reset', 0)
 
         # Synapse & Learning parameters
         self.declare_parameter('training_mode', True)
-        self.declare_parameter('learning_rate', 0.250)
-        self.declare_parameter('initial_weight', 0.3)
-        self.declare_parameter('t_pre', 3.0)
-        self.declare_parameter('t_post', 3.0)
-        self.declare_parameter('tau_e_shift', 4.0)
-        self.declare_parameter('dw_pos', 0.25)
-        self.declare_parameter('dw_neg', 0.03125)
-        self.declare_parameter('min_weight', 0.03125)
-        self.declare_parameter('max_weight', 1.0)
-        self.declare_parameter('dopamine_correct', 1.0)
-        self.declare_parameter('dopamine_wrong', -0.5)
+        self.declare_parameter('lr_shift', 3)
+        self.declare_parameter('initial_weight', 64)
+        self.declare_parameter('t_pre', 3)
+        self.declare_parameter('t_post', 4)
+        self.declare_parameter('tau_e_shift', 4)
+        self.declare_parameter('dw_pos', 32)
+        self.declare_parameter('dw_neg', 64)
+        self.declare_parameter('min_weight', 8)
+        self.declare_parameter('max_weight', 255)
+        self.declare_parameter('reward_shift', 2)
+        self.declare_parameter('punish_shift', 0)
         self.declare_parameter('learning_mode', 'rstdp')
+        self.declare_parameter('feedback', True)
         self.declare_parameter('seed', 42)
 
         # ---- CSV logging ----
@@ -159,24 +160,25 @@ class SNNNode(Node):
         self.output_size = self.num_actions
 
         # Neuron params
-        self.decay = float(self.get_parameter('decay').value)
-        self.threshold = float(self.get_parameter('threshold').value)
-        self.reset = float(self.get_parameter('reset').value)
+        self.decay = int(self.get_parameter('decay').value)
+        self.threshold = int(self.get_parameter('threshold').value)
+        self.reset = int(self.get_parameter('reset').value)
 
         # Synapse params
         self.training_mode = bool(self.get_parameter('training_mode').value)
-        self.learning_rate = float(self.get_parameter('learning_rate').value)
-        self.initial_weight = float(self.get_parameter('initial_weight').value)
-        self.t_pre = float(self.get_parameter('t_pre').value)
-        self.t_post = float(self.get_parameter('t_post').value)
-        self.tau_e_shift = float(self.get_parameter('tau_e_shift').value)
-        self.dw_pos = float(self.get_parameter('dw_pos').value)
-        self.dw_neg = float(self.get_parameter('dw_neg').value)
-        self.max_weight = float(self.get_parameter('max_weight').value)
-        self.min_weight = float(self.get_parameter('min_weight').value)
-        self.dopamine_correct = float(self.get_parameter('dopamine_correct').value)
-        self.dopamine_wrong = float(self.get_parameter('dopamine_wrong').value)
+        self.lr_shift = int(self.get_parameter('lr_shift').value)
+        self.initial_weight = int(self.get_parameter('initial_weight').value)
+        self.t_pre = int(self.get_parameter('t_pre').value)
+        self.t_post = int(self.get_parameter('t_post').value)
+        self.tau_e_shift = int(self.get_parameter('tau_e_shift').value)
+        self.dw_pos = int(self.get_parameter('dw_pos').value)
+        self.dw_neg = int(self.get_parameter('dw_neg').value)
+        self.max_weight = int(self.get_parameter('max_weight').value)
+        self.min_weight = int(self.get_parameter('min_weight').value)
+        self.reward_shift = int(self.get_parameter('reward_shift').value)
+        self.punish_shift = int(self.get_parameter('punish_shift').value)
         self.learning_mode = str(self.get_parameter('learning_mode').value)
+        self.feedback = bool(self.get_parameter('feedback').value)
         
         seed = self.get_parameter('seed').value
         if seed is not None:
@@ -188,28 +190,29 @@ class SNNNode(Node):
 
         neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset}
         synapse_params = {
-            "learning_rate": self.learning_rate, "w_init": self.initial_weight, 
-            "t_pre": self.t_pre, "t_post": self.t_post, "tau_e_shift": self.tau_e_shift, 
-            "dw_pos": self.dw_pos, "dw_neg": self.dw_neg, 
-            "w_min": self.min_weight, "w_max": self.max_weight, 
-            "learning_mode": self.learning_mode
+            "lr_shift": self.lr_shift, "w_init": self.initial_weight,
+            "t_pre": self.t_pre, "t_post": self.t_post, "tau_e_shift": self.tau_e_shift,
+            "dw_pos": self.dw_pos, "dw_neg": self.dw_neg,
+            "w_min": self.min_weight, "w_max": self.max_weight,
+            "mode": self.learning_mode
         }
 
         self.network = SNNLayer(
-            n_inputs=self.input_size, 
-            n_outputs=self.output_size, 
-            neuron_params=neuron_params, 
-            synapse_params=synapse_params
+            n_inputs=self.input_size,
+            n_outputs=self.output_size,
+            neuron_params=neuron_params,
+            synapse_params=synapse_params,
+            feedback=self.feedback
         )
 
         share_dir = get_package_share_directory('python_snn_node')
         weight_path = os.path.join(share_dir, 'config', 'weights.mem')
 
-        self.network.load_weights(weight_file=weight_path, scale=127)
+        self.network.load_weights(weight_file=weight_path)
 
         # --- State and Communication ---
         self.last_input_stamp = self.get_clock().now()
-        self.last_vector = np.zeros(self.input_size, dtype=np.float32)
+        self.last_vector = np.zeros(self.input_size, dtype=np.int32)
         self.correct_output = -1
 
         qos_sensor = QoSProfile(
@@ -336,8 +339,8 @@ class SNNNode(Node):
             )
             return
 
-        # Convert 0/1 uint8 spikes to float32 and store in last_vector
-        self.last_vector[:] = data.astype(np.float32)
+        # Convert 0/1 uint8 spikes to int32 and store in last_vector
+        self.last_vector[:] = data.astype(np.int32)
         self.last_input_stamp = self.get_clock().now()
 
         if self.logger_csv is not None and self.log_mode == "A":
@@ -363,8 +366,8 @@ class SNNNode(Node):
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
         
-        """# Apply reward, uncomment for reward based training
-        self.network.apply_reward(dopamine=0, winner_idx=winner_idx)"""
+        # Apply reward, uncomment for reward based training
+        # self.network.apply_reward(dopamine_shift=self.reward_shift, dopamine_sign=1, winner_idx=winner_idx)
 
 
         # Normal actuation
@@ -417,7 +420,10 @@ class SNNNode(Node):
         self.pub_dopamine.publish(Float32(data=float(dopamine)))
 
         # ---- Optional: apply dopamine to learning rule (when you enable training) ----
-        # self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
+        # if dopamine > 0:
+        #     self.network.apply_reward(dopamine_shift=self.reward_shift, dopamine_sign=1, winner_idx=int(winner_idx))
+        # elif dopamine < 0:
+        #     self.network.apply_reward(dopamine_shift=self.punish_shift, dopamine_sign=0, winner_idx=int(winner_idx))
 
         # ---- Add to your existing logger ----
         # Recommended: store reward + some context so you can tune later.
@@ -542,7 +548,7 @@ class SNNNode(Node):
         Called when /proximity_stop triggers. winner_idx is what the policy wanted to do.
         Implement your punishment here once we confirm how net.step applies dopamine.
         """
-        self.network.apply_reward(dopamine=self.dopamine_wrong, winner_idx=winner_idx)
+        self.network.apply_reward(dopamine_shift=self.punish_shift, dopamine_sign=0, winner_idx=winner_idx)
 
 
     def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):

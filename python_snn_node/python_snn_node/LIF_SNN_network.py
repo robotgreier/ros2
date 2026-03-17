@@ -1,31 +1,29 @@
 import numpy as np
-import os
-from ament_index_python.packages import get_package_share_directory
+
 
 class LIF:
     """
     Leaky Integrate-and-Fire neuron.
 
     Args:
-            decay: Membrane decay (subtraction based)
-            threshold: Magnitude of membrane potential needed to produce a spike
-            reset: Value the membrane potential is reset to after spike
+        decay: Membrane decay (uint8, scaled x256)
+        threshold: Spike threshold (uint16, scaled x256)
+        reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=0.75, threshold=4.0, reset=0.0):
-        # --- Neuron dynamics ---
-        self.decay = decay              # Membrane decay
+    def __init__(self, decay=192, threshold=1024, reset=0):
+        self.decay = decay
         self.threshold = threshold
         self.reset = reset
-        self.mem = 0.0
-        self.pre_reset_mem = 0.0       # Membrane potential before reset, used for WTA
+        self.mem = 0            # uint16, never negative
+        self.pre_reset_mem = 0  # Membrane potential before reset, used for WTA
         self.spk = 0
 
     def update(self, synaptic_input):
         """Membrane update. Returns spike (0 or 1)."""
         self.spk = 0
-        self.mem = self.mem - self.decay + synaptic_input
-        self.pre_reset_mem = self.mem  # Cache membrane potential before reset for WTA
+        self.mem = max(0, self.mem - self.decay) + synaptic_input
+        self.pre_reset_mem = self.mem
 
         if self.mem >= self.threshold:
             self.spk = 1
@@ -38,75 +36,49 @@ class RSTDPSynapse:
     """
     Reward-modulated STDP synapse with rectangular window.
 
-    Supports two modes:
-        'rstdp': Weight updates only when apply_reward() is called externally
-                 with a dopamine signal. Eligibility trace accumulates STDP
-                 events and decays over time, acting as a credit assignment window.
+    Modes:
+        'rstdp': Weight updates only when apply_reward() is called with a dopamine
+                 signal. Eligibility trace accumulates STDP events and decays over time.
         'stdp':  Weight updates immediately on each spike pairing (dopamine=1.0).
-                 Eligibility still decays each step, so the effective update is
-                 lr * eligibility at the moment of each spike — not a pure
-                 instantaneous step, but a short-window trace-based update.
 
     Args:
-            mode: 'rstdp' (default) or 'stdp'
-            learning_rate: Scales the weight update
-            w_init: Initial weight (random if None)
-            t_pre/t_post: Rectangular STDP window widths (timesteps)
-                          Pre-before-post within t_pre → LTP (causal)
-                          Post-before-pre within t_post → LTD (acausal)
-            tau_e_shift: Eligibility decay as right-shift (divide by 2^N each step)
-                         Higher = slower decay, longer credit assignment window
-            dw_pos/dw_neg: Fixed weight increment/decrement on spike pairing
-                           Equivalent to A_plus/A_minus in exponential STDP
-            w_min/w_max: Weight clamps
+        mode: 'rstdp' (default) or 'stdp'
+        lr_shift: Learning rate as right-shift (lr = 1 / 2^lr_shift)
+        w_init: Initial weight (random if None)
+        t_pre/t_post: Rectangular STDP window widths (timesteps)
+        tau_e_shift: Eligibility decay as right-shift
+        dw_pos/dw_neg: Fixed weight increment/decrement on spike pairing
+        w_min/w_max: Weight clamps
     """
 
-    # Eligibility traces start as disabled/inactive
     DISABLED = -1
 
-    def __init__(self, learning_rate=0.125, w_init=0.3,
+    def __init__(self, lr_shift=3, w_init=77,
                  t_pre=2, t_post=3, tau_e_shift=4,
-                 dw_pos=0.25, dw_neg=0.03125,
-                 w_min=0.03125, w_max=1.0,
-                 learning_mode='rstdp'):
+                 dw_pos=64, dw_neg=8,
+                 w_min=8, w_max=255,
+                 mode='rstdp'):
 
-        self.learning_mode = learning_mode
-        self.learning_rate = learning_rate
-        self.weight = w_init if w_init is not None else np.random.uniform(0.3, 0.8)
+        self.mode = mode
+        self.lr_shift = lr_shift
+        self.weight = w_init if w_init is not None else np.random.randint(77, 205)
 
-        # STDP window parameters
         self.t_pre = t_pre
         self.t_post = t_post
-        self.tau_e_shift = int(tau_e_shift)
+        self.tau_e_shift = tau_e_shift
         self.dw_pos = dw_pos
         self.dw_neg = dw_neg
 
-        # Counter-based trace state (pre/post_timer = -1 -> inactive, 0+ = counting)
         self.pre_timer = self.DISABLED
         self.post_timer = self.DISABLED
-        self.eligibility = 0.0
+        self.eligibility = 0  # int16, range [-256, 256]
 
-        # Weight bounds
         self.w_min = w_min
         self.w_max = w_max
 
     def update_eligibility(self, pre_spike, post_spike):
-        """
-        Update spike timing counters and eligibility each timestep.
-
-        Uses rectangular STDP windows: if a spike pair occurs within
-        the window, eligibility is incremented/decremented by dw_pos/dw_neg.
-        Timers run independently so multiple pairings within a window
-        are detected — equivalent to parallel trace registers in HDL.
-
-        In 'stdp' mode, weight is updated immediately after eligibility update
-        (dopamine=1.0), so no external apply_reward() call is needed.
-
-        Args:
-            pre_spike: 1 if pre-synaptic neuron fired, 0 otherwise
-            post_spike: 1 if post-synaptic neuron fired, 0 otherwise
-        """
-        # STDP causality timers
+        """Update spike timing counters and eligibility each timestep."""
+        # Advance and expire timers
         if self.pre_timer >= 0:
             self.pre_timer += 1
             if self.pre_timer > self.t_pre:
@@ -117,185 +89,221 @@ class RSTDPSynapse:
             if self.post_timer > self.t_post:
                 self.post_timer = self.DISABLED
 
-        # STDP on pre-spike: start pre timer, check for acausality (LTD)
+        # LTD: pre fires while post_timer is active (acausal pairing)
         if pre_spike:
-            if self.post_timer >= 0 and self.post_timer <= self.t_post:
+            if self.post_timer >= 0:
                 self.eligibility -= self.dw_neg
             self.pre_timer = 0
 
-        # STDP on post-spike: start post timer, check for causality (LTP)
+        # LTP: post fires while pre_timer is active (causal pairing)
         if post_spike:
-            if self.pre_timer >= 0 and self.pre_timer <= self.t_pre:
+            if self.pre_timer >= 0:
                 self.eligibility += self.dw_pos
             self.post_timer = 0
 
-        # Decay eligibility via right-shift
-        self.eligibility = self.eligibility - self.eligibility / (1 << self.tau_e_shift)
+        self.eligibility -= self.eligibility >> self.tau_e_shift
+        self.eligibility = max(-256, min(256, self.eligibility))
 
-        # Clamp eligibility
-        self.eligibility = np.clip(self.eligibility, -1.0, 1.0)
+        if self.mode == 'stdp':
+            self.apply_reward(dopamine_shift=0, dopamine_sign=1, dopamine_enable=1)
 
-        # In stdp mode, apply weight update immediately
-        if self.learning_mode == 'stdp':
-            self.apply_reward(dopamine=1.0)
-
-    def apply_reward(self, dopamine):
+    def apply_reward(self, dopamine_shift, dopamine_sign, dopamine_enable):
         """
         Apply reward-modulated weight update.
 
         Args:
-            dopamine: Reward signal. Positive reinforces correlated activity, negative punishes it.
-                      In 'stdp' mode this is always 1.0 (called internally).
+            dopamine_shift: Shift amount (0–2); effective magnitude = 2^dopamine_shift / 2^lr_shift
+            dopamine_sign:  1 = reward (weight + delta), 0 = punishment (weight - delta)
+            dopamine_enable: 1 = apply update, 0 = no-op
         """
-        if self.learning_mode == "rstdp":
-            delta_w = self.learning_rate * dopamine * self.eligibility
-            self.weight = np.clip(self.weight + delta_w, self.w_min, self.w_max)
+        if not dopamine_enable:
+            return
+
+        delta_w = (abs(self.eligibility) << dopamine_shift) >> self.lr_shift
+        if dopamine_sign:
+            new_weight = self.weight + delta_w
+        else:
+            new_weight = self.weight - delta_w
+
+        self.weight = max(self.w_min, min(self.w_max, new_weight))
 
 
 class SNNLayer:
     """
-    A fully-connected SNN with STDP/R-STDP learning.
+    Fully-connected SNN layer with vectorised NumPy state arrays.
 
     Args:
-            n_inputs: Number of pre-synaptic input neurons
-            n_outputs: Number of post-synaptic output neurons
-            neuron_params: Dict passed to LIF constructor
-            synapse_params: Dict passed to RSTDPSynapse constructor
-                            Include 'mode': 'stdp' or 'rstdp' (default)
+        n_inputs: Number of pre-synaptic input neurons
+        n_outputs: Number of post-synaptic output neurons
+        neuron_params: Dict passed to LIF constructor
+        synapse_params: Dict passed to RSTDPSynapse constructor;
+                        include 'mode': 'stdp' or 'rstdp' (default)
+        feedback: If True, adds one extra input driven by NOR of previous outputs
     """
 
-    def __init__(self, n_inputs, n_outputs, neuron_params=None, synapse_params=None):
-        neuron_params = neuron_params or {}
+    def __init__(self, n_inputs, n_outputs, neuron_params=None, synapse_params=None, feedback=False):
+        neuron_params  = neuron_params  or {}
         synapse_params = synapse_params or {}
 
-        self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.learning_mode = synapse_params.get('learning_mode', 'rstdp')
+        self.mode      = synapse_params.get('mode', 'rstdp')
+        self.feedback  = feedback
+        self._feedback_reg = 0
 
-        # Create output neurons
-        self.neurons = [LIF(**neuron_params) for _ in range(n_outputs)]
+        # +1 input for feedback neuron if enabled
+        self.n_inputs = n_inputs + 1 if feedback else n_inputs
 
-        # Create synapse matrix: synapses[post][pre]
-        self.synapses = [
-            [RSTDPSynapse(**synapse_params) for _ in range(n_inputs)]
-            for _ in range(n_outputs)
-        ]
+        # Neuron state (n_outputs,)
+        self.decay     = neuron_params.get('decay',     192)
+        self.threshold = neuron_params.get('threshold', 1024)
+        self.reset_val = neuron_params.get('reset',     0)
+
+        self.mem           = np.zeros(n_outputs, dtype=np.int32)
+        self.pre_reset_mem = np.zeros(n_outputs, dtype=np.int32)
+        self.spk           = np.zeros(n_outputs, dtype=np.int32)
+        self.spike_count   = np.zeros(n_outputs, dtype=np.int32)
+
+        # Synapse state (n_outputs, n_inputs)
+        self.lr_shift    = synapse_params.get('lr_shift',    3)
+        self.t_pre       = synapse_params.get('t_pre',       2)
+        self.t_post      = synapse_params.get('t_post',      3)
+        self.tau_e_shift = synapse_params.get('tau_e_shift', 4)
+        self.dw_pos      = synapse_params.get('dw_pos',      64)
+        self.dw_neg      = synapse_params.get('dw_neg',      8)
+        self.w_min       = synapse_params.get('w_min',       8)
+        self.w_max       = synapse_params.get('w_max',       255)
+
+        w_init = synapse_params.get('w_init', None)
+        if w_init is None:
+            self.weights = np.random.randint(77, 205, size=(n_outputs, self.n_inputs), dtype=np.int32)
+        else:
+            self.weights = np.full((n_outputs, self.n_inputs), w_init, dtype=np.int32)
+
+        self.eligibility = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
+        self.pre_timer   = np.full((n_outputs, self.n_inputs), -1, dtype=np.int32)
+        self.post_timer  = np.full((n_outputs, self.n_inputs), -1, dtype=np.int32)
 
     def forward(self, input_spikes):
         """
-        Process one timestep/frame.
+        Process one timestep.
 
         Args:
-            input_spikes: List/array of length n_inputs (0s and 1s)
+            input_spikes: Array of length n_inputs (0s and 1s)
 
         Returns:
             List of output spikes (length n_outputs)
         """
-        output_spikes = []
+        input_arr = np.asarray(input_spikes, dtype=np.int32)
+        if self.feedback:
+            input_arr = np.append(input_arr, self._feedback_reg)
 
-        for j, neuron in enumerate(self.neurons):
-            # Compute weighted synaptic input
-            synaptic_input = sum(
-                self.synapses[j][i].weight * input_spikes[i]
-                for i in range(self.n_inputs)
-            )
+        # LIF membrane update
+        synaptic_inputs = self.weights @ input_arr
+        self.mem = np.maximum(0, self.mem - self.decay) + synaptic_inputs
+        self.pre_reset_mem = self.mem.copy()
+        output_arr = (self.mem >= self.threshold).astype(np.int32)
+        self.mem = np.where(output_arr, self.reset_val, self.mem)
+        self.spike_count += output_arr
 
-            # Update neuron
-            spike = neuron.update(synaptic_input)
-            output_spikes.append(spike)
+        if self.mode == 'stdp':
+            winner = self._winner_from_arr(output_arr)
+            # Lateral inhibition: suppress all non-winner membranes
+            self.mem[np.arange(self.n_outputs) != winner] = self.reset_val
 
-        # Update synapses after all neurons have been evaluated
-        if self.learning_mode == 'stdp':
-            # Lateral inhibition: only winner's synapses receive LTP/LTD,
-            # but all eligibility traces decay each step
-            winner = self.winner_takes_all(output_spikes)
-            for j in range(self.n_outputs):
-                if j != winner:
-                    self.neurons[j].mem = self.neurons[j].reset  # suppress losers
-            for j in range(self.n_outputs):
-                for i in range(self.n_inputs):
-                    # Winner gets full pre/post spike events; losers only decay
-                    pre = input_spikes[i] if j == winner else 0
-                    post = output_spikes[j] if j == winner else 0
-                    self.synapses[j][i].update_eligibility(
-                        pre_spike=pre,
-                        post_spike=post,
-                    )
-        elif self.learning_mode == "rstdp":
-            # R-STDP: update all synapses, weight updates happen externally via apply_reward()
-            for j in range(self.n_outputs):
-                for i in range(self.n_inputs):
-                    self.synapses[j][i].update_eligibility(
-                        pre_spike=input_spikes[i],
-                        post_spike=output_spikes[j],
-                    )
+            # Only winner's synapses see real spikes; losers decay only
+            pre_mat  = np.zeros((self.n_outputs, self.n_inputs), dtype=np.int32)
+            post_mat = np.zeros((self.n_outputs, self.n_inputs), dtype=np.int32)
+            pre_mat[winner]  = input_arr
+            post_mat[winner] = output_arr[winner]
+            self._update_eligibility(pre_mat, post_mat)
 
-        return output_spikes
+            delta_w = np.abs(self.eligibility) >> self.lr_shift
+            self.weights = np.clip(self.weights + delta_w, self.w_min, self.w_max)
+        else:
+            pre_mat  = np.broadcast_to(input_arr[np.newaxis, :],  (self.n_outputs, self.n_inputs))
+            post_mat = np.broadcast_to(output_arr[:, np.newaxis], (self.n_outputs, self.n_inputs))
+            self._update_eligibility(pre_mat, post_mat)
+
+        if self.feedback:
+            self._feedback_reg = int(not np.any(output_arr))
+
+        return output_arr.tolist()
+
+    def _update_eligibility(self, pre_mat, post_mat):
+        """Update all (n_outputs x n_inputs) eligibility traces for one timestep."""
+        # Advance active timers
+        np.add(self.pre_timer,  1, out=self.pre_timer,  where=self.pre_timer  >= 0)
+        np.add(self.post_timer, 1, out=self.post_timer, where=self.post_timer >= 0)
+
+        # Expire timers
+        self.pre_timer[self.pre_timer   > self.t_pre]  = -1
+        self.post_timer[self.post_timer > self.t_post] = -1
+
+        # LTD: pre fires while post_timer is active (acausal)
+        pre_fired = pre_mat.astype(bool)
+        np.subtract(self.eligibility, self.dw_neg,
+                    out=self.eligibility,
+                    where=pre_fired & (self.post_timer >= 0))
+        self.pre_timer[pre_fired] = 0
+
+        # LTP: post fires while pre_timer is active (causal)
+        # Uses updated pre_timer so simultaneous pre+post counts as LTP
+        post_fired = post_mat.astype(bool)
+        np.add(self.eligibility, self.dw_pos,
+               out=self.eligibility,
+               where=post_fired & (self.pre_timer >= 0))
+        self.post_timer[post_fired] = 0
+
+        # Decay and clamp
+        self.eligibility -= self.eligibility >> self.tau_e_shift
+        np.clip(self.eligibility, -256, 256, out=self.eligibility)
 
     def winner_takes_all(self, output_spikes):
         """
         Returns index of winning neuron.
-        Spiking neurons always beat non-spiking ones.
-        Pre-reset membrane potential breaks ties, ensuring index-independent
-        results equivalent to a parallel hardware comparator on FPGA.
+        Spiking neurons beat non-spiking ones; pre-reset membrane breaks ties.
         """
-        spiking = [i for i, s in enumerate(output_spikes) if s == 1]
+        return self._winner_from_arr(np.asarray(output_spikes, dtype=np.int32))
 
+    def _winner_from_arr(self, output_arr):
+        spiking = np.where(output_arr == 1)[0]
         if len(spiking) == 1:
-            return spiking[0]
-        elif len(spiking) > 1:
-            # Multiple spikes: highest pre-reset membrane potential wins
-            return max(spiking, key=lambda i: self.neurons[i].pre_reset_mem)
-        else:
-            # No spikes: highest pre-reset membrane potential
-            return int(np.argmax([n.pre_reset_mem for n in self.neurons]))
+            return int(spiking[0])
+        if len(spiking) > 1:
+            return int(spiking[np.argmax(self.pre_reset_mem[spiking])])
+        return int(np.argmax(self.pre_reset_mem))
 
-    def apply_reward(self, dopamine, winner_idx):
+    def apply_reward(self, dopamine_shift, dopamine_sign, winner_idx):
         """
-        Apply reward only to the winning neuron's synapses.
+        Apply reward to the winning neuron's synapses.
         No-op in 'stdp' mode (weights already updated in forward()).
         """
-        if self.learning_mode == 'stdp':
+        if self.mode == 'stdp':
             return
-        for i in range(self.n_inputs):
-            # Reinforce/punish winner
-            self.synapses[winner_idx][i].apply_reward(dopamine)
+        delta_w = (np.abs(self.eligibility[winner_idx]) << dopamine_shift) >> self.lr_shift
+        if dopamine_sign:
+            new_row = self.weights[winner_idx] + delta_w
+        else:
+            new_row = self.weights[winner_idx] - delta_w
+        np.clip(new_row, self.w_min, self.w_max, out=self.weights[winner_idx])
 
     def get_weights(self):
         """Return weight matrix as numpy array [n_outputs x n_inputs]."""
-        return np.array([
-            [self.synapses[j][i].weight for i in range(self.n_inputs)]
-            for j in range(self.n_outputs)
-        ])
-    
+        return self.weights.copy()
 
-    def load_weights(self, weight_file="weights.mem", scale=127):
-        """Loads and sets the weights of the current model from file."""
-        with open(weight_file, "r") as f:
-            lines = [ln.strip() for ln in f if ln.strip()]
-
-        expected = self.n_outputs * self.n_inputs
-        if len(lines) < expected:
-            raise ValueError(f"weights file has {len(lines)} lines, expected {expected}")
-
-        idx = 0
-        for post in range(self.n_outputs):
-            for pre in range(self.n_inputs):
-                w = int(lines[idx], 16)          # 0..255
-                if w > 127:
-                    w -= 256                     # -> -128..127
-                self.synapses[post][pre].weight = w / float(scale)
-                idx += 1
-
+    def load_weights(self, weight_file="weights.mem"):
+        """Load weights from a hex file (one value per line)."""
+        with open(weight_file) as f:
+            hex_values = [int(line.strip(), 16) for line in f]
+        self.weights[:] = np.array(hex_values, dtype=np.int32).reshape(self.n_outputs, self.n_inputs)
 
     def reset_state(self):
-        """Reset the state of all neurons and synaptic traces in the network."""
-        for n in self.neurons:
-            n.mem = 0.0
-            n.spk = 0
-            n.pre_reset_mem = 0.0
-        for j in range(self.n_outputs):
-            for i in range(self.n_inputs):
-                self.synapses[j][i].eligibility = 0.0
-                self.synapses[j][i].pre_timer = RSTDPSynapse.DISABLED
-                self.synapses[j][i].post_timer = RSTDPSynapse.DISABLED
+        """Reset all neuron and synapse trace state."""
+        self.mem[:]           = 0
+        self.spk[:]           = 0
+        self.pre_reset_mem[:] = 0
+        self.eligibility[:]   = 0
+        self.pre_timer[:]     = -1
+        self.post_timer[:]    = -1
+        self._feedback_reg    = 0
+        self.spike_count[:]   = 0

@@ -6,9 +6,9 @@ python_snn_node:
     pack_order: ["keypoints_grid", "proximity", "object_rec"] # add more channels here when they are implemented in encoder_node (proximity_stop, etc.)
 
     # Channel sizes, must match encoder_node's output
-    keypoints_grid_size: 12   # <-- adjust to match encoder_node's number of cells in grid
-    proximity_size: 1
-    object_rec_size: 3
+    keypoints_grid_size: 8*3   # <-- adjust to match encoder_node's number of cells in grid
+    proximity_size: 4
+    object_rec_size: 5
 
     # Output actions from SNN
     num_actions: 3   # LEFT, FORWARD, RIGHT
@@ -22,24 +22,25 @@ python_snn_node:
     turn_speed: 0.6 # rad/s
 
     ##### Neuron parameters #####
-    decay: 0.75
-    threshold: 4.0
-    reset: 0.0
+    decay: 64
+    threshold: 512
+    reset: 0
 
     ##### Synapse parameters #####
     training_mode: true # Remove?
-    learning_rate: 0.125
-    initial_weight: None
-    t_pre: 2
-    t_post: 3
+    lr_shift: 3 
+    initial_weight: 64
+    t_pre: 3
+    t_post: 4
     tau_e_shift: 4
-    dw_pos: 0.25
-    dw_neg: 0.03125
-    min_weight: 0.03125
-    max_weight: 1.0
-    dopamine_correct: 0.5
-    dopamine_wrong: -1.0
-    mode: 'stdp'
+    dw_pos: 32
+    dw_neg: 64
+    min_weight: 8
+    max_weight: 255
+    reward_shift: 64
+    punish_shift: 64
+    feedback: True
+    mode: 'None'
 
 
     seed: 42 # for reproducibility, or null for random.

@@ -65,6 +65,11 @@ class EncodingNode(Node):
             "keypoints_grid": [], # variable length, filled on first message
         }
 
+        # Last valid (finite) proximity reading; used to detect sensor saturation.
+        # The ultrasonic driver returns inf for both "out of range" and "below
+        # range_min" — track the last valid reading so we can tell them apart.
+        self._last_proximity_d: float = float("inf")
+
         # ---- Publisher ----
         self.pub = self.create_publisher(UInt8MultiArray, output_topic, 10)
 
@@ -114,9 +119,22 @@ class EncodingNode(Node):
         self.pub.publish(msg)
 
     def on_proximity_scan(self, msg: LaserScan) -> None:
-        # Robust extraction: choose minimum finite range; treat all-invalid as +inf
+        # Robust extraction: choose minimum finite range; treat all-invalid as +inf.
+        # The ultrasonic driver returns inf for BOTH "out of range" and "below
+        # range_min" — they are indistinguishable from the range data alone.
+        # Heuristic: if the last valid reading was inside the lowest thermometric
+        # bracket (dist_max_m / n_dist_bits), the robot was already "very close"
+        # and the sensor has saturated rather than lost the target — emit all-ones.
+        lowest_bracket = self.prox_encoder.thresholds[-1]  # smallest threshold
+
         vals = [r for r in msg.ranges if math.isfinite(r) and r > 0.0]
-        d = min(vals) if vals else float("inf")
+        if vals:
+            d = min(vals)
+            self._last_proximity_d = d
+        elif self._last_proximity_d < lowest_bracket:
+            d = self._last_proximity_d  # sensor saturated — stay at last close reading
+        else:
+            d = float("inf")
 
         self.channels["proximity"] = self.prox_encoder.update(d)
 

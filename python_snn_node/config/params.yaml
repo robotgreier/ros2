@@ -18,8 +18,8 @@ python_snn_node:
     idle_timeout_sec: 1.0
 
     # Robot speed settings
-    forward_speed: 0.25 # m/s
-    turn_speed: 0.6 # rad/s
+    forward_speed: 0.125 # m/s
+    turn_speed: 0.3 # rad/s
 
     ##### Neuron parameters #####
     decay: 64
@@ -40,7 +40,7 @@ python_snn_node:
     reward_shift: 64
     punish_shift: 64
     feedback: True
-    mode: 'None'
+    mode: 'rstdp'
 
 
     seed: 42 # for reproducibility, or null for random.

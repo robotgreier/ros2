@@ -26,7 +26,7 @@ class HCSR04Node(Node):
         self.echo_line.request(consumer="echo", type=gpiod.LINE_REQ_DIR_IN)
 
         self.publisher = self.create_publisher(Range, "/ultrasonic/front/scan", 10)
-        self.timer = self.create_timer(0.1, self.measure)   # 10 Hz
+        self.timer = self.create_timer(0.20, self.measure)   # 5 Hz
 
         self.get_logger().info("HC-SR04 libgpiod-node startet.")
 

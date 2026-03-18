@@ -1,0 +1,28 @@
+v4l2_camera_node:
+  ros__parameters:
+
+    # Device
+    video_device: "/dev/video0"
+
+    # Image format
+    image_size: [640, 480]
+    pixel_format: "mjpeg"
+    output_encoding: "rgb8"
+    framerate: 30.0
+
+    # Exposure
+    auto_exposure: true
+    exposure: 200        # brukes bare hvis auto_exposure = false
+
+    # Focus
+    focus_auto: false
+    focus_absolute: 0    # still inn ved behov
+
+    # Basic V4L2 controls
+    brightness: 128
+    contrast: 128
+    saturation: 128
+    sharpness: 128
+
+    # Topic override (optional)
+    image_raw_topic: "/camera/image_raw"

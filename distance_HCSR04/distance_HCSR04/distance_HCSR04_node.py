@@ -1,85 +1,82 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32
-import RPi.GPIO as GPIO
+from sensor_msgs.msg import Range
+import gpiod
 import time
 
 
+
 class HCSR04Node(Node):
+
     def __init__(self):
-        super().__init__('distance_HCSR04_node')
+        super().__init__("distance_HCSR04_node")
 
-        # Sett GPIO pins HER
-        self.TRIGGER_PIN = 23   # BCM numbering
-        self.ECHO_PIN = 24
+        # GPIO via libgpiod
+        chip = gpiod.Chip("gpiochip0")
 
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.TRIGGER_PIN, GPIO.OUT)
-        GPIO.setup(self.ECHO_PIN, GPIO.IN)
+        # Set GPIO pins på Raspberry Pi 
+        self.TRIG = 23
+        self.ECHO = 24
 
-        self.publisher = self.create_publisher(Int32, '/ultrasonic/front/scan', 10)
+        self.trig_line = chip.get_line(self.TRIG)
+        self.echo_line = chip.get_line(self.ECHO)
 
-        # Publiseringsfrekvens
-        self.timer = self.create_timer(0.1, self.read_distance)  # 10 Hz
+        self.trig_line.request(consumer="trig", type=gpiod.LINE_REQ_DIR_OUT)
+        self.echo_line.request(consumer="echo", type=gpiod.LINE_REQ_DIR_IN)
 
-        self.get_logger().info("HC-SR04 sensor node er startet.")
+        self.publisher = self.create_publisher(Range, "/ultrasonic/front/scan", 10)
+        self.timer = self.create_timer(0.1, self.measure)   # 10 Hz
 
-    def read_distance(self):
-        # Send 10 µs trigger pulse
-        GPIO.output(self.TRIGGER_PIN, True)
-        time.sleep(0.00001)
-        GPIO.output(self.TRIGGER_PIN, False)
+        self.get_logger().info("HC-SR04 libgpiod-node startet.")
 
-        # Vent på echo start (max timeout)
-        start_time = time.time()
-        timeout = start_time + 0.02  # 20 ms
+    def measure(self):
+        # Send 10 us puls
+        self.trig_line.set_value(1)
+        time.sleep(10e-6)
+        self.trig_line.set_value(0)
 
-        while GPIO.input(self.ECHO_PIN) == 0:
-            start_time = time.time()
-            if start_time > timeout:
-                self.get_logger().warn("Echo start timeout")
+        # Vent på ECHO = HIGH
+        start = time.time()
+        timeout = start + 0.03  # 30 ms
+
+        while self.echo_line.get_value() == 0:
+            if time.time() > timeout:
                 return
 
-        # Vent på echo slutt
-        stop_time = time.time()
-        timeout = stop_time + 0.02  # 20 ms
+        echo_start = time.time()
 
-        while GPIO.input(self.ECHO_PIN) == 1:
-            stop_time = time.time()
-            if stop_time > timeout:
-                self.get_logger().warn("Echo end timeout")
+        # Vent på ECHO = LOW
+        while self.echo_line.get_value() == 1:
+            if time.time() > timeout:
                 return
 
-        # Beregn avstand i mm
-        # Lydhastighet ≈ 34300 cm/s → 343 m/s → 34300 mm/s
-        elapsed = stop_time - start_time
-        distance_mm = int((elapsed * 343000) / 2)
+        echo_end = time.time()
 
-        msg = Int32()
-        msg.data = distance_mm
+        # Beregn avstand (mm)
+        duration = echo_end - echo_start  # sekunder
+        distance = (duration * 343000) / 2  # mm
+
+        # Publiser Range
+        msg = Range()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "ultrasonic_front"
+        msg.radiation_type = Range.ULTRASOUND
+        msg.field_of_view = 0.4
+        msg.min_range = 0.02
+        msg.max_range = 4.0
+        msg.range = distance / 1000.0   # meter
+
         self.publisher.publish(msg)
-
-        # Debug (kan slås av)
-        self.get_logger().debug(f"Avstand: {distance_mm} mm")
-
-    def destroy_node(self):
-        GPIO.cleanup()
-        super().destroy_node()
 
 
 def main(args=None):
-        rclpy.init(args=args)
-        node = HCSR04Node()
-
-        try:
-            rclpy.spin(node)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            node.destroy_node()
-            rclpy.shutdown()
+    rclpy.init(args=args)
+    node = HCSR04Node()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

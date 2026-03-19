@@ -1,23 +1,58 @@
-#!/usr/bin/python
-
+#!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
 import time
 import atexit
 
-# Lokale Emakefun-filer (samme mappe)
-from Emakefun_MotorHAT import Emakefun_MotorHAT, Emakefun_DCMotor, Emakefun_Servo
-from Emakefun_MotorDriver import PWM
-from Emakefun_I2C import Emakefun_I2C
+# Relative imports fordi pakken er en ROS2-modul
+from .Emakefun_MotorHAT import Emakefun_MotorHAT
 
-import time
-mh = Emakefun_MotorHAT(addr=0x60)
+class ServoTestNode(Node):
+    def __init__(self):
+        super().__init__('servo_test')
 
-myServo = mh.getServo(1)
-while (True):
+        self.get_logger().info("Initialiserer Emakefun MotorHAT...")
+        self.mh = Emakefun_MotorHAT(addr=0x60)
+        self.servo = self.mh.getServo(1)
 
-    myServo.writeServo(180)
-    time.sleep(2)
-    myServo.writeServo(0)
-    time.sleep(2)
+        atexit.register(self.cleanup)
+
+        self.timer = self.create_timer(4.0, self.timer_callback)
+        self.position = 0
+
+        self.get_logger().info("ServoTestNode startet.")
+
+    def timer_callback(self):
+        """Kjøres hver 4. sekund"""
+        if self.position == 0:
+            angle = 180
+            self.position = 1
+        else:
+            angle = 0
+            self.position = 0
+
+        self.get_logger().info(f"Setter servo til {angle} grader...")
+        self.servo.writeServo(angle)
+
+    def cleanup(self):
+        self.get_logger().info("Stopper MotorHAT og skrur av motorer...")
+        self.mh.close()
+        time.sleep(0.1)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ServoTestNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.cleanup()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

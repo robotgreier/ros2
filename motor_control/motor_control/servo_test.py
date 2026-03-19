@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from Emakefun_MotorHAT import Emakefun_MotorHAT, Emakefun_Servo
+from .Emakefun_MotorHAT import Emakefun_MotorHAT, Emakefun_Servo
 import time
 mh = Emakefun_MotorHAT(addr=0x60)
 

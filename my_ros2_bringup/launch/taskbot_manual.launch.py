@@ -77,12 +77,12 @@ def generate_launch_description():
         #),
         
         # Command arbiter node
-        Node(
-            package='cmd_arbiter',
-            executable='cmd_arbiter',
-            name='cmd_arbiter',
-            output='screen'
-        ),
+        # Node(
+        #     package='cmd_arbiter',
+        #     executable='cmd_arbiter',
+        #     name='cmd_arbiter',
+        #     output='screen'
+        # ),
 
         # Encoding node
         Node(
@@ -118,12 +118,12 @@ def generate_launch_description():
         ),
 
         # Emergency stop node based on distance sensor
-        Node(
-            package='proximity_stop',
-            executable='proximity_stop_node',
-            name='proximity_stop',
-            output='screen'
-        ),
+        # Node(
+        #    package='proximity_stop',
+        #    executable='proximity_stop_node',
+        #    name='proximity_stop',
+        #    output='screen'
+        #),
 
         # Python SNN node
        # Node(

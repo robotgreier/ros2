@@ -46,9 +46,9 @@ class SNNNode(Node):
         self.declare_parameter('pack_order', ['keypoints_grid','proximity', 'object_rec'])
 
         # Channel sizes (matches YAML)
-        self.declare_parameter('keypoints_grid_size', 12)
-        self.declare_parameter('proximity_size', 1)
-        self.declare_parameter('object_rec_size', 3)
+        self.declare_parameter('keypoints_grid_size', 24)
+        self.declare_parameter('proximity_size', 4)
+        self.declare_parameter('object_rec_size', 5)
 
         # Action parameters
         self.declare_parameter('num_actions', 3)
@@ -81,7 +81,7 @@ class SNNNode(Node):
         self.declare_parameter('max_weight', 255)
         self.declare_parameter('reward_shift', 2)
         self.declare_parameter('punish_shift', 0)
-        self.declare_parameter('learning_mode', 'rstdp')
+        self.declare_parameter('learning_mode', 'none')
         self.declare_parameter('feedback', True)
         self.declare_parameter('seed', 42)
 

@@ -31,17 +31,26 @@ def generate_launch_description():
             ]
         ),
         
-        # Static TF base_link -> camera_link to simulate in Rviz2
+        
+        # Static TF base_link → camera_link
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
             name='camera_tf',
-            # x, y, z, roll, pitch, yaw, parent, child
-            arguments=["0.10", "0.0", "0.09",
-                       "0", "0", "0",
-                       "base_link", "camera_link"],
+            arguments=[
+                "--x", "0.10",
+                "--y", "0.0",
+                "--z", "0.09",
+                "--qx", "0.0",
+                "--qy", "0.0",
+                "--qz", "0.0",
+                "--qw", "1.0",
+                "--frame-id", "base_link",
+                "--child-frame-id", "camera_link"
+            ],
             output='screen'
         ),
+
 
         # Distance sensor node
         Node(

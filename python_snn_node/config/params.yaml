@@ -6,7 +6,7 @@ python_snn_node:
     pack_order: ["keypoints_grid", "proximity", "object_rec"] # add more channels here when they are implemented in encoder_node (proximity_stop, etc.)
 
     # Channel sizes, must match encoder_node's output
-    keypoints_grid_size: 8*3   # <-- adjust to match encoder_node's number of cells in grid
+    keypoints_grid_size: 24   # <-- adjust to match encoder_node's number of cells in grid
     proximity_size: 4
     object_rec_size: 5
 

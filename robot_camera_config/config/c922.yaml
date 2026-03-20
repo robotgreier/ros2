@@ -6,12 +6,12 @@ v4l2_camera_node:
 
     # Image format
     image_size: [640, 480]
-    pixel_format: "mjpeg"
-    output_encoding: "rgb8"
+    pixel_format: "MJPG"
+    # output_encoding: "rgb8"
     framerate: 30.0
 
     # Exposure
-    auto_exposure: true
+    auto_exposure: false
     exposure: 200        # brukes bare hvis auto_exposure = false
 
     # Focus

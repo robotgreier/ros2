@@ -4,7 +4,6 @@ from rclpy.node import Node
 import time
 import atexit
 
-# Relative imports fordi pakken er en ROS2-modul
 from .Emakefun_MotorHAT import Emakefun_MotorHAT
 
 class ServoTestNode(Node):
@@ -17,15 +16,15 @@ class ServoTestNode(Node):
 
         atexit.register(self.cleanup)
 
-        self.timer = self.create_timer(4.0, self.timer_callback)
+        self.timer = self.create_timer(1.0, self.timer_callback)
         self.position = 0
 
         self.get_logger().info("ServoTestNode startet.")
 
     def timer_callback(self):
-        """Kjøres hver 4. sekund"""
+        """Kjøres hver 1. sekund"""
         if self.position == 0:
-            angle = 180
+            angle = 45
             self.position = 1
         else:
             angle = 0

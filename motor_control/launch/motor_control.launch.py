@@ -4,9 +4,9 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-            package='motor_control_node',
+            package='motor_control',
             executable='motor_control_node',
-            name='motor_control',
+            name='motor_control_node',
             parameters=[
                 # Robot geometry and kinematics, needs to be updated for our robot:
                 {'wheel_separation': 0.15},

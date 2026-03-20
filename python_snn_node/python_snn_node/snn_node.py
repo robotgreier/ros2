@@ -60,8 +60,8 @@ class SNNNode(Node):
         self.declare_parameter('proximity_stop_active_high', True)
 
         # Robot speed parameters
-        self.declare_parameter('forward_speed', 0.25)
-        self.declare_parameter('turn_speed', 0.6)
+        self.declare_parameter('forward_speed', 0.05)
+        self.declare_parameter('turn_speed', 0.1)
 
         # Neuron parameters (integer-scaled)
         self.declare_parameter('decay', 64)

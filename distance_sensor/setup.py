@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'distance_HCSR04'
+package_name = 'distance_sensor'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'distance_HCSR04_node = distance_HCSR04.distance_HCSR04_node:main',
+            'distance_sensor_node = distance_sensor.distance_sensor_node:main',
         ],
     },
 )

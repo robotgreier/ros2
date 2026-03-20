@@ -7,10 +7,10 @@ import time
 
 
 
-class HCSR04Node(Node):
+class DistanceSensorNode(Node):
 
     def __init__(self):
-        super().__init__("distance_HCSR04_node")
+        super().__init__("distance_sensor_node")
 
         # GPIO via libgpiod
         chip = gpiod.Chip("gpiochip0")
@@ -72,7 +72,7 @@ class HCSR04Node(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = HCSR04Node()
+    node = DistanceSensorNode()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

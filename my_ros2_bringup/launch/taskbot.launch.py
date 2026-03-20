@@ -15,6 +15,8 @@ def generate_launch_description():
 
 
     return LaunchDescription([
+
+        # Camera node with link to .yaml config file for camera parameters
         Node(
             package="v4l2_camera",
             executable="v4l2_camera_node",
@@ -28,40 +30,64 @@ def generate_launch_description():
                 ("image_raw", "image_raw")
             ]
         ),
+        
+        # Static TF base_link -> camera_link to simulate in Rviz2
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='camera_tf',
+            # x, y, z, roll, pitch, yaw, parent, child
+            arguments=["0.10", "0.0", "0.09",
+                       "0", "0", "0",
+                       "base_link", "camera_link"],
+            output='screen'
+        ),
+
+        # Distance sensor node
         Node(
             package='distance_sensor',
             executable='distance_sensor_node',
             name='distance_sensor_node',
             output='screen'
         ),        
+
+        # Motor control node
          Node(
             package='motor_control',
             executable='motor_control_node',
             name='motor_control_node',
             output='screen'
         ),    
-        Node(
-            package='grab_node',
-            executable='grab_node',
-            name='grab_node',
-            output='screen'
-        ),
+
+        # Grab node
+        # Node(
+        #    package='grab_node',
+        #    executable='grab_node',
+        #    name='grab_node',
+        #    output='screen'
+        #),
+        
+        # Command arbiter node
         Node(
             package='cmd_arbiter',
             executable='cmd_arbiter',
             name='cmd_arbiter',
             output='screen'
         ),
+
+        # Encoding node
         Node(
             package='encoding_node',
             executable='encoding_node',
             name='encoding_node',
             output='screen',
             parameters=[{
-            "proximity_topic": "/ultrasonic/front/scan",
+            # "proximity_topic": "/ultrasonic/front/scan",
             "output_topic": "/snn/input",
             "proximity_bin_edges": [0.02, 0.04, 0.08, 0.16, 0.32, 0.64],
         }],
+
+        # OpenCD keypoint grid node
         ),
         Node(
             package='opencv_nodes',
@@ -72,6 +98,8 @@ def generate_launch_description():
             "response_threshold": 0.0,
             "use_clahe": False,
         }],
+
+        # OpenCV image recognition node
         ),
         Node(
             package='opencv_nodes',
@@ -79,30 +107,29 @@ def generate_launch_description():
             name='img_recog',
             output='screen'
         ),
+
+        # Emergency stop node based on distance sensor
         Node(
             package='proximity_stop',
             executable='proximity_stop_node',
             name='proximity_stop',
             output='screen'
         ),
+
+        # Python SNN node
         Node(
             package='python_snn_node',
             executable='snn_node',
             name='python_snn_node',
             output='screen'
         ),
+
+        # Task manager node to coordinate
         Node(
             package='task_manager',
             executable='task_manager',
             name='task_manager',
             output='screen'
         ),
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='camera_tf',
-            arguments=["0.10", "0.0", "0.09", "0", "0", "0", "base_link", "camera_link"],
-            output='screen'
-        )
 
     ])

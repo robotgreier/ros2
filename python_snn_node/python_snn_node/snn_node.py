@@ -79,8 +79,6 @@ class SNNNode(Node):
         self.declare_parameter('dw_neg', 64)
         self.declare_parameter('min_weight', 8)
         self.declare_parameter('max_weight', 255)
-        self.declare_parameter('reward_shift', 2)
-        self.declare_parameter('punish_shift', 0)
         self.declare_parameter('learning_mode', 'none')
         self.declare_parameter('feedback', True)
         self.declare_parameter('seed', 42)
@@ -175,8 +173,6 @@ class SNNNode(Node):
         self.dw_neg = int(self.get_parameter('dw_neg').value)
         self.max_weight = int(self.get_parameter('max_weight').value)
         self.min_weight = int(self.get_parameter('min_weight').value)
-        self.reward_shift = int(self.get_parameter('reward_shift').value)
-        self.punish_shift = int(self.get_parameter('punish_shift').value)
         self.learning_mode = str(self.get_parameter('learning_mode').value)
         self.feedback = bool(self.get_parameter('feedback').value)
         
@@ -366,8 +362,6 @@ class SNNNode(Node):
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
         
-        # Apply reward, uncomment for reward based training
-        # self.network.apply_reward(dopamine_shift=self.reward_shift, dopamine_sign=1, winner_idx=winner_idx)
 
 
         # Normal actuation
@@ -384,24 +378,19 @@ class SNNNode(Node):
         obj_bits = self._extract_object_bits_from_last()
         prox_spike = self._extract_proximity_spike_from_last()
 
-        d_shift, d_sign, d_enable, dopamine_comps = self.dopamine_computer.step(
+        dopamine, dopamine_comps = self.dopamine_computer.step(
             obj_bits=obj_bits,
             proximity_spike=prox_spike,
             action_idx=int(winner_idx),
             task_state=self.task_state,
             grab_event=self.grab_event,
             proximity_stop=self.proximity_stop,
-            reward_shift=self.reward_shift,
-            punish_shift=self.punish_shift,
         )
 
         # ---- Dopamine component breakdown for logging ----
         def _comp(key):
             c = dopamine_comps.get(key)
-            if c is None:
-                return 0.0
-            shift, sign, enable = c
-            return float(shift + 1) * (1.0 if sign else -1.0) if enable else 0.0
+            return float(c) if c is not None else 0.0
 
         dop_align      = _comp("align_action")
         dop_action     = _comp("searching")
@@ -411,12 +400,12 @@ class SNNNode(Node):
         dop_prox_stop  = _comp("proximity_stop")
         dop_prox_approach = 0.0  # prox_spike_gated is commented out
 
-        dopamine_float = float(d_shift + 1) * (1.0 if d_sign else -1.0) if d_enable else 0.0
+        dopamine_float = float(dopamine)
         self.pub_dopamine.publish(Float32(data=dopamine_float))
 
-        # ---- Optional: apply dopamine to learning rule (when you enable training) ----
-        # if d_enable:
-        #     self.network.apply_reward(dopamine_shift=d_shift, dopamine_sign=d_sign, winner_idx=int(winner_idx))
+        # ---- Apply dopamine to learning rule ----
+        if self.training_mode:
+            self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
 
         # ---- Add to your existing logger ----
         # Recommended: store reward + some context so you can tune later.
@@ -541,7 +530,7 @@ class SNNNode(Node):
         Called when /proximity_stop triggers. winner_idx is what the policy wanted to do.
         Implement your punishment here once we confirm how net.step applies dopamine.
         """
-        self.network.apply_reward(dopamine_shift=self.punish_shift, dopamine_sign=0, winner_idx=winner_idx)
+        self.network.apply_reward(dopamine=-1, winner_idx=winner_idx)
 
 
     def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):

@@ -11,7 +11,7 @@ class LIF:
         reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=192, threshold=1024, reset=0):
+    def __init__(self, decay=256, threshold=1024, reset=0):
         self.decay = decay
         self.threshold = threshold
         self.reset = reset
@@ -39,7 +39,7 @@ class RSTDPSynapse:
     Modes:
         'rstdp': Weight updates only when apply_reward() is called with a dopamine
                  signal. Eligibility trace accumulates STDP events and decays over time.
-        'stdp':  Weight updates immediately on each spike pairing (dopamine=1.0).
+        'stdp':  Weight updates immediately on each spike pairing (dopamine=1).
 
     Args:
         mode: 'rstdp' (default) or 'stdp'
@@ -53,15 +53,15 @@ class RSTDPSynapse:
 
     DISABLED = -1
 
-    def __init__(self, lr_shift=3, w_init=77,
-                 t_pre=2, t_post=3, tau_e_shift=4,
-                 dw_pos=64, dw_neg=8,
+    def __init__(self, lr_shift=2, w_init=None,
+                 t_pre=2, t_post=2, tau_e_shift=2,
+                 dw_pos=16, dw_neg=64,
                  w_min=8, w_max=255,
                  mode='rstdp'):
 
         self.mode = mode
         self.lr_shift = lr_shift
-        self.weight = w_init if w_init is not None else np.random.randint(77, 205)
+        self.weight = w_init if w_init is not None else np.random.randint(64, 192)
 
         self.t_pre = t_pre
         self.t_post = t_post
@@ -104,27 +104,32 @@ class RSTDPSynapse:
         self.eligibility -= self.eligibility >> self.tau_e_shift
         self.eligibility = max(-256, min(256, self.eligibility))
 
+        # In stdp mode, apply weight update immediately (dopamine=1 → ×1 multiplier)
         if self.mode == 'stdp':
-            self.apply_reward(dopamine_shift=0, dopamine_sign=1, dopamine_enable=1)
+            self.apply_reward(dopamine=1)
 
-    def apply_reward(self, dopamine_shift, dopamine_sign, dopamine_enable):
+    def apply_reward(self, dopamine):
         """
         Apply reward-modulated weight update.
 
+        HDL mapping:
+            - dopamine=0 is a no-op
+            - Signed multiply: product = eligibility * dopamine (one DSP48E1)
+            - Arithmetic right-shift by lr_shift
+            - Saturating add to weight, then clamp
+
         Args:
-            dopamine_shift: Shift amount (0–2); effective magnitude = 2^dopamine_shift / 2^lr_shift
-            dopamine_sign:  1 = reward (weight + delta), 0 = punishment (weight - delta)
-            dopamine_enable: 1 = apply update, 0 = no-op
+            dopamine: Signed integer. Positive = reward, negative = punishment.
+                      Zero = no-op. Magnitude controls update strength.
+
+        The signed multiply preserves both signals: eligibility sign carries STDP
+        pairing direction (LTP vs LTD), dopamine sign carries reward vs punishment.
         """
-        if not dopamine_enable:
+        if dopamine == 0:
             return
 
-        delta_w = (abs(self.eligibility) << dopamine_shift) >> self.lr_shift
-        if dopamine_sign:
-            new_weight = self.weight + delta_w
-        else:
-            new_weight = self.weight - delta_w
-
+        delta_w = (self.eligibility * dopamine) >> self.lr_shift
+        new_weight = self.weight + delta_w
         self.weight = max(self.w_min, min(self.w_max, new_weight))
 
 
@@ -217,7 +222,8 @@ class SNNLayer:
             post_mat[winner] = output_arr[winner]
             self._update_eligibility(pre_mat, post_mat)
 
-            delta_w = np.abs(self.eligibility) >> self.lr_shift
+            # Immediate weight update for all synapses (dopamine=1 → signed multiply ×1)
+            delta_w = self.eligibility >> self.lr_shift
             self.weights = np.clip(self.weights + delta_w, self.w_min, self.w_max)
         else:
             pre_mat  = np.broadcast_to(input_arr[np.newaxis, :],  (self.n_outputs, self.n_inputs))
@@ -273,18 +279,21 @@ class SNNLayer:
             return int(spiking[np.argmax(self.pre_reset_mem[spiking])])
         return int(np.argmax(self.pre_reset_mem))
 
-    def apply_reward(self, dopamine_shift, dopamine_sign, winner_idx):
+    def apply_reward(self, dopamine, winner_idx):
         """
         Apply reward to the winning neuron's synapses.
         No-op in 'stdp' mode (weights already updated in forward()).
+
+        Args:
+            dopamine:    Signed integer. Positive = reward, negative = punishment.
+                         Zero = no-op. Magnitude controls update strength.
+            winner_idx:  Row index of the winning neuron.
         """
         if self.mode == 'stdp':
             return
-        delta_w = (np.abs(self.eligibility[winner_idx]) << dopamine_shift) >> self.lr_shift
-        if dopamine_sign:
-            new_row = self.weights[winner_idx] + delta_w
-        else:
-            new_row = self.weights[winner_idx] - delta_w
+
+        delta_w = (self.eligibility[winner_idx] * dopamine) >> self.lr_shift
+        new_row = self.weights[winner_idx] + delta_w
         np.clip(new_row, self.w_min, self.w_max, out=self.weights[winner_idx])
 
     def get_weights(self):

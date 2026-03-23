@@ -73,9 +73,8 @@ class EncodingNode(Node):
         # ---- Publisher ----
         self.pub = self.create_publisher(UInt8MultiArray, output_topic, 10)
 
-        # ---- Subscribers ---- accept both Range and LaserScan
+        # ---- Subscribers ---- 
         self.create_subscription(Range, proximity_topic, self.on_proximity_scan, 10)
-        # self.create_subscription(LaserScan, proximity_topic, self.on_proximity_scan, 10)
         self.create_subscription(Int32MultiArray, keypoints_topic, self.on_keypoints_grid, 10)
 
         self.get_logger().info(
@@ -120,7 +119,6 @@ class EncodingNode(Node):
         self.pub.publish(msg)
 
     def on_proximity_scan(self, msg: Range) -> None:
-        # Accept both Range and LaserScan
         # Robust extraction: choose minimum finite range; treat all-invalid as +inf.
         # The ultrasonic driver returns inf for BOTH "out of range" and "below
         # range_min" — they are indistinguishable from the range data alone.

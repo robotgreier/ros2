@@ -51,6 +51,13 @@ def generate_launch_description():
             output='screen'
         ),
 
+        # Proximety_adapter_node
+        Node(
+            package='distance_sensor',
+            executable='proximety_adapter_node',
+            name='proximety_adapter_node',
+            output='screen'
+        ),        
 
         # Distance sensor node
         Node(
@@ -67,6 +74,14 @@ def generate_launch_description():
             name='motor_control_node',
             output='screen'
         ),    
+         
+        # Gripper node
+         Node(
+            package='motor_control',
+            executable='gripper_node',
+            name='gripper_node',
+            output='screen'
+        ),
 
         # Grab node
         # Node(

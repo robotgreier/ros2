@@ -11,7 +11,7 @@ class LIF:
         reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=256, threshold=1024, reset=0):
+    def __init__(self, decay=192, threshold=1024, reset=0):
         self.decay = decay
         self.threshold = threshold
         self.reset = reset
@@ -53,15 +53,15 @@ class RSTDPSynapse:
 
     DISABLED = -1
 
-    def __init__(self, lr_shift=2, w_init=None,
-                 t_pre=2, t_post=2, tau_e_shift=2,
-                 dw_pos=16, dw_neg=64,
+    def __init__(self, lr_shift=3, w_init=64,
+                 t_pre=2, t_post=3, tau_e_shift=4,
+                 dw_pos=64, dw_neg=8,
                  w_min=8, w_max=255,
                  mode='rstdp'):
 
         self.mode = mode
         self.lr_shift = lr_shift
-        self.weight = w_init if w_init is not None else np.random.randint(64, 192)
+        self.weight = w_init if w_init is not None else np.random.randint(77, 205)
 
         self.t_pre = t_pre
         self.t_post = t_post
@@ -180,7 +180,7 @@ class SNNLayer:
 
         w_init = synapse_params.get('w_init', None)
         if w_init is None:
-            self.weights = np.random.randint(77, 205, size=(n_outputs, self.n_inputs), dtype=np.int32)
+            self.weights = np.random.randint(64, 192, size=(n_outputs, self.n_inputs), dtype=np.int32)
         else:
             self.weights = np.full((n_outputs, self.n_inputs), w_init, dtype=np.int32)
 

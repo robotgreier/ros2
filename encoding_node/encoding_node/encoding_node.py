@@ -119,7 +119,7 @@ class EncodingNode(Node):
         msg.data = self.pack_vector()
         self.pub.publish(msg)
 
-    def on_proximity_scan(self, msg: LaserScan) -> None:
+    def on_proximity_scan(self, msg: Range) -> None:
         # Robust extraction: choose minimum finite range; treat all-invalid as +inf.
         # The ultrasonic driver returns inf for BOTH "out of range" and "below
         # range_min" — they are indistinguishable from the range data alone.
@@ -128,7 +128,7 @@ class EncodingNode(Node):
         # and the sensor has saturated rather than lost the target — emit all-ones.
         lowest_bracket = self.prox_encoder.thresholds[-1]  # smallest threshold
 
-        vals = [r for r in msg.ranges if math.isfinite(r) and r > 0.0]
+        vals = [r for r in msg.range if math.isfinite(r) and r > 0.0]
         if vals:
             d = min(vals)
             self._last_proximity_d = d

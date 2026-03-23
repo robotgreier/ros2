@@ -30,7 +30,7 @@ class ProximityStopNode(Node):
         self.declare_parameter("state_topic", "/task/state")
         self.declare_parameter("stop_topic", "/proximity_stop")
 
-        self.declare_parameter("distance_threshold", 0.05)  # meters
+        self.declare_parameter("distance_threshold", 0.12)  # meters
         self.declare_parameter("disabled_states", [APPROACH_ITEM, APPROACH_DROPOFF])
 
         self.scan_topic = self.get_parameter("scan_topic").value

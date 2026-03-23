@@ -11,7 +11,7 @@ class LIF:
         reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=192, threshold=1024, reset=0):
+    def __init__(self, decay=256, threshold=1024, reset=0):
         self.decay = decay
         self.threshold = threshold
         self.reset = reset
@@ -53,15 +53,15 @@ class RSTDPSynapse:
 
     DISABLED = -1
 
-    def __init__(self, lr_shift=3, w_init=64,
-                 t_pre=2, t_post=3, tau_e_shift=4,
-                 dw_pos=64, dw_neg=8,
+    def __init__(self, lr_shift=2, w_init=None,
+                 t_pre=2, t_post=2, tau_e_shift=2,
+                 dw_pos=16, dw_neg=64,
                  w_min=8, w_max=255,
                  mode='rstdp'):
 
         self.mode = mode
         self.lr_shift = lr_shift
-        self.weight = w_init if w_init is not None else np.random.randint(77, 205)
+        self.weight = w_init if w_init is not None else np.random.randint(64, 192)
 
         self.t_pre = t_pre
         self.t_post = t_post
@@ -269,15 +269,12 @@ class SNNLayer:
         Returns index of winning neuron.
         Spiking neurons beat non-spiking ones; pre-reset membrane breaks ties.
         """
-        return self._winner_from_arr(np.asarray(output_spikes, dtype=np.int32))
-
-    def _winner_from_arr(self, output_arr):
-        spiking = np.where(output_arr == 1)[0]
-        if len(spiking) == 1:
-            return int(spiking[0])
-        if len(spiking) > 1:
-            return int(spiking[np.argmax(self.pre_reset_mem[spiking])])
-        return int(np.argmax(self.pre_reset_mem))
+        spikes = np.asarray(output_spikes, dtype=np.int32)
+        spiking = np.where(spikes == 1)[0]
+        # If any neurons spiked, compete among them; otherwise all compete
+        pool = spiking if len(spiking) > 0 else np.arange(len(spikes))
+        # Highest pre-reset membrane potential wins (deterministic, no index bias)
+        return int(pool[np.argmax(self.pre_reset_mem[pool])])
 
     def apply_reward(self, dopamine, winner_idx):
         """

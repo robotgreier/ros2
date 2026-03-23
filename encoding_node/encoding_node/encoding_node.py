@@ -74,8 +74,9 @@ class EncodingNode(Node):
         # ---- Publisher ----
         self.pub = self.create_publisher(UInt8MultiArray, output_topic, 10)
 
-        # ---- Subscribers ----
+        # ---- Subscribers ---- accept both Range and LaserScan
         self.create_subscription(Range, proximity_topic, self.on_proximity_scan, 10)
+        self.create_subscription(LaserScan, proximity_topic, self.on_proximity_scan, 10)
         self.create_subscription(Int32MultiArray, keypoints_topic, self.on_keypoints_grid, 10)
 
         self.get_logger().info(
@@ -119,16 +120,30 @@ class EncodingNode(Node):
         msg.data = self.pack_vector()
         self.pub.publish(msg)
 
-    def on_proximity_scan(self, msg: Range) -> None:
+    def on_proximity_scan(self, msg) -> None:
+        # Accept both Range and LaserScan
         # Robust extraction: choose minimum finite range; treat all-invalid as +inf.
         # The ultrasonic driver returns inf for BOTH "out of range" and "below
         # range_min" — they are indistinguishable from the range data alone.
         # Heuristic: if the last valid reading was inside the lowest thermometric
         # bracket (dist_max_m / n_dist_bits), the robot was already "very close"
         # and the sensor has saturated rather than lost the target — emit all-ones.
-        lowest_bracket = self.prox_encoder.thresholds[-1]  # smallest threshold
+        
+        # --- Normalize message into a list of ranges ---
+        if isinstance(msg, Range):
+        # Real robot - HC-SR04
+            vals = [msg.range] if math.isfinite(msg.range) and msg.range > 0.0 else []
+        
+        # Gazebo simulation - LaserSCan with 1 beam
+        elif isinstance(msg, LaserScan):
+        vals = [r for r in msg.range if math.isfinite(r) and r > 0.0]    
+        
+        else:
+            self.get_logger().warn(f"Unknown proximity msg type: {type(msg)}")
+            return
 
-        vals = [r for r in msg.range if math.isfinite(r) and r > 0.0]
+        lowest_bracket = self.prox_encoder.thresholds[-1]  # smallest threshold
+        
         if vals:
             d = min(vals)
             self._last_proximity_d = d

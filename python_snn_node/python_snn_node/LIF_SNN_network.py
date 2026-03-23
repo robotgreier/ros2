@@ -211,7 +211,7 @@ class SNNLayer:
         self.spike_count += output_arr
 
         if self.mode == 'stdp':
-            winner = self._winner_from_arr(output_arr)
+            winner = self.winner_takes_all(output_arr)
             # Lateral inhibition: suppress all non-winner membranes
             self.mem[np.arange(self.n_outputs) != winner] = self.reset_val
 

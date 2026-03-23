@@ -54,8 +54,8 @@ def generate_launch_description():
         # Proximety_adapter_node
         Node(
             package='distance_sensor',
-            executable='proximety_adapter_node',
-            name='proximety_adapter_node',
+            executable='proximity_adapter_node',
+            name='proximity_adapter_node',
             output='screen'
         ),    
         

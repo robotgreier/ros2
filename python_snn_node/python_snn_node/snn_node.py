@@ -126,18 +126,6 @@ class SNNNode(Node):
             lost_grace_ticks=int(self.get_parameter('lost_grace_ticks').value)
         )
 
-
-        def _on_task_state(self, msg: UInt8):
-            self.task_state = int(msg.data)
-
-
-        def _on_grab_event(self, msg: UInt8):
-            self.grab_event = int(msg.data)
-
-
-        def _on_proximity_stop(self, msg: Bool):
-            self.proximity_stop = bool(msg.data)
-
         # --- Read Parameters ---
         self.input_mode = str(self.get_parameter('input_mode').value).lower().strip()
         self.input_topic = str(self.get_parameter('input_topic').value)
@@ -293,25 +281,32 @@ class SNNNode(Node):
 
     ### For training ###
     def _extract_object_bits_from_last(self) -> list[int]:
-        """Extract [L,C,R] from the last 3 packed input bits."""
-        # self.last_vector is float32, values are 0.0/1.0 from cb_packed
+        """
+        Extract [L, C, R] from the object_rec channel of the packed input.
+        Works for any object_rec_size by collapsing bins symmetrically:
+          left  = any bin before center
+          center = middle bin
+          right = any bin after center
+        """
         v = self.last_vector
-        if v is None or v.size < 3:
+        obj_size = self.channel_sizes.get('object_rec', 3)
+        if v is None or v.size < obj_size:
             return [0, 0, 0]
-        return [int(v[-3]), int(v[-2]), int(v[-1])]
+        obj = [int(x) for x in v[-obj_size:]]
+        mid = (obj_size - 1) // 2
+        L = int(any(obj[:mid]))
+        C = int(obj[mid])
+        R = int(any(obj[mid + 1:]))
+        return [L, C, R]
 
 
     def _extract_proximity_spike_from_last(self) -> int:
-        """
-        Extract proximity bit from packed input.
-        With pack_order ['keypoints_grid','proximity','object_rec'] and sizes 12,1,3:
-        proximity is index 12.
-        If your pack_order/sizes change, update this to compute offsets dynamically.
-        """
+        """Extract the first proximity bit using segment_offsets."""
         v = self.last_vector
-        if v is None or v.size < 13:
+        prox_start, _ = self.segment_offsets.get('proximity', (0, 0))
+        if v is None or v.size <= prox_start:
             return 0
-        return int(v[12])
+        return int(v[prox_start])
 
     ### /For training ###
 

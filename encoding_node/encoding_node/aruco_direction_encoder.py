@@ -19,10 +19,8 @@ class ArucoDirectionEncoder:
     where -1 is the left edge and +1 is the right edge.  It is remapped
     to [0, 1] internally before binning.
 
-    State gating:
-      SEARCH_ITEM / SEARCH_DROPOFF  -> always all-zero
-      APPROACH_ITEM / APPROACH_DROPOFF -> one-hot encode position
-      detect_flag < 0.5             -> all-zero (tag not visible)
+    Fires in all task states whenever detect_flag >= 0.5 (tag visible).
+    Returns all-zero when no tag is detected.
     """
 
     def __init__(self, n_aruco_bins: int):
@@ -32,12 +30,6 @@ class ArucoDirectionEncoder:
         self._bin_edges = np.linspace(0.0, 1.0, n_aruco_bins + 1)
 
     def encode(self, *, state: int, detect_flag: float, x_norm: float) -> List[int]:
-        if state in (SEARCH_ITEM, SEARCH_DROPOFF):
-            return [0] * self.n_aruco_bins
-
-        if state not in (APPROACH_ITEM, APPROACH_DROPOFF):
-            return [0] * self.n_aruco_bins
-
         if detect_flag < 0.5:
             return [0] * self.n_aruco_bins
 

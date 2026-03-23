@@ -28,19 +28,19 @@ python_snn_node:
 
     ##### Synapse parameters #####
     training_mode: true # Remove?
-    lr_shift: 3 
+    lr_shift: 4 
     initial_weight: 64
     t_pre: 3
-    t_post: 4
-    tau_e_shift: 4
+    t_post: 2
+    tau_e_shift: 2
     dw_pos: 32
     dw_neg: 64
     min_weight: 8
     max_weight: 255
-    reward_shift: 64
-    punish_shift: 64
+    reward_shift: 0
+    punish_shift: 1
     feedback: True
-    mode: 'rstdp'
+    learning_mode: 'None' # 'None', 'stdp', 'rstdp'
 
 
     seed: 42 # for reproducibility, or null for random.

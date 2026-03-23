@@ -125,9 +125,14 @@ class ImgRecog(Node):
         self.held_item_id: Optional[int] = None
         self.locked_item_id: Optional[int] = None
 
+        self.grab_sequence_active = False
+
         # Episode reset timer
         self.reset_timer = None
         self.reset_pending = False
+
+        # True while grab_node is executing a scripted grab/drop sequence
+        self.grab_sequence_active = False
 
         # Camera model (filled from CameraInfo)
         self.K: Optional[np.ndarray] = None
@@ -168,20 +173,27 @@ class ImgRecog(Node):
             f"Grab event received: event={event}, "
             f"locked_item_id={self.locked_item_id}, "
             f"held_item_id={self.held_item_id}, "
-            f"delivered={sorted(self.delivered_item_ids)}"
+            f"delivered={sorted(self.delivered_item_ids)}, "
+            f"grab_sequence_active={self.grab_sequence_active}"
         )
 
-        if event == self.EVENT_GRABBED:
+        if event == self.EVENT_BUSY:
+            self.grab_sequence_active = True
+            self.get_logger().info("EVENT_BUSY received -> grab_sequence_active=True")
+
+        elif event == self.EVENT_GRABBED:
             if self.locked_item_id is not None:
                 self.held_item_id = int(self.locked_item_id)
                 self.get_logger().info(
                     f"EVENT_GRABBED -> held_item_id set to {self.held_item_id}"
                 )
-                self.locked_item_id = None
             else:
                 self.get_logger().warn(
                     "EVENT_GRABBED received but locked_item_id is None"
                 )
+
+            # still busy until the full sequence completes
+            self.locked_item_id = None
 
         elif event == self.EVENT_DROPPED:
             if self.held_item_id is not None:
@@ -195,22 +207,23 @@ class ImgRecog(Node):
 
                 self.held_item_id = None
                 self.locked_item_id = None
-
-                if self.delivered_item_ids == self.item_ids:
-                    self.get_logger().info(
-                        "All items delivered. Starting episode reset timer."
-                    )
-                    self._start_episode_reset_timer()
             else:
                 self.get_logger().warn(
                     "EVENT_DROPPED received but held_item_id is None"
                 )
 
-        elif event == self.EVENT_IDLE:
-            self.get_logger().info("EVENT_IDLE received")
+            self.grab_sequence_active = False
+            self.get_logger().info("EVENT_DROPPED -> grab_sequence_active=False")
 
-        elif event == self.EVENT_BUSY:
-            self.get_logger().info("EVENT_BUSY received")
+            if self.delivered_item_ids == self.item_ids:
+                self.get_logger().info(
+                    "All items delivered. Starting episode reset timer."
+                )
+                self._start_episode_reset_timer()
+
+        elif event == self.EVENT_IDLE:
+            self.grab_sequence_active = False
+            self.get_logger().info("EVENT_IDLE received -> grab_sequence_active=False")
 
         else:
             self.get_logger().warn(f"Unknown grab event code: {event}")
@@ -357,6 +370,13 @@ class ImgRecog(Node):
             self.pub.publish(out)
 
             if self.current_state == APPROACH_ITEM:
+                # If grab sequence is active, temporary vision loss is expected
+                if self.grab_sequence_active:
+                    self.get_logger().info(
+                        "APPROACH_ITEM: no candidates, but grab sequence is active -> keeping lock/state"
+                    )
+                    return
+
                 self._consec_lost += 1
                 self._consec_found = 0
                 if self._consec_lost >= self.lost_frames:
@@ -375,6 +395,15 @@ class ImgRecog(Node):
 
             return
 
+        #Debug logger
+        self.get_logger().info(
+            f"cb_img: state={self.current_state}, "
+            f"grab_sequence_active={self.grab_sequence_active}, "
+            f"locked_item_id={self.locked_item_id}, "
+            f"held_item_id={self.held_item_id}, "
+            f"delivered={sorted(self.delivered_item_ids)}"
+        )
+
         # Choose best candidate differently depending on state
         best = None
 
@@ -390,6 +419,13 @@ class ImgRecog(Node):
                 else:
                     # Locked target not visible in this frame
                     self.pub.publish(out)
+
+                    if self.grab_sequence_active:
+                        self.get_logger().info(
+                            "Locked target not visible, but grab sequence is active -> keeping lock/state"
+                        )
+                        return
+
                     self._consec_lost += 1
                     self._consec_found = 0
                     if self._consec_lost >= self.lost_frames:

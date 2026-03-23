@@ -27,8 +27,8 @@ class ProximityAdapter(Node):
         self.pub = self.create_publisher(Range, output_topic, 10)
 
         # Abonner på begge, men på *forskjellige* topics
-        self.create_subscription(Range, input_topic, self.cb_range, 10)
-        self.create_subscription(LaserScan, input_topic, self.cb_laserscan, 10)
+        self.create_subscription(Range, robot_input_topic, self.cb_range, 10)
+        self.create_subscription(LaserScan, gazebo_input_topic, self.cb_laserscan, 10)
 
     # --- Callbacks ---
 

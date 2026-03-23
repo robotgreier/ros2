@@ -28,12 +28,15 @@ EVENT_GRABBED = 1
 EVENT_DROPPED = 2
 EVENT_BUSY = 3
 
-
-# ---- Gripper Commands ----
-GRIPPER_IDLE = 0
+# Gripper commands
+GRIPPER_DROP = 0
 GRIPPER_GRIP = 1
-GRIPPER_DROP = 2
 
+# Gripper states
+GRIPPER_STATE_OPEN = 0
+GRIPPER_STATE_MOVING = 1
+GRIPPER_STATE_CLOSED = 2
+GRIPPER_STATE_ERROR = 255
 
 class GrabState(Enum):
     IDLE = 0
@@ -93,6 +96,10 @@ class GrabNode(Node):
         self.min_forward_distance = self.get_parameter("min_forward_distance").value
         self.max_forward_distance = self.get_parameter("max_forward_distance").value
 
+        self.gripper_state = None
+        self.waiting_for_gripper = False
+        self.expected_gripper_state = None
+
         # -------- Publishers --------
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel/grab", 10)
         self.event_pub = self.create_publisher(UInt8, "/grab_node/event", 10)
@@ -108,6 +115,11 @@ class GrabNode(Node):
                                  "/task/state",
                                  self.cb_task_state,
                                  10)
+        
+        self.gripper_state_sub = self.create_subscription(UInt8,
+                                                        '/gripper/state',
+                                                        self.gripper_state_callback,
+                                                        10)
 
         # -------- Service Client --------
         self.cli = self.create_client(SetTaskState, "/task/set_state")
@@ -181,6 +193,40 @@ class GrabNode(Node):
             f"tvec=({data[7]:.3f}, {data[8]:.3f}, {data[9]:.3f})"
         )
 
+    def gripper_state_callback(self, msg):
+        self.gripper_state = int(msg.data)
+        self.get_logger().info(f"Received gripper state: {self.gripper_state}")
+
+        if not self.waiting_for_gripper:
+            return
+
+        if self.gripper_state == GRIPPER_STATE_ERROR:
+            self.get_logger().error("Gripper reported ERROR state.")
+            self.waiting_for_gripper = False
+            self.sequence_active = False
+            self.state = GrabState.IDLE
+            return
+
+        if self.gripper_state == self.expected_gripper_state:
+            self.get_logger().info(
+                f"Expected gripper state {self.expected_gripper_state} confirmed."
+            )
+
+            self.waiting_for_gripper = False
+
+            if self.current_task_state == APPROACH_ITEM:
+                self.publish_event(EVENT_GRABBED)
+
+                next_state = SEARCH_DROPOFF
+                self.call_set_state(next_state)
+
+                self.sequence_active = False
+                self.state = GrabState.IDLE
+
+            elif self.current_task_state == APPROACH_DROPOFF:
+                self.publish_event(EVENT_DROPPED)
+                self.start_backup_motion()
+                self.state = GrabState.EXECUTING_BACKUP
     
 
     # =====================================================
@@ -275,31 +321,43 @@ class GrabNode(Node):
 
     def perform_actuation(self):
 
+        if self.waiting_for_gripper:
+            self.get_logger().warn("Already waiting for gripper confirmation. Ignoring actuation request.")
+            return
+
         if self.current_task_state == APPROACH_ITEM:
 
-            self.publish_event(EVENT_GRABBED)
-
             if self.use_sim_gripper:
-                #temp
-                self.get_logger().info(f"Attempting grip now. Estimated distance to object: {self.remaining_distance}")
-                #/temp
+                self.get_logger().info(
+                    f"Attempting grip now. Estimated distance to object: {self.remaining_distance}"
+                )
                 self.call_gripper_service(self.grab_cli)
-            else:
-                self.gripper_pub.publish(UInt8(data=GRIPPER_GRIP))
 
-            next_state = SEARCH_DROPOFF
-            self.call_set_state(next_state)
+                self.publish_event(EVENT_GRABBED)
+                next_state = SEARCH_DROPOFF
+                self.call_set_state(next_state)
+                self.sequence_active = False
+                self.state = GrabState.IDLE
+
+            else:
+                self.get_logger().info("Publishing physical gripper GRIP command.")
+                self.waiting_for_gripper = True
+                self.expected_gripper_state = GRIPPER_STATE_CLOSED
+                self.gripper_pub.publish(UInt8(data=GRIPPER_GRIP))
 
         elif self.current_task_state == APPROACH_DROPOFF:
 
-            self.publish_event(EVENT_DROPPED)
-
             if self.use_sim_gripper:
                 self.call_gripper_service(self.drop_cli)
-            else:
-                self.gripper_pub.publish(UInt8(data=GRIPPER_DROP))
+                self.publish_event(EVENT_DROPPED)
+                self.start_backup_motion()
+                self.state = GrabState.EXECUTING_BACKUP
 
-            self.start_backup_motion()
+            else:
+                self.get_logger().info("Publishing physical gripper DROP command.")
+                self.waiting_for_gripper = True
+                self.expected_gripper_state = GRIPPER_STATE_OPEN
+                self.gripper_pub.publish(UInt8(data=GRIPPER_DROP))
 
     # ###Temporary
     # def perform_actuation(self):
@@ -326,11 +384,12 @@ class GrabNode(Node):
                 if resp.success:
                     self.get_logger().info("Gripper action successful.")
                 else:
-                    self.get_logger().error("Gripper action failed.")
+                    self.get_logger().error("Gripper action failed.")  
+
             except Exception as e:
                 self.get_logger().error(f"Gripper service error: {e}")
 
-        future.add_done_callback(callback)
+        future.add_done_callback(callback)    
 
     def start_backup_motion(self):
         duration = float(self.backup_distance) / float(self.backup_speed)
@@ -349,6 +408,10 @@ class GrabNode(Node):
     def finish_backup_motion(self):
         self.stop_motion()
         self.motion_end_time = None
+
+        self.sequence_active = False
+        self.state = GrabState.IDLE
+        self.publish_event(EVENT_IDLE)
 
         next_state = SEARCH_ITEM
         self.call_set_state(next_state)

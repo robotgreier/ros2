@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'distance_sensor_node = distance_sensor.distance_sensor_node:main',
+            'proximity_adapter_node = distance_sensor.proximity_adapter_node:main',
         ],
     },
 )

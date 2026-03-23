@@ -4,6 +4,7 @@ from typing import Dict, List
 import rclpy
 from rclpy.node import Node
 
+from sensor_msgs.msg import Range
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import UInt8MultiArray, Int32MultiArray, Float32MultiArray, UInt8
 
@@ -74,7 +75,7 @@ class EncodingNode(Node):
         self.pub = self.create_publisher(UInt8MultiArray, output_topic, 10)
 
         # ---- Subscribers ----
-        self.create_subscription(LaserScan, proximity_topic, self.on_proximity_scan, 10)
+        self.create_subscription(Range, proximity_topic, self.on_proximity_scan, 10)
         self.create_subscription(Int32MultiArray, keypoints_topic, self.on_keypoints_grid, 10)
 
         self.get_logger().info(

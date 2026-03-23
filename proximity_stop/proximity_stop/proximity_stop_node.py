@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
+from sensor_msgs.msg import Range
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, UInt8
 
@@ -18,7 +19,7 @@ APPROACH_DROPOFF = 3
 
 class ProximityStopNode(Node):
     """
-    Publishes /proximity_stop (Bool) based on minimum finite range in LaserScan,
+    Publishes /proximity_stop (Bool) based on minimum finite range in LaserScan/Range,
     gated by task state (disabled during APPROACH_* states by default).
     """
 
@@ -54,7 +55,7 @@ class ProximityStopNode(Node):
         self.stop_pub = self.create_publisher(Bool, self.stop_topic, 10)
 
         self.scan_sub = self.create_subscription(
-            LaserScan, self.scan_topic, self.on_scan, sensor_qos
+            Range, self.scan_topic, self.on_scan, sensor_qos
         )
         self.state_sub = self.create_subscription(
             UInt8, self.state_topic, self.on_state, 10
@@ -68,12 +69,12 @@ class ProximityStopNode(Node):
     def on_state(self, msg: UInt8) -> None:
         self.current_state = int(msg.data)
 
-    def on_scan(self, msg: LaserScan) -> None:
+    def on_scan(self, msg: Range) -> None:
         # Gate emergency stop by state
         stop_enabled = (self.current_state not in self.disabled_states)
 
         # Compute min finite positive range
-        vals = [r for r in msg.ranges if math.isfinite(r) and r > 0.0]
+        vals = [r for r in msg.range if math.isfinite(r) and r > 0.0]
         dmin = min(vals) if vals else float("inf")
 
         # Stop condition

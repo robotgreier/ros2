@@ -36,7 +36,7 @@ python_snn_node:
     dw_pos: 32
     dw_neg: 64
     min_weight: 8
-    max_weight: 255
+    max_weight: 127
     reward_shift: 0
     punish_shift: 1
     feedback: True

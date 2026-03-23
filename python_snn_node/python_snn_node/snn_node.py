@@ -70,7 +70,7 @@ class SNNNode(Node):
 
         # Synapse & Learning parameters
         self.declare_parameter('training_mode', True)
-        self.declare_parameter('lr_shift', 3)
+        self.declare_parameter('lr_shift', 2)
         self.declare_parameter('initial_weight', 64)
         self.declare_parameter('t_pre', 3)
         self.declare_parameter('t_post', 4)
@@ -78,7 +78,7 @@ class SNNNode(Node):
         self.declare_parameter('dw_pos', 32)
         self.declare_parameter('dw_neg', 64)
         self.declare_parameter('min_weight', 8)
-        self.declare_parameter('max_weight', 255)
+        self.declare_parameter('max_weight', 127)
         self.declare_parameter('learning_mode', 'none')
         self.declare_parameter('feedback', True)
         self.declare_parameter('seed', 42)

@@ -6,7 +6,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from sensor_msgs.msg import Range
-from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, UInt8
 
 
@@ -19,7 +18,7 @@ APPROACH_DROPOFF = 3
 
 class ProximityStopNode(Node):
     """
-    Publishes /proximity_stop (Bool) based on minimum finite range in LaserScan/Range,
+    Publishes /proximity_stop (Bool) based on minimum finite range in Range,
     gated by task state (disabled during APPROACH_* states by default).
     """
 
@@ -57,9 +56,8 @@ class ProximityStopNode(Node):
         self.scan_sub = self.create_subscription(
             Range, self.scan_topic, self.on_scan, sensor_qos
         )
-        self.scan_sub = self.create_subscription(
-            LaserScan, self.scan_topic, self.on_scan, sensor_qos
-        )
+
+       
         self.state_sub = self.create_subscription(
             UInt8, self.state_topic, self.on_state, 10
         )
@@ -76,19 +74,7 @@ class ProximityStopNode(Node):
         # Gate emergency stop by state
         stop_enabled = (self.current_state not in self.disabled_states)
 
-        # --- Normalize message into vals[] --- 
-        
-        if isinstance(msg, Range):
-        # HC-SR04 on real robot
-            vals = [msg.range] if math.isfinite(msg.range) and msg.range > 0.0 else []
-
-        elif isinstance(msg, LaserScan):
-        # Gazebo forward-facing scan (1 beam, but works with many)
-            vals = [r for r in msg.ranges if math.isfinite(r) and r > 0.0]
-
-        else:
-            self.get_logger().warn(f"Unknown scan msg type: {type(msg)}")
-            return
+        vals = [msg.range] if math.isfinite(msg.range) and msg.range > 0.0 else []
 
         # Compute min finite positive range
         dmin = min(vals) if vals else float("inf")

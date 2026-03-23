@@ -2,7 +2,6 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Range
-from sensor_msgs.msg import LaserScan
 import gpiod
 import time
 
@@ -26,7 +25,7 @@ class DistanceSensorNode(Node):
         self.trig_line.request(consumer="trig", type=gpiod.LINE_REQ_DIR_OUT)
         self.echo_line.request(consumer="echo", type=gpiod.LINE_REQ_DIR_IN)
 
-        self.publisher = self.create_publisher(Range, "/ultrasonic/front/scan", 10)
+        self.publisher = self.create_publisher(Range, "/ultrasonic/front/raw", 10)
         self.timer = self.create_timer(0.20, self.measure)   # 5 Hz
 
         self.get_logger().info("HC-SR04 libgpiod-node startet.")

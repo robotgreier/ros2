@@ -61,7 +61,7 @@ class DistanceSensorNode(Node):
         msg = LaserScan()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "ultrasonic_front"
-        msg.radiation_type = LaserScan.ULTRASOUND
+        msg.radiation_type = LaserScan
         msg.field_of_view = 0.4
         msg.min_range = 0.02
         msg.max_range = 4.0

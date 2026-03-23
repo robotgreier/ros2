@@ -15,6 +15,15 @@ def generate_launch_description():
             name='cmd_arbiter',
             output='screen'
         ),
+
+        # Proximety_adapter_node
+        Node(
+            package='distance_sensor',
+            executable='proximety_adapter_node',
+            name='proximety_adapter_node',
+            output='screen'
+        ), 
+
         Node(
             package='encoding_node',
             executable='encoding_node',

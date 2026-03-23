@@ -68,7 +68,7 @@ def generate_launch_description():
         ),        
 
         # Motor control node
-         Node(
+        Node(
             package='motor_control',
             executable='motor_control_node',
             name='motor_control_node',
@@ -76,7 +76,7 @@ def generate_launch_description():
         ),    
          
         # Gripper node
-         Node(
+        Node(
             package='motor_control',
             executable='gripper_node',
             name='gripper_node',

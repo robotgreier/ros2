@@ -136,7 +136,7 @@ class EncodingNode(Node):
         
         # Gazebo simulation - LaserSCan with 1 beam
         elif isinstance(msg, LaserScan):
-        vals = [r for r in msg.range if math.isfinite(r) and r > 0.0]    
+            vals = [r for r in msg.range if math.isfinite(r) and r > 0.0]    
         
         else:
             self.get_logger().warn(f"Unknown proximity msg type: {type(msg)}")

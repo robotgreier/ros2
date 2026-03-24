@@ -19,7 +19,11 @@ class MotorControlNode(Node):
         max_lin_vel: Wheel diameter: 55mm. 
         """
         self.declare_parameter('wheel_base', 0.13)       # meter
+<<<<<<< HEAD
         self.declare_parameter('max_lin_vel', 0.001)      # m/s → PWM 255
+=======
+        self.declare_parameter('max_lin_vel', 2.0)       # m/s → PWM 255
+>>>>>>> 235d823 (speed adjustments)
         self.declare_parameter('max_ang_vel', 0.1)       # rad/s
         self.declare_parameter('cmd_vel_timeout', 0.5)   # sekunder
 

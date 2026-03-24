@@ -15,8 +15,11 @@ class MotorControlNode(Node):
         super().__init__('motor_control_node')
 
         # --- ROS-parameteroppsett ---
+        """
+        max_lin_vel: Wheel diameter: 55mm. 
+        """
         self.declare_parameter('wheel_base', 0.13)       # meter
-        self.declare_parameter('max_lin_vel', 0.10)      # m/s → PWM 255
+        self.declare_parameter('max_lin_vel', 0.01)      # m/s → PWM 255
         self.declare_parameter('max_ang_vel', 0.1)       # rad/s
         self.declare_parameter('cmd_vel_timeout', 0.5)   # sekunder
 

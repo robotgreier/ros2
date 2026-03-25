@@ -276,9 +276,9 @@ class SNNNode(Node):
     def _on_proximity_stop(self, msg: Bool):
         self.proximity_stop = bool(msg.data)
 
-    def _on_scan(self, msg: Range): # Endre Range til LaserScan ved Gazebo
-        finite = [r for r in msg.ranges if 0.0 < r < float('inf')]
-        self.last_distance_m = min(finite) if finite else float('nan')
+    def _on_scan(self, msg: Range):
+        d = msg.range
+        self.last_distance_m = d if 0.0 < d < float('inf') else float('nan')
 
     ### For training ###
     def _extract_object_bits_from_last(self) -> list[int]:

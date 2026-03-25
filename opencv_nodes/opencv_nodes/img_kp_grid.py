@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import Int32MultiArray, MultiArrayDimension
@@ -65,7 +66,7 @@ class ImgKpGrid(Node):
             self.clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(tile, tile))
 
         self.pub = self.create_publisher(Int32MultiArray, self.out_topic, 10)
-        self.sub = self.create_subscription(Image, self.in_topic, self.cb, 10)
+        self.sub = self.create_subscription(Image, self.in_topic, self.cb, qos_profile_sensor_data)
 
         self.publish_debug = bool(self.get_parameter('publish_debug_image').value)
         self.debug_topic = self.get_parameter('debug_topic').value

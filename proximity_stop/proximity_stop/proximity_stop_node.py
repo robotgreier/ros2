@@ -30,7 +30,7 @@ class ProximityStopNode(Node):
         self.declare_parameter("state_topic", "/task/state")
         self.declare_parameter("stop_topic", "/proximity_stop")
 
-        self.declare_parameter("distance_threshold", 0.12)  # meters
+        self.declare_parameter("distance_threshold", 0.20)  # meters
         self.declare_parameter("disabled_states", [APPROACH_ITEM, APPROACH_DROPOFF])
 
         self.scan_topic = self.get_parameter("scan_topic").value
@@ -74,7 +74,7 @@ class ProximityStopNode(Node):
         # Gate emergency stop by state
         stop_enabled = (self.current_state not in self.disabled_states)
 
-        vals = [msg.range] if math.isfinite(msg.range) and msg.range > 0.0 else []
+        vals = [msg.range] if math.isfinite(msg.range) and msg.range >= 0.0 else []
 
         # Compute min finite positive range
         dmin = min(vals) if vals else float("inf")

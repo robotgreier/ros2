@@ -33,16 +33,17 @@ class DistanceSensorNode(Node):
     def measure(self):
         # Send 10 us puls
         self.trig_line.set_value(1)
-        time.sleep(10e-6)
+        time.sleep(0.000002)
         self.trig_line.set_value(0)
 
         # Vent på ECHO = HIGH
         start = time.time()
-        timeout = start + 0.03  # 30 ms
+        timeout = start + 0.06  # 60 ms
 
         while self.echo_line.get_value() == 0:
             if time.time() > timeout:
                 return
+            time.sleep(0.00001)  # 10 µs 
 
         echo_start = time.time()
 
@@ -50,6 +51,7 @@ class DistanceSensorNode(Node):
         while self.echo_line.get_value() == 1:
             if time.time() > timeout:
                 return
+            time.sleep(0.00001)  # 10 µs
 
         echo_end = time.time()
 

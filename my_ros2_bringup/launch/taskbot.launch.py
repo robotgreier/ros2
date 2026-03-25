@@ -16,6 +16,8 @@ def generate_launch_description():
 
     return LaunchDescription([
 
+        DeclareLaunchArgument('motor_control', default_value='true'),
+
         # Camera node with link to .yaml config file for camera parameters
         Node(
             package="v4l2_camera",
@@ -68,12 +70,12 @@ def generate_launch_description():
         ),        
 
         # Motor control node
-        #Node(
-        #    package='motor_control',
-        #    executable='motor_control_node',
-        #    name='motor_control_node',
-        #    output='screen'
-        #),    
+        Node(
+            package='motor_control',
+            executable='motor_control_node',
+            name='motor_control_node',
+            output='screen'
+        ),    
         
         # Gripper node
         Node(

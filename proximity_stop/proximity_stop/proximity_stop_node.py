@@ -46,7 +46,7 @@ class ProximityStopNode(Node):
 
         # QoS: sensors often use BEST_EFFORT
         sensor_qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10,
         )

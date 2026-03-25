@@ -201,7 +201,7 @@ class SNNNode(Node):
         self.correct_output = -1
 
         qos_sensor = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )

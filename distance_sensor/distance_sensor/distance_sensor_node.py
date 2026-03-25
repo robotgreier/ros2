@@ -4,6 +4,8 @@ from rclpy.node import Node
 from sensor_msgs.msg import Range
 import gpiod
 import time
+from collections import deque
+import statistics
 
 
 
@@ -25,6 +27,10 @@ class DistanceSensorNode(Node):
         self.trig_line.request(consumer="trig", type=gpiod.LINE_REQ_DIR_OUT)
         self.echo_line.request(consumer="echo", type=gpiod.LINE_REQ_DIR_IN)
 
+        # Filters
+        self.median_window = deque(maxlen=5)
+        self.filtered_value = None
+
         self.publisher = self.create_publisher(Range, "/ultrasonic/front/raw_range", 10)
         self.timer = self.create_timer(0.20, self.measure)   # 5 Hz
 
@@ -32,6 +38,8 @@ class DistanceSensorNode(Node):
 
     def measure(self):
         # Send 10 us puls
+        self.trig_line.set_value(0)
+        time.sleep(0.000002)
         self.trig_line.set_value(1)
         time.sleep(0.000002)
         self.trig_line.set_value(0)
@@ -57,7 +65,23 @@ class DistanceSensorNode(Node):
 
         # Beregn avstand (mm)
         duration = echo_end - echo_start  # sekunder
-        distance = (duration * 343000) / 2  # mm
+        distance_mm = (duration * 343000) / 2
+        distance_m = distance_mm / 1000.0 
+
+        # Validation
+        if distance_m <= 0.0 or distance_m > 4.0:
+            return
+        
+        # Median filter
+        self.median_window.append(distance_m)
+        median_val = statistics.median(self.median_window)
+
+        # Exponential smooth (IIR filter)
+        alpha = 0.25
+        if self.filtered_value is None:
+            self.filtered_value = median_val
+        else: 
+            self.filtered_value = alpha * median_val + (1.0 -alpha) * self.filtered_value
 
         # Publiser Range
         msg = Range()
@@ -67,7 +91,7 @@ class DistanceSensorNode(Node):
         msg.field_of_view = 0.4
         msg.min_range = 0.02
         msg.max_range = 4.0
-        msg.range = distance / 1000.0   # meter
+        msg.range = float(self.filtered_value)
 
         self.publisher.publish(msg)
 

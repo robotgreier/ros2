@@ -11,7 +11,7 @@ def generate_launch_description():
                 # Robot geometry and kinematics, needs to be updated for our robot:
                 {'wheel_separation': 0.15},
                 {'wheel_radius': 0.027},
-                {'max_wheel_linear_speed': 0.8},
+                {'max_wheel_linear_speed': 0.2},
                 # DRI0054 defaults:
                 {'i2c_address': 0x60},     # per DFRobot docs
                 {'left_motor_id': 1},

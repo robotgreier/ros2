@@ -56,7 +56,7 @@ class SNNNode(Node):
         # Driving parameters
         self.declare_parameter('timer_hz', 30.0)
         self.declare_parameter('idle_timeout_sec', 1.0)
-        self.declare_parameter('use_proximity_for_stop', False)
+        self.declare_parameter('use_proximity_for_stop', True)
         self.declare_parameter('proximity_stop_active_high', True)
 
         # Robot speed parameters
@@ -64,8 +64,8 @@ class SNNNode(Node):
         self.declare_parameter('turn_speed', 0.1)
 
         # Neuron parameters (integer-scaled)
-        self.declare_parameter('decay', 64)
-        self.declare_parameter('threshold', 512)
+        self.declare_parameter('decay', 128)
+        self.declare_parameter('threshold', 1024)
         self.declare_parameter('reset', 0)
 
         # Synapse & Learning parameters

@@ -68,13 +68,13 @@ def generate_launch_description():
         ),        
 
         # Motor control node
-        Node(
+        """Node(
             package='motor_control',
             executable='motor_control_node',
             name='motor_control_node',
             output='screen'
         ),    
-        
+        """
         # Gripper node
         Node(
             package='motor_control',

@@ -151,13 +151,13 @@ def generate_launch_description():
             executable='snn_node',
             name='python_snn_node',
             output='screen',
-            parameters=[
-                os.path.join(get_package_share_directory('python_snn_node'), 'config', 'params.yaml'),
-                {
-                    'log_enable': True,
-                    'log_mode': 'A',
-                }
-            ]
+            #parameters=[
+            #    os.path.join(get_package_share_directory('python_snn_node'), 'config', 'params.yaml'),
+            #    {
+            #        'log_enable': True,
+            #        'log_mode': 'A',
+            #    }
+            #]
         ),
 
         # Task manager node to coordinate

@@ -11,6 +11,7 @@ from std_msgs.msg import (UInt8,
                                    Int32MultiArray,
                                      String)
 from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Range
 
 from geometry_msgs.msg import Twist
 
@@ -206,7 +207,7 @@ class SNNNode(Node):
         )
 
         self.create_subscription(UInt8MultiArray, self.input_topic, self.cb_packed, qos_sensor)
-        self.create_subscription(LaserScan, '/ultrasonic/front/scan', self._on_scan, qos_sensor)
+        self.create_subscription(Range, '/ultrasonic/front/scan', self._on_scan, qos_sensor) # Endre Range til LaserScan ved Gazebo
         self.create_subscription(Int32, '/snn/correct_output', self.cb_correct, 10)
 
         self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10)
@@ -275,7 +276,7 @@ class SNNNode(Node):
     def _on_proximity_stop(self, msg: Bool):
         self.proximity_stop = bool(msg.data)
 
-    def _on_scan(self, msg: LaserScan):
+    def _on_scan(self, msg: Range): # Endre Range til LaserScan ved Gazebo
         finite = [r for r in msg.ranges if 0.0 < r < float('inf')]
         self.last_distance_m = min(finite) if finite else float('nan')
 

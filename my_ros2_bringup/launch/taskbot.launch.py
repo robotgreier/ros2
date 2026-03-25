@@ -2,6 +2,8 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.substitutions import PathJoinSubstitution
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -77,15 +79,17 @@ def generate_launch_description():
             package='motor_control',
             executable='motor_control_node',
             name='motor_control_node',
-            output='screen'
-        ),    
-        
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('motor_control'))
+        ),
+
         # Gripper node
         Node(
             package='motor_control',
             executable='gripper_node',
             name='gripper_node',
-            output='screen'
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('motor_control'))
         ),
         
         # Grab node
@@ -151,13 +155,13 @@ def generate_launch_description():
             executable='snn_node',
             name='python_snn_node',
             output='screen',
-            #parameters=[
-            #    os.path.join(get_package_share_directory('python_snn_node'), 'config', 'params.yaml'),
-            #    {
-            #        'log_enable': True,
-            #        'log_mode': 'A',
-            #    }
-            #]
+            parameters=[
+                os.path.join(get_package_share_directory('python_snn_node'), 'config', 'params.yaml'),
+                {
+                    'log_enable': True,
+                    'log_mode': 'A',
+                }
+            ]
         ),
 
         # Task manager node to coordinate

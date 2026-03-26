@@ -57,7 +57,7 @@ class GrabNode(Node):
         self.declare_parameter("item_distance_threshold", 0.3)
         self.declare_parameter("dropoff_distance_threshold", 0.3)
 
-        self.declare_parameter("approach_speed", 0.05)
+        self.declare_parameter("approach_speed", 0.5)
         self.declare_parameter("approach_distance_item", 0.4)
         self.declare_parameter("approach_distance_dropoff", 0.3)
 

@@ -16,7 +16,7 @@ class MotorControlNode(Node):
 
         # --- ROS-parameteroppsett ---
         self.declare_parameter('wheel_base', 0.13)       # meter
-        self.declare_parameter('max_lin_vel', 0.6)       # Higher number = lower speed
+        self.declare_parameter('max_lin_vel', 0.7)       # Higher number = lower speed
         self.declare_parameter('max_ang_vel', 0.2)       # rad/s
         self.declare_parameter('cmd_vel_timeout', 0.5)   # sekunder
 

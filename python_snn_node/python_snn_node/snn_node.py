@@ -151,7 +151,6 @@ class SNNNode(Node):
         self.reset = int(self.get_parameter('reset').value)
 
         # Synapse params
-        self.training_mode = bool(self.get_parameter('training_mode').value)
         self.lr_shift = int(self.get_parameter('lr_shift').value)
         self.initial_weight = int(self.get_parameter('initial_weight').value)
         self.t_pre = int(self.get_parameter('t_pre').value)
@@ -388,7 +387,7 @@ class SNNNode(Node):
         self.pub_dopamine.publish(Float32(data=dopamine_float))
 
         # ---- Apply dopamine to learning rule ----
-        if self.training_mode:
+        if self.learning_mode == 'rstdp':
             self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
 
         # ---- Add to your existing logger ----

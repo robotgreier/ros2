@@ -36,7 +36,6 @@ python_snn_node:
     dw_neg: 32
     min_weight: 8
     max_weight: 127
-    stdp_std_dop: 1
     feedback: True
     learning_mode: 'None' # 'None', 'stdp', 'rstdp'
 

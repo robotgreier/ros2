@@ -11,21 +11,6 @@ SEARCH_DROPOFF = 2
 APPROACH_DROPOFF = 3
 
 
-def reward_signal(seen, pos, action_idx):
-    """Returns signed dopamine integer. Positive = reward, negative = punishment."""
-    if seen and (
-        (pos == 0  and action_idx == 1) or
-        (pos == -1 and action_idx == 0) or
-        (pos == +1 and action_idx == 2)
-    ):
-        return +1   # correct action: reward
-
-    if not seen and action_idx in (0, 2):
-        return +1   # searching: weak reward
-
-    return -1       # everything else: punish
-
-
 class DopamineComputer:
     """
     Reward shaping for continuous pick-deliver-repeat.
@@ -51,20 +36,20 @@ class DopamineComputer:
     @staticmethod
     def decode_object_bits(obj_bits: list[int]):
         """
-        Encoding:
-          000 = none
-          001 = right
-          010 = center
-          100 = left
-        Returns: (seen: bool, pos: -1/0/+1/None)
+        One-hot encoding over N horizontal zones (works for any odd N).
+        For N=5:
+          10000 = far left  (-2)
+          01000 = left      (-1)
+          00100 = center    ( 0)
+          00010 = right     (+1)
+          00001 = far right (+2)
+          00000 = none
+        Returns: (seen: bool, pos: int/None)
         """
-        l, c, r = obj_bits
-        if l == 1 and c == 0 and r == 0:
-            return True, -1
-        if l == 0 and c == 1 and r == 0:
-            return True, 0
-        if l == 0 and c == 0 and r == 1:
-            return True, +1
+        n = len(obj_bits)
+        for i, bit in enumerate(obj_bits):
+            if bit == 1:
+                return True, i - (n // 2)
         return False, None
 
     def step(
@@ -80,13 +65,23 @@ class DopamineComputer:
         comps: dict[str, int] = {}
 
         # Priority 5 (base): alignment / action match
-        dopamine = reward_signal(seen, pos, action_idx)
+        if seen and pos is not None and (
+            (pos == 0 and action_idx == 1) or
+            (pos  < 0 and action_idx == 0) or
+            (pos  > 0 and action_idx == 2)
+        ):
+            dopamine = 2   # correct action: reward
+        elif not seen and action_idx in (0, 2):
+            dopamine = 1   # searching: weak reward
+        else:
+            dopamine = -1  # everything else: punish
+
         if not seen and dopamine > 0:
             comps["searching"] = dopamine
         else:
             comps["align_action"] = dopamine
 
-        # Priority 4: lost-target penalty
+        """# Priority 4: lost-target penalty
         if seen:
             self.lost_ticks = 0
             self._lost_penalized = False
@@ -95,14 +90,14 @@ class DopamineComputer:
                 self.lost_ticks += 1
                 if self.lost_ticks > self.lost_grace_ticks:
                     dopamine = -1
-                    comps["lost_target"] = dopamine
+                    comps["lost_target"] = dopamine"""
 
-        # Priority 3: proximity stop penalty
+        """# Priority 3: proximity stop penalty
         if proximity_stop:
             dopamine = -1
-            comps["proximity_stop"] = dopamine
+            comps["proximity_stop"] = dopamine"""
 
-        # Priority 2: state transitions
+        """# Priority 2: state transitions
         if task_state is not None:
             if self.prev_task_state is not None:
                 prev, curr = self.prev_task_state, task_state
@@ -116,15 +111,15 @@ class DopamineComputer:
                     dopamine = -1
                     comps["state_regress"] = dopamine
 
-            self.prev_task_state = task_state
+            self.prev_task_state = task_state"""
 
-        # Priority 1: grab/drop events
+        """# Priority 1: grab/drop events
         if grab_event == EVENT_GRABBED:
             dopamine = +1
             comps["grabbed"] = dopamine
         elif grab_event == EVENT_DROPPED:
             dopamine = +1
-            comps["dropped"] = dopamine
+            comps["dropped"] = dopamine"""
 
         # Commented out: gated proximity spike reward
         # gated = (
@@ -136,5 +131,5 @@ class DopamineComputer:
         #     dopamine = +1
         #     comps["prox_spike_gated"] = dopamine
 
-        self.prev_seen = seen
+        #self.prev_seen = seen
         return dopamine, comps

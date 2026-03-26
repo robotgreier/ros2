@@ -70,14 +70,13 @@ class SNNNode(Node):
         self.declare_parameter('reset', 0)
 
         # Synapse & Learning parameters
-        self.declare_parameter('training_mode', True)
-        self.declare_parameter('lr_shift', 2)
+        self.declare_parameter('lr_shift', 3)
         self.declare_parameter('initial_weight', 64)
         self.declare_parameter('t_pre', 3)
-        self.declare_parameter('t_post', 4)
-        self.declare_parameter('tau_e_shift', 4)
+        self.declare_parameter('t_post', 2)
+        self.declare_parameter('tau_e_shift', 3)
         self.declare_parameter('dw_pos', 32)
-        self.declare_parameter('dw_neg', 64)
+        self.declare_parameter('dw_neg', 32)
         self.declare_parameter('min_weight', 8)
         self.declare_parameter('max_weight', 127)
         self.declare_parameter('learning_mode', 'none')
@@ -282,23 +281,12 @@ class SNNNode(Node):
 
     ### For training ###
     def _extract_object_bits_from_last(self) -> list[int]:
-        """
-        Extract [L, C, R] from the object_rec channel of the packed input.
-        Works for any object_rec_size by collapsing bins symmetrically:
-          left  = any bin before center
-          center = middle bin
-          right = any bin after center
-        """
+        """Extract the raw object_rec bits from the packed input vector."""
         v = self.last_vector
-        obj_size = self.channel_sizes.get('object_rec', 3)
+        obj_size = self.channel_sizes.get('object_rec', 5)
         if v is None or v.size < obj_size:
-            return [0, 0, 0]
-        obj = [int(x) for x in v[-obj_size:]]
-        mid = (obj_size - 1) // 2
-        L = int(any(obj[:mid]))
-        C = int(obj[mid])
-        R = int(any(obj[mid + 1:]))
-        return [L, C, R]
+            return [0] * obj_size
+        return [int(x) for x in v[-obj_size:]]
 
 
     def _extract_proximity_spike_from_last(self) -> int:

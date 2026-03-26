@@ -73,7 +73,7 @@ class GrabNode(Node):
         self.declare_parameter("max_forward_distance", 0.45)
 
         # For simulation
-        self.declare_parameter("use_sim_gripper", True)
+        self.declare_parameter("use_sim_gripper", False)
         self.use_sim_gripper = self.get_parameter("use_sim_gripper").value 
         #/ For simulation
 

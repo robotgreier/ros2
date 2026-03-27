@@ -2,10 +2,18 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
+import yaml
+
 
 def generate_launch_description():
-    shared_params = os.path.join(
+
+    _params_file = os.path.join(
         get_package_share_directory('my_ros2_bringup'), 'config', 'params.yaml')
+    with open(_params_file) as f:
+        _all = yaml.safe_load(f)
+
+    def p(node_name):
+        return _all.get(node_name, {}).get('ros__parameters', {})
 
     return LaunchDescription([
         Node(
@@ -13,14 +21,14 @@ def generate_launch_description():
             executable='grab_node',
             name='grab_node',
             output='screen',
-            parameters=[shared_params],
+            parameters=[p('grab_node')],
         ),
         Node(
             package='cmd_arbiter',
             executable='cmd_arbiter',
             name='cmd_arbiter',
             output='screen',
-            parameters=[shared_params],
+            parameters=[p('cmd_arbiter')],
         ),
 
         # Proximity adapter node
@@ -36,33 +44,34 @@ def generate_launch_description():
             executable='encoding_node',
             name='encoding_node',
             output='screen',
-            parameters=[shared_params],
+            parameters=[p('encoding_node')],
         ),
         Node(
             package='opencv_nodes',
             executable='img_kp_grid',
             name='img_kp_grid',
             output='screen',
-            parameters=[shared_params],
+            parameters=[p('img_kp_grid')],
         ),
         Node(
             package='opencv_nodes',
             executable='img_recog',
             name='img_recog',
             output='screen',
-            parameters=[shared_params],
+            parameters=[p('img_recog')],
         ),
         Node(
             package='proximity_stop',
             executable='proximity_stop_node',
             name='proximity_stop',
             output='screen',
-            parameters=[shared_params],
+            parameters=[p('proximity_stop')],
         ),
         # Node(
         #     package='python_snn_node',
         #     executable='snn_node',
         #     name='python_snn_node',
+        #     parameters=[p('python_snn_node')],
         #     output='screen'
         # ),
         Node(

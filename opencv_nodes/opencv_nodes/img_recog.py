@@ -469,6 +469,10 @@ class ImgRecog(Node):
             self._consec_lost = 0
             self._consec_found = 0
 
+
+        self.get_logger().info(
+            f"K_is_none={self.K is None}, D_is_none={self.D is None}, marker_length_m={self.marker_length_m}"
+        )
         # Pose estimation if camera intrinsics available
         distance_m = -1.0
         tvec = (0.0, 0.0, 0.0)
@@ -489,6 +493,8 @@ class ImgRecog(Node):
             rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
             tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
             distance_m = float(math.sqrt(tv[0] ** 2 + tv[1] ** 2 + tv[2] ** 2))
+
+        self.get_logger().info(f"Pose result: rvecs={rvecs}, tvecs={tvecs}")
 
         out.data = [
             1.0,

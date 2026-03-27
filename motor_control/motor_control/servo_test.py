@@ -24,10 +24,10 @@ class ServoTestNode(Node):
     def timer_callback(self):
         """Kjøres hver 1. sekund"""
         if self.position == 0:
-            angle = 50
+            angle = 0
             self.position = 1
         else:
-            angle = 180
+            angle = 45
             self.position = 0
 
         self.get_logger().info(f"Setter servo til {angle} grader...")

@@ -17,7 +17,7 @@ class MotorControlNode(Node):
         # --- ROS-parameteroppsett ---
         self.declare_parameter('wheel_base', 0.13)       # meter
         self.declare_parameter('max_lin_vel', 0.7)       # Higher number = lower speed
-        self.declare_parameter('max_ang_vel', 0.2)       # rad/s
+        self.declare_parameter('max_ang_vel', 2.0)       # rad/s
         self.declare_parameter('cmd_vel_timeout', 0.5)   # sekunder
 
         self.wheel_base = float(self.get_parameter('wheel_base').value)
@@ -70,17 +70,22 @@ class MotorControlNode(Node):
         v = max(-self.max_lin_vel, min(self.max_lin_vel, v))
         w = max(-self.max_ang_vel, min(self.max_ang_vel, w))
 
-        # Differensialdrift
-        v_l = v - (w * self.wheel_base / 2.0)
-        v_r = v + (w * self.wheel_base / 2.0)
+        # Normaliser lineær og angular uavhengig til [-1, 1]
+        v_norm = v / self.max_lin_vel if self.max_lin_vel > 0 else 0.0
+        w_norm = w / self.max_ang_vel if self.max_ang_vel > 0 else 0.0
 
-        # Konverter til PWM
-        pwm_l = self.left_dir * self.velocity_to_pwm(v_l)
-        pwm_r = self.right_dir * self.velocity_to_pwm(v_r)
+        # Differensialdrift i normalisert rom
+        pwm_l_norm = v_norm - w_norm
+        pwm_r_norm = v_norm + w_norm
 
-        # Påfør
-        self.apply_pwm(self.m_left, pwm_l)
-        self.apply_pwm(self.m_right, pwm_r)
+        # Skaler til [-255, 255], bevar forholdet ved overflow
+        scale = max(1.0, abs(pwm_l_norm), abs(pwm_r_norm))
+        pwm_l = int(255 * pwm_l_norm / scale)
+        pwm_r = int(255 * pwm_r_norm / scale)
+
+        # Påfør med retningskoreksjon
+        self.apply_pwm(self.m_left,  self.left_dir  * pwm_l)
+        self.apply_pwm(self.m_right, self.right_dir * pwm_r)
 
     # -----------------------
     # Failsafe timeout
@@ -89,17 +94,6 @@ class MotorControlNode(Node):
         if time.time() - self.last_cmd_time > self.timeout:
             self.apply_pwm(self.m_left, 0)
             self.apply_pwm(self.m_right, 0)
-
-    # -----------------------
-    # Konverter hjulhastighet til PWM [-255, 255]
-    # -----------------------
-    def velocity_to_pwm(self, v_wheel):
-        if self.max_lin_vel <= 0:
-            return 0
-
-        pwm = int(255 * (v_wheel / self.max_lin_vel))
-        pwm = max(-255, min(255, pwm))
-        return pwm
 
     # -----------------------
     # Påfør PWM til motor

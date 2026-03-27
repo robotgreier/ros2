@@ -27,7 +27,7 @@ Functionality
 -------------
 - Initializes the Emakefun MotorHAT and servo.
 - Starts in the OPEN position as a safe default.
-- Receives grip/drop commands from another node, such as grab_node.
+- Receives grip/drop commands from grab_node.
 - Uses a simple internal state machine to track whether the gripper is:
     OPEN, MOVING, CLOSED, or ERROR.
 - Moves the servo gradually ("soft movement") instead of jumping directly
@@ -88,7 +88,7 @@ class GripperNode(Node):
 
         # ---- Parameters you can tune later ----
         self.servo_channel = 1
-        self.open_angle = 60.0
+        self.open_angle = 50.0
         self.closed_angle = 180.0
 
         self.step_size_deg = 2.0          # degrees per step

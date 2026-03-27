@@ -159,7 +159,7 @@ class SNNLayer:
         self.n_inputs = n_inputs + 1 if feedback else n_inputs
 
         # Neuron state (n_outputs,)
-        self.decay     = neuron_params.get('decay',     192)
+        self.decay     = neuron_params.get('decay',     128)
         self.threshold = neuron_params.get('threshold', 1024)
         self.reset_val = neuron_params.get('reset',     0)
 
@@ -174,8 +174,8 @@ class SNNLayer:
         self.t_post      = synapse_params.get('t_post',      3)
         self.tau_e_shift = synapse_params.get('tau_e_shift', 4)
         self.dw_pos      = synapse_params.get('dw_pos',      64)
-        self.dw_neg      = synapse_params.get('dw_neg',      8)
-        self.w_min       = synapse_params.get('w_min',       8)
+        self.dw_neg      = synapse_params.get('dw_neg',      32)
+        self.w_min       = synapse_params.get('w_min',       64)
         self.w_max       = synapse_params.get('w_max',       255)
 
         w_init = synapse_params.get('w_init', "None")

@@ -18,7 +18,7 @@ encoding_node:
     output_topic: "/snn/input"
     proximity_topic: "/ultrasonic/front/scan"
     proximity_n_dist_bits: *proximity_n_bits
-    proximity_dist_max_m: 0.5
+    proximity_dist_max_m: 1.0
     aruco_n_bins: *aruco_n_bins
 
 # ── Keypoint grid node ─────────────────────────────────────────────────────────

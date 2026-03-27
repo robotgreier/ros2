@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from power_monitor.msg import PowerReading
+from geometry_msgs.msg import Vector3
 import csv
 import time
 from datetime import datetime
@@ -14,17 +14,17 @@ class PowerLogger(Node):
 
         with open(self.filename, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(["timestamp","topic","voltage_V","current_A","power_W"])
+            writer.writerow(["timestamp","topic","voltage","current","power"])
 
         self.get_logger().info(f"Logging to CSV: {self.filename}")
 
-        self.create_subscription(PowerReading, "/system/power", self.cb_system, 10)
-        self.create_subscription(PowerReading, "/fpga/power", self.cb_fpga, 10)
+        self.create_subscription(Vector3, "/system/power", self.cb_system, 10)
+        self.create_subscription(Vector3, "/fpga/power", self.cb_fpga, 10)
 
     def write(self, topic, msg):
         t = time.time()
         with open(self.filename, 'a', newline='') as f:
-            csv.writer(f).writerow([t, topic, msg.voltage, msg.current, msg.power])
+            csv.writer(f).writerow([t, topic, msg.x, msg.y, msg.z])
 
     def cb_system(self, msg):
         self.write("system", msg)

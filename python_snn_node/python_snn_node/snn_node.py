@@ -171,6 +171,9 @@ class SNNNode(Node):
         self.segment_offsets = self._compute_offsets(self.pack_order, self.channel_sizes)
         self.input_size = sum(self.channel_sizes.get(name, 0) for name in self.pack_order)
 
+
+
+        #### Initialize SNN Layer ####
         neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset}
         synapse_params = {
             "lr_shift": self.lr_shift, "w_init": self.initial_weight,
@@ -191,7 +194,11 @@ class SNNNode(Node):
         share_dir = get_package_share_directory('python_snn_node')
         weight_path = os.path.join(share_dir, 'config', 'weights.mem')
 
-        self.network.load_weights(weight_file=weight_path)
+        # Load weights if file exists
+        if os.path.exists(weight_path):
+            self.network.load_weights(weight_file=weight_path)
+
+        ###########################################
 
         # --- State and Communication ---
         self.last_input_stamp = self.get_clock().now()
@@ -296,8 +303,6 @@ class SNNNode(Node):
             return 0
         return int(v[prox_start])
 
-    ### /For training ###
-
     # Helpers 
     def _compute_offsets(self, order, sizes):
         offsets = {}
@@ -337,6 +342,7 @@ class SNNNode(Node):
             self.publish_stop(f"stale input {age_sec:.2f}s > {self.idle_timeout_sec}s")
             return
 
+
         ##### Run network #####
 
         # Forward pass
@@ -345,8 +351,6 @@ class SNNNode(Node):
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
         
-
-
         # Normal actuation
         decision = self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
 
@@ -357,7 +361,7 @@ class SNNNode(Node):
         spk_msg.data = [int(x) for x in output_spikes]
         self.pub_spikes.publish(spk_msg)
 
-        # ---- Reward computation ----
+        ## Reward computation ##
         obj_bits = self._extract_object_bits_from_last()
         prox_spike = self._extract_proximity_spike_from_last()
 
@@ -370,7 +374,7 @@ class SNNNode(Node):
             proximity_stop=self.proximity_stop,
         )
 
-        # ---- Dopamine component breakdown for logging ----
+        ## Dopamine component breakdown for logging ##
         def _comp(key):
             c = dopamine_comps.get(key)
             return float(c) if c is not None else 0.0
@@ -386,18 +390,11 @@ class SNNNode(Node):
         dopamine_float = float(dopamine)
         self.pub_dopamine.publish(Float32(data=dopamine_float))
 
-        # ---- Apply dopamine to learning rule ----
+        ## Apply dopamine based reward ##
         if self.learning_mode == 'rstdp':
             self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
 
-        # ---- Add to your existing logger ----
-        # Recommended: store reward + some context so you can tune later.
-        # If you already log pending_input, just append these fields to the same row.
-        # Example (pseudo):
-        # self.logger_csv.write_row(..., reward=dopamine, state=self.task_state,
-        #                           grab_event=self.grab_event,
-        #                           proximity_stop=int(self.proximity_stop),
-        #                           **reward_comps)
+        ## Logging ##
 
         if self.logger_csv is not None:
             t_output_ns = int(self.get_clock().now().nanoseconds)
@@ -508,13 +505,7 @@ class SNNNode(Node):
                     self.logger_csv.push(row)
                     self.last_logged = signature
 
-    def on_proximity_penalty(self, winner_idx: int):
-        """
-        Called when /proximity_stop triggers. winner_idx is what the policy wanted to do.
-        Implement your punishment here once we confirm how net.step applies dopamine.
-        """
-        self.network.apply_reward(dopamine=-1, winner_idx=winner_idx)
-
+    #### Publishing helpers ####
 
     def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):
         cmd = Twist()

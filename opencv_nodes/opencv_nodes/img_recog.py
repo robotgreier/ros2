@@ -473,17 +473,25 @@ class ImgRecog(Node):
         self.get_logger().info(
             f"K_is_none={self.K is None}, D_is_none={self.D is None}, marker_length_m={self.marker_length_m}"
         )
+
         # Pose estimation if camera intrinsics available
+        rvecs = None
+        tvecs = None
+
         distance_m = -1.0
         tvec = (0.0, 0.0, 0.0)
         rvec = (0.0, 0.0, 0.0)
 
+        self.get_logger().warn("ENTERING POSE BLOCK CHECK")
+
         if self.K is not None and self.D is not None and self.marker_length_m > 0.0:
+            self.get_logger().warn("POSE BLOCK ENTERED")
             try:
-                self.get_logger().info(f"K=\n{self.K}")
-                self.get_logger().info(f"D={self.D}")
+                self.get_logger().warn(f"K={self.K}")
+                self.get_logger().warn(f"D={self.D}")
 
                 c = best["corners"].astype(np.float32).reshape(1, 4, 2)
+                self.get_logger().warn(f"corners_for_pose={c}")
 
                 rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
                     c,
@@ -492,7 +500,7 @@ class ImgRecog(Node):
                     self.D
                 )
 
-                self.get_logger().info(f"RAW pose: rvecs={rvecs}, tvecs={tvecs}")
+                self.get_logger().warn(f"RAW pose: rvecs={rvecs}, tvecs={tvecs}")
 
                 if rvecs is not None and tvecs is not None and len(rvecs) > 0 and len(tvecs) > 0:
                     rv = rvecs[0][0]
@@ -500,12 +508,18 @@ class ImgRecog(Node):
 
                     rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
                     tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
-
-                    # Forward distance is usually z, not Euclidean norm
                     distance_m = float(tv[2])
+
+                    self.get_logger().warn(
+                        f"POSE USED: distance_m={distance_m}, tvec={tvec}, rvec={rvec}"
+                    )
+                else:
+                    self.get_logger().error("Pose arrays returned empty or None.")
 
             except Exception as e:
                 self.get_logger().error(f"Pose estimation failed: {e}")
+        else:
+            self.get_logger().error("Pose prerequisites failed.")
 
 
         out.data = [

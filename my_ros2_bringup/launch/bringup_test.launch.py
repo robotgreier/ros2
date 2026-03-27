@@ -51,7 +51,7 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # Proximety_adapter_node
+        # Proximity_adapter_node
         Node(
             package='distance_sensor',
             executable='proximity_adapter_node',
@@ -65,7 +65,7 @@ def generate_launch_description():
             executable='distance_sensor_node',
             name='distance_sensor_node',
             output='screen'
-        ),        
+        ),          
 
         # Motor control node
         Node(

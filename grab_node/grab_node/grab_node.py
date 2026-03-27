@@ -69,7 +69,7 @@ class GrabNode(Node):
         self.declare_parameter("item_final_distance", -1.0)
         self.declare_parameter("dropoff_final_distance", 0.02)
 
-        self.declare_parameter("min_forward_distance", 0.02)
+        self.declare_parameter("min_forward_distance", 0.2)
         self.declare_parameter("max_forward_distance", 0.45)
 
         # For simulation
@@ -238,11 +238,15 @@ class GrabNode(Node):
         if self.x_norm is None or self.distance is None:
             return
 
-        if self.distance < 0.0:
+        # Reject invalid or zero distance
+        if self.distance <= 0.0:
             self.get_logger().warn(f"Ignoring invalid distance: {self.distance:.3f}")
             return
 
         centered = abs(self.x_norm) < self.center_threshold
+
+        # Optional: enforce a minimum valid distance (more robust)
+        distance_valid = self.distance > 0.2
 
         if self.current_task_state == APPROACH_ITEM:
             close_enough = self.distance < self.item_dist_thresh
@@ -251,17 +255,19 @@ class GrabNode(Node):
         else:
             return
 
-        if centered and close_enough:
+        # Only start approach if EVERYTHING is valid
+        if centered and close_enough and distance_valid:
             self.get_logger().info("Alignment and distance OK. Starting approach.")
             self.start_forward_motion()
 
     def start_forward_motion(self):
         self.publish_event(EVENT_BUSY)
 
-        if self.distance is None or self.distance < 0.0:
+        if self.distance is None or self.distance <= 0.0:
             self.get_logger().warn(
                 f"Invalid distance in start_forward_motion: {self.distance}"
             )
+            self.state = GrabState.WAITING_ALIGNMENT
             return
 
         if self.current_task_state == APPROACH_ITEM:

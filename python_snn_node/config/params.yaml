@@ -22,7 +22,7 @@ python_snn_node:
     turn_speed: 0.3 # rad/s
 
     ##### Neuron parameters #####
-    decay: 128
+    decay: 64
     threshold: 1024
     reset: 0
 
@@ -32,10 +32,10 @@ python_snn_node:
     t_pre: 3
     t_post: 2
     tau_e_shift: 3
-    dw_pos: 32
+    dw_pos: 64
     dw_neg: 32
     min_weight: 8
-    max_weight: 127
+    max_weight: 255
     feedback: True
     learning_mode: 'rstdp' # 'None', 'stdp', 'rstdp'
 

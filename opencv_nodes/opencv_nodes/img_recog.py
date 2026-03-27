@@ -478,23 +478,35 @@ class ImgRecog(Node):
         tvec = (0.0, 0.0, 0.0)
         rvec = (0.0, 0.0, 0.0)
 
-        self.get_logger().info(
-            f"K_is_none={self.K is None}, "
-            f"D_is_none={self.D is None}, "
-            f"marker_length_m={self.marker_length_m}"
-            )
-
         if self.K is not None and self.D is not None and self.marker_length_m > 0.0:
-            # estimatePoseSingleMarkers expects corners as list/array shaped (N,1,4,2) or (N,4,2)
-            c = best["corners"].astype(np.float32).reshape(1, 1, 4, 2)
-            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(c, self.marker_length_m, self.K, self.D)
-            rv = rvecs[0][0]
-            tv = tvecs[0][0]
-            rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
-            tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
-            distance_m = float(math.sqrt(tv[0] ** 2 + tv[1] ** 2 + tv[2] ** 2))
+            try:
+                self.get_logger().info(f"K=\n{self.K}")
+                self.get_logger().info(f"D={self.D}")
 
-        self.get_logger().info(f"Pose result: rvecs={rvecs}, tvecs={tvecs}")
+                c = best["corners"].astype(np.float32).reshape(1, 4, 2)
+
+                rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                    c,
+                    self.marker_length_m,
+                    self.K,
+                    self.D
+                )
+
+                self.get_logger().info(f"RAW pose: rvecs={rvecs}, tvecs={tvecs}")
+
+                if rvecs is not None and tvecs is not None and len(rvecs) > 0 and len(tvecs) > 0:
+                    rv = rvecs[0][0]
+                    tv = tvecs[0][0]
+
+                    rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
+                    tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
+
+                    # Forward distance is usually z, not Euclidean norm
+                    distance_m = float(tv[2])
+
+            except Exception as e:
+                self.get_logger().error(f"Pose estimation failed: {e}")
+
 
         out.data = [
             1.0,

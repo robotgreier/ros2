@@ -1,0 +1,145 @@
+# Global parameter file — loaded by all bringup launch files.
+# Edit values here to tune the system without touching launch files.
+#
+# Shared values use YAML anchors (&name) and aliases (*name).
+# Change the anchor once — every node that references it updates automatically.
+# The _globals section is ignored at runtime (no node has that name).
+
+_globals:
+  aruco_n_bins:     &aruco_n_bins     3    # encoding_node/aruco_n_bins         → python_snn_node/object_rec_size
+  proximity_n_bits: &proximity_n_bits 4    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
+  kp_rows:          &kp_rows          3    # img_kp_grid/rows → python_snn_node/kp_rows
+  kp_cols:          &kp_cols          8    # img_kp_grid/cols → python_snn_node/kp_cols
+
+# ── Encoding node ──────────────────────────────────────────────────────────────
+encoding_node:
+  ros__parameters:
+    output_topic: "/snn/input"
+    proximity_topic: "/ultrasonic/front/scan"
+    proximity_n_dist_bits: *proximity_n_bits
+    proximity_dist_max_m: 0.5
+    aruco_n_bins: *aruco_n_bins
+
+# ── Keypoint grid node ─────────────────────────────────────────────────────────
+img_kp_grid:
+  ros__parameters:
+    rows: *kp_rows
+    cols: *kp_cols
+    response_threshold: 0.0
+    use_clahe: false
+
+# ── SNN node ───────────────────────────────────────────────────────────────────
+python_snn_node:
+  ros__parameters:
+    # Input from encoding_node
+    input_mode: "packed"
+    input_topic: "/snn/input"
+    pack_order: ["keypoints_grid", "proximity", "object_rec"]
+
+    # Channel sizes — kept in sync with encoding/vision nodes via anchors above
+    kp_rows: *kp_rows
+    kp_cols: *kp_cols           # grid size = kp_rows * kp_cols, computed in node
+    proximity_size: *proximity_n_bits
+    object_rec_size: *aruco_n_bins
+
+    # Output actions
+    num_actions: 3           # LEFT, FORWARD, RIGHT
+
+    # Timer and idle behaviour
+    timer_hz: 30.0
+    idle_timeout_sec: 1.0
+
+    # Robot speeds
+    forward_speed: 0.125     # m/s
+    turn_speed: 0.3          # rad/s
+
+    # Neuron parameters
+    decay: 128
+    threshold: 1024
+    reset: 0
+
+    # Synapse / learning parameters
+    lr_shift: 3
+    initial_weight: -1       # -1 = random init
+    t_pre: 3
+    t_post: 2
+    tau_e_shift: 3
+    dw_pos: 64
+    dw_neg: 32
+    min_weight: 8
+    max_weight: 255
+    feedback: true
+    learning_mode: "rstdp"   # none | stdp | rstdp
+
+    seed: 42
+
+    # CSV logging
+    log_enable: true
+    log_mode: "A"            # A = log on new input, B = every tick, C = state changes
+
+# ── Motor control node ─────────────────────────────────────────────────────────
+motor_control_node:
+  ros__parameters:
+    wheel_base: 0.13         # m, distance between wheels
+    max_lin_vel: 0.7         # m/s
+    max_ang_vel: 2.0         # rad/s
+    cmd_vel_timeout: 0.5     # s, stop if no command received
+
+# ── Grab node ──────────────────────────────────────────────────────────────────
+grab_node:
+  ros__parameters:
+    center_threshold: 0.15
+    item_distance_threshold: 0.3    # m
+    dropoff_distance_threshold: 0.3 # m
+    approach_speed: 0.1             # m/s
+    approach_distance_item: 0.4     # m
+    approach_distance_dropoff: 0.3  # m
+    backup_speed: 0.1               # m/s
+    backup_distance: 0.3            # m
+    motion_publish_rate_hz: 20.0
+    item_final_distance: -1.0       # -1 = disabled
+    dropoff_final_distance: 0.02    # m
+    min_forward_distance: 0.2       # m
+    max_forward_distance: 0.45      # m
+    use_sim_gripper: false
+
+# ── Command arbiter ────────────────────────────────────────────────────────────
+cmd_arbiter:
+  ros__parameters:
+    out_topic: "/cmd_vel"
+    proximity_stop_topic: "/proximity_stop"
+    source_names: ["grab", "teleop", "snn"]
+    source_topics: ["/cmd_vel/grab", "/cmd_vel/teleop", "/cmd_vel/snn"]
+    source_priorities: [100, 50, 10]   # higher wins
+    source_timeouts_sec: [0.5, 0.5, 0.5]
+    publish_rate_hz: 30.0
+    proximity_stop_active_high: true
+    publish_zero_when_idle: true
+
+# ── Proximity stop ─────────────────────────────────────────────────────────────
+proximity_stop:
+  ros__parameters:
+    scan_topic: "/ultrasonic/front/scan"
+    state_topic: "/task/state"
+    stop_topic: "/proximity_stop"
+    distance_threshold: 0.20         # m
+    disabled_states: [1, 3]          # 1=APPROACH_ITEM, 3=APPROACH_DROPOFF
+
+# ── ArUco / image recognition node ────────────────────────────────────────────
+img_recog:
+  ros__parameters:
+    image_topic: "/camera/image_raw"
+    camera_info_topic: "/camera/camera_info"
+    state_topic: "/task/state"
+    out_topic: "/vision/aruco/target"
+    aruco_dictionary: "DICT_4X4_50"
+    item_ids: [1, 2, 3]
+    dropoff_ids: [4]
+    marker_length_m: 0.04            # m, adjust to your printed marker size
+    target_policy: "largest"         # largest | closest_to_center
+    found_frames: 2
+    lost_frames: 12
+    enable_state_auto: true
+    grab_event_topic: "/grab_node/event"
+    episode_reset_delay_sec: 5.0
+    set_state_service: "/task/set_state"

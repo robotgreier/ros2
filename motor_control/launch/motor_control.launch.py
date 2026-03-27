@@ -1,27 +1,18 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+import os
 
 def generate_launch_description():
+    params_file = os.path.join(
+        get_package_share_directory('my_ros2_bringup'), 'config', 'params.yaml')
+
     return LaunchDescription([
         Node(
             package='motor_control',
             executable='motor_control_node',
             name='motor_control_node',
-            parameters=[
-                # Robot geometry and kinematics, needs to be updated for our robot:
-                {'wheel_separation': 0.15},
-                {'wheel_radius': 0.027},
-                {'max_wheel_linear_speed': 0.2},
-                # DRI0054 defaults:
-                {'i2c_address': 0x60},     # per DFRobot docs
-                {'left_motor_id': 1},
-                {'right_motor_id': 2},
-                {'invert_left': False},
-                {'invert_right': True},    # often one side needs inversion
-                {'cmd_vel_timeout': 0.5},
-                {'slew_rate': 6.0},        # throttle units/sec
-                {'stop_mode': 'brake'}     # or 'coast'
-            ],
+            parameters=[params_file],
             output='screen'
         )
     ])

@@ -5,8 +5,8 @@ from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('python_snn_node')
-    params_file = os.path.join(pkg_share, 'config', 'params.yaml')
+    params_file = os.path.join(
+        get_package_share_directory('my_ros2_bringup'), 'config', 'params.yaml')
 
     return LaunchDescription([
         Node(
@@ -14,6 +14,6 @@ def generate_launch_description():
             executable='python_snn_node',
             name='python_snn_node',
             output='screen',
-            parameters=[params_file],   # <-- peker til installert kopi
+            parameters=[params_file],
         )
     ])

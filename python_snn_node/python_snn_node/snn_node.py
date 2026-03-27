@@ -47,7 +47,8 @@ class SNNNode(Node):
         self.declare_parameter('pack_order', ['keypoints_grid','proximity', 'object_rec'])
 
         # Channel sizes (matches YAML)
-        self.declare_parameter('keypoints_grid_size', 24)
+        self.declare_parameter('kp_rows', 3)
+        self.declare_parameter('kp_cols', 8)
         self.declare_parameter('proximity_size', 4)
         self.declare_parameter('object_rec_size', 3)
 
@@ -131,9 +132,11 @@ class SNNNode(Node):
         self.input_topic = str(self.get_parameter('input_topic').value)
         self.pack_order = list(self.get_parameter('pack_order').value)
 
+        kp_rows = int(self.get_parameter('kp_rows').value)
+        kp_cols = int(self.get_parameter('kp_cols').value)
         self.channel_sizes = {
             'proximity': int(self.get_parameter('proximity_size').value),
-            'keypoints_grid': int(self.get_parameter('keypoints_grid_size').value),
+            'keypoints_grid': kp_rows * kp_cols,
             'object_rec': int(self.get_parameter('object_rec_size').value)
         }
 

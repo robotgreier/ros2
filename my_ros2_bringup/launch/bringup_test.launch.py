@@ -2,10 +2,14 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_share_directory
+import os
 
 def generate_launch_description():
 
-    
+    shared_params = os.path.join(
+        get_package_share_directory('my_ros2_bringup'), 'config', 'params.yaml')
+
     # Path to the camera config file inside the ROS2 package
     camera_config = PathJoinSubstitution([
         FindPackageShare("robot_camera_config"),
@@ -72,9 +76,10 @@ def generate_launch_description():
             package='motor_control',
             executable='motor_control_node',
             name='motor_control_node',
-            output='screen'
-        ),    
-         
+            output='screen',
+            parameters=[shared_params],
+        ),
+
         # Gripper node
         Node(
             package='motor_control',
@@ -88,15 +93,17 @@ def generate_launch_description():
            package='grab_node',
            executable='grab_node',
            name='grab_node',
-           output='screen'
+           output='screen',
+           parameters=[shared_params],
         ),
-        
+
         # Command arbiter node
         Node(
             package='cmd_arbiter',
             executable='cmd_arbiter',
             name='cmd_arbiter',
-            output='screen'
+            output='screen',
+            parameters=[shared_params],
         ),
 
         # Encoding node
@@ -105,31 +112,25 @@ def generate_launch_description():
             executable='encoding_node',
             name='encoding_node',
             output='screen',
-            parameters=[{
-            # "proximity_topic": "/ultrasonic/front/scan",
-            "output_topic": "/snn/input",
-            "proximity_bin_edges": [0.02, 0.04, 0.08, 0.16, 0.32, 0.64],
-        }],
-
-        # OpenCD keypoint grid node
+            parameters=[shared_params],
         ),
+
+        # OpenCV keypoint grid node
         Node(
             package='opencv_nodes',
             executable='img_kp_grid',
             name='img_kp_grid',
             output='screen',
-            parameters=[{
-            "response_threshold": 0.0,
-            "use_clahe": False,
-        }],
+            parameters=[shared_params],
+        ),
 
         # OpenCV image recognition node
-        ),
         Node(
             package='opencv_nodes',
             executable='img_recog',
             name='img_recog',
-            output='screen'
+            output='screen',
+            parameters=[shared_params],
         ),
 
         # Emergency stop node based on distance sensor
@@ -137,7 +138,8 @@ def generate_launch_description():
            package='proximity_stop',
            executable='proximity_stop_node',
            name='proximity_stop',
-           output='screen'
+           output='screen',
+           parameters=[shared_params],
         ),
 
         # Python SNN node

@@ -72,7 +72,7 @@ class DopamineComputer:
         ):
             dopamine = 3   # correct action: reward
         elif not seen and action_idx in (0, 2):
-            dopamine = 1   # searching: weak reward
+            dopamine = 0   # searching: weak reward
         else:
             dopamine = -3  # everything else: punish
 

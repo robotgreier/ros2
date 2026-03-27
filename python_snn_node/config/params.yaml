@@ -37,7 +37,7 @@ python_snn_node:
     min_weight: 8
     max_weight: 127
     feedback: True
-    learning_mode: 'rstdp' # 'None', 'stdp', 'rstdp'
+    learning_mode: 'stdp' # 'None', 'stdp', 'rstdp'
 
 
     seed: 42 # for reproducibility, or null for random.

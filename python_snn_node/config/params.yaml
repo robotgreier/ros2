@@ -28,7 +28,7 @@ python_snn_node:
 
     ##### Synapse parameters #####
     lr_shift: 3 
-    initial_weight: "None"
+    initial_weight: -1  # -1 for random init, or specify a value between min_weight and max_weight
     t_pre: 3
     t_post: 2
     tau_e_shift: 3

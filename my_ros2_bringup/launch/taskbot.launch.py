@@ -118,6 +118,7 @@ def generate_launch_description():
             # "proximity_topic": "/ultrasonic/front/scan",
             "output_topic": "/snn/input",
             "proximity_bin_edges": [0.02, 0.04, 0.08, 0.16, 0.32, 0.64],
+            "aruco_n_bins": 3,
         }],
 
         # OpenCD keypoint grid node

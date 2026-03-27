@@ -70,7 +70,7 @@ class DopamineComputer:
             (pos  < 0 and action_idx == 0) or
             (pos  > 0 and action_idx == 2)
         ):
-            dopamine = 3   # correct action: reward
+            dopamine = 2   # correct action: reward
         elif not seen and action_idx in (0, 2):
             dopamine = 1   # searching: weak reward
         else:

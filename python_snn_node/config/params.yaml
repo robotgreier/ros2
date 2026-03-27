@@ -22,7 +22,7 @@ python_snn_node:
     turn_speed: 0.3 # rad/s
 
     ##### Neuron parameters #####
-    decay: 64
+    decay: 128
     threshold: 1024
     reset: 0
 

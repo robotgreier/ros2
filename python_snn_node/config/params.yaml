@@ -28,7 +28,7 @@ python_snn_node:
 
     ##### Synapse parameters #####
     lr_shift: 3 
-    initial_weight: 64
+    initial_weight: "None"
     t_pre: 3
     t_post: 2
     tau_e_shift: 3

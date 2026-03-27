@@ -29,7 +29,7 @@ class EncodingNode(Node):
 
         self.declare_parameter("proximity_topic", "/ultrasonic/front/scan")
         self.declare_parameter("proximity_n_dist_bits", 4)
-        self.declare_parameter("proximity_dist_max_m", 1.5)
+        self.declare_parameter("proximity_dist_max_m", 0.5)
 
         self.declare_parameter("keypoints_topic", "/features/keypoints_grid")
         self.declare_parameter("keypoints_n_threshold_levels", 5)

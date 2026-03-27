@@ -152,8 +152,8 @@ class SNNNode(Node):
 
         # Synapse params
         self.lr_shift = int(self.get_parameter('lr_shift').value)
-        val = self.get_parameter('initial_weight').value
-        self.initial_weight = int(val) if isinstance(val, (int, float)) else (int(val) if str(val).lstrip('-').isdigit() else 64)        self.t_pre = int(self.get_parameter('t_pre').value)
+        self.initial_weight = str(self.get_parameter('initial_weight').value)
+        self.t_pre = int(self.get_parameter('t_pre').value)
         self.t_post = int(self.get_parameter('t_post').value)
         self.tau_e_shift = int(self.get_parameter('tau_e_shift').value)
         self.dw_pos = int(self.get_parameter('dw_pos').value)

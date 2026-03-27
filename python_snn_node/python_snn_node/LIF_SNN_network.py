@@ -179,7 +179,7 @@ class SNNLayer:
         self.w_max       = synapse_params.get('w_max',       255)
 
         w_init = synapse_params.get('w_init', "None")
-        if w_init is "None" or w_init is None:
+        if w_init == "None" or w_init is None:
             self.weights = np.random.randint(64, 192, size=(n_outputs, self.n_inputs), dtype=np.int32)
         else:
             self.weights = np.full((n_outputs, self.n_inputs), w_init, dtype=np.int32)

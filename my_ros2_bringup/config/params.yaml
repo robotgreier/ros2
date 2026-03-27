@@ -53,22 +53,22 @@ python_snn_node:
     forward_speed: 0.125     # m/s
     turn_speed: 0.3          # rad/s
 
-    # Neuron parameters
-    decay: 128
-    threshold: 1024
-    reset: 0
+    # Neuron parameters 
+    decay: 128              # membrane potential decay per timestep (0-255, higher is faster decay)
+    threshold: 1024         # firing threshold higher means higher synaptic input needed to fire
+    reset: 0 
 
     # Synapse / learning parameters
-    lr_shift: 3
-    initial_weight: -1       # -1 = random init
-    t_pre: 3
-    t_post: 2
-    tau_e_shift: 3
-    dw_pos: 64
-    dw_neg: 32
-    min_weight: 8
-    max_weight: 255
-    feedback: true
+    lr_shift: 3             # learning rate = 1 / (2^lr_shift)
+    initial_weight: -1      # -1 = random init, otherwise set to this initial int value
+    t_pre: 3                # time steps for pre-synaptic trace
+    t_post: 2               # time steps for post-synaptic trace
+    tau_e_shift: 3          # 
+    dw_pos: 64              # weight change for causal spike pair (pre before post)
+    dw_neg: 32              # weight change for acausal spike pair (post before pre)
+    min_weight: 8           # minimum synaptic weight (absolute value)
+    max_weight: 255         # maximum synaptic weight (absolute value)
+    feedback: true  
     learning_mode: "rstdp"   # none | stdp | rstdp
 
     seed: 42

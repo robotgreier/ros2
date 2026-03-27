@@ -6,10 +6,11 @@
 # The _globals section is ignored at runtime (no node has that name).
 
 _globals:
-  aruco_n_bins:     &aruco_n_bins     3    # encoding_node/aruco_n_bins         → python_snn_node/object_rec_size
-  proximity_n_bits: &proximity_n_bits 4    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
-  kp_rows:          &kp_rows          3    # img_kp_grid/rows → python_snn_node/kp_rows
-  kp_cols:          &kp_cols          8    # img_kp_grid/cols → python_snn_node/kp_cols
+  ros__parameters:
+    aruco_n_bins:     &aruco_n_bins     3    # encoding_node/aruco_n_bins         → python_snn_node/object_rec_size
+    proximity_n_bits: &proximity_n_bits 4    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
+    kp_rows:          &kp_rows          3    # img_kp_grid/rows → python_snn_node/kp_rows
+    kp_cols:          &kp_cols          8    # img_kp_grid/cols → python_snn_node/kp_cols
 
 # ── Encoding node ──────────────────────────────────────────────────────────────
 encoding_node:

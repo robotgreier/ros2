@@ -7,7 +7,7 @@ class SystemPowerNode(Node):
     def __init__(self):
         super().__init__('system_power_node')
 
-        self.ina = INA219(address=0x44)
+        self.ina = INA219(address=0x45)
         self.pub = self.create_publisher(Vector3, 'system/power', 10)
         self.timer = self.create_timer(0.5, self.read_power)
 

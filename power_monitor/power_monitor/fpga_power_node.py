@@ -7,7 +7,7 @@ class FPGAPowerNode(Node):
     def __init__(self):
         super().__init__('fpga_power_node')
 
-        self.ina = INA219(address=0x45)
+        self.ina = INA219(address=0x44)
         self.pub = self.create_publisher(Vector3, 'fpga/power', 10)
         self.timer = self.create_timer(0.5, self.read_power)
 

@@ -8,7 +8,7 @@ python_snn_node:
     # Channel sizes, must match encoder_node's output
     keypoints_grid_size: 24   # <-- adjust to match encoder_node's number of cells in grid
     proximity_size: 4
-    object_rec_size: 5
+    object_rec_size: 3
 
     # Output actions from SNN
     num_actions: 3   # LEFT, FORWARD, RIGHT

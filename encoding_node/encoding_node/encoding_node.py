@@ -32,7 +32,7 @@ class EncodingNode(Node):
         self.declare_parameter("proximity_dist_max_m", 0.5)
 
         self.declare_parameter("keypoints_topic", "/features/keypoints_grid")
-        self.declare_parameter("keypoints_n_threshold_levels", 5)
+        self.declare_parameter("keypoints_n_threshold_levels", 3)
         self.declare_parameter("keypoints_threshold_max", 20)
 
         # ---- Read parameters ----

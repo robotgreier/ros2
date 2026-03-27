@@ -49,7 +49,7 @@ class SNNNode(Node):
         # Channel sizes (matches YAML)
         self.declare_parameter('keypoints_grid_size', 24)
         self.declare_parameter('proximity_size', 4)
-        self.declare_parameter('object_rec_size', 5)
+        self.declare_parameter('object_rec_size', 3)
 
         # Action parameters
         self.declare_parameter('num_actions', 3)

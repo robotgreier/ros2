@@ -5,14 +5,16 @@ import csv
 import time
 from datetime import datetime
 
-BATTERY_WH = 55.5  # Example: 3S 5000 mAh LiPo
+BATTERY_WH = 49.02  # LiPo 11.4V * 4300mAh = 49.02Wh
 
 class PowerLogger(Node):
     def __init__(self):
         super().__init__('power_logger')
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.filename = f"/opt/robot_ws/src/ros2/power_monitor/power_log/power_log_{timestamp}.csv"
+        
+        log_dir = "/opt/robot_ws/log/power_monitor"
+        self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 
         with open(self.filename, 'w', newline='') as f:
             writer = csv.writer(f)

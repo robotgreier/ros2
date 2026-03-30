@@ -21,7 +21,7 @@ def generate_launch_description():
             output="screen",
 
             parameters=[{
-                "camera_info_url": config_file",
+                "camera_info_url": config_file,
             }],
 
             # Remapping so output becomes /camera/image_raw

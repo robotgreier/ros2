@@ -1,10 +1,11 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.substitutions import PathJoinSubstitution
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
+from launch.launch_description_sources import XMLLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 import os
 import yaml
@@ -28,6 +29,18 @@ def generate_launch_description():
         "config",
         "c922.yaml"
     ])
+
+    
+    foxglove_launch = IncludeLaunchDescription(
+        XMLLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('foxglove_bridge'),
+                'launch',
+                'foxglove_bridge_launch.xml'
+            )
+        )
+    )
+
 
     return LaunchDescription([
 
@@ -71,7 +84,7 @@ def generate_launch_description():
             name='distance_sensor_node',
             output='screen'
         ),
-
+    
         # Motor control node
         Node(
             package='motor_control',
@@ -161,5 +174,29 @@ def generate_launch_description():
             name='task_manager',
             output='screen'
         ),
+
+        # Power monitor node
+        Node(
+            package='power_monitor',
+            executable='system_power_node',
+            name='system_power_node',
+            output='screen'
+        ),
+
+        Node(
+            package='power_monitor',
+            executable='fpga_power_node',
+            name='fpga_power_node',
+            output='screen'
+        ),
+
+        Node(
+            package='power_monitor',
+            executable='power_logger',
+            name='power_logger',
+            output='screen'
+        ),
+    
+        foxglove_launch,
 
     ])

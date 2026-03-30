@@ -10,8 +10,8 @@ c922_camera:
     framerate: 30.0
 
     # Exposure
-    auto_exposure: false
-    exposure: 200
+    # auto_exposure: false
+    # exposure: 200
 
     # Focus
     focus_auto: false

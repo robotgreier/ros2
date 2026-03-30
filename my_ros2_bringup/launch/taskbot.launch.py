@@ -93,13 +93,13 @@ def generate_launch_description():
         ),
 
         # Grab node
-        # Node(
-        #    package='grab_node',
-        #    executable='grab_node',
-        #    name='grab_node',
-        #    parameters=[p('grab_node')],
-        #    output='screen'
-        #),
+        Node(
+           package='grab_node',
+           executable='grab_node',
+           name='grab_node',
+           parameters=[p('grab_node')],
+           output='screen'
+        ),
 
         # Command arbiter node
         Node(

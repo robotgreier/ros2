@@ -21,16 +21,6 @@ def generate_launch_description():
     def p(node_name):
         return _all.get(node_name, {}).get('ros__parameters', {})
 
-    foxglove_launch = IncludeLaunchDescription(
-        AnyLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('foxglove_bridge'),
-                'launch',
-                'foxglove_bridge_launch.xml'
-            )
-        )
-    )
-
     return LaunchDescription([
 
         # Camera node with link to .yaml config file for camera parameters
@@ -187,6 +177,4 @@ def generate_launch_description():
             output='screen'
         ),
     
-        foxglove_launch,
-
     ])

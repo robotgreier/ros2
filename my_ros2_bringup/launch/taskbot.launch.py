@@ -22,7 +22,14 @@ def generate_launch_description():
 
     def p(node_name):
         return _all.get(node_name, {}).get('ros__parameters', {})
-       
+    
+    # Path to the camera config file inside the ROS2 package
+    camera_config = PathJoinSubstitution([
+        FindPackageShare("robot_camera_config"),
+        "config",
+        "c922.yaml"
+    ])
+
     return LaunchDescription([
 
         DeclareLaunchArgument('motor_control', default_value='true'),
@@ -31,15 +38,10 @@ def generate_launch_description():
         Node(
             package="v4l2_camera",
             executable="v4l2_camera_node",
-            name="camera",
-            namespace="",
-            output="screen",
-            parameters=[{
-                "camera_info_url": "file:///opt/robot_ws/install/robot_camera_config/share/robot_camera_config/config/c922_camera_info.yaml",
-            }],
-            remappings=[
-                ("image_raw", "image_raw")
-            ]
+            name="c922_camera",
+            namespace="camera",
+            parameters=[{"camera_info_url": "file:///opt/robot_ws/install/robot_camera_config/share/robot_camera_config/config/c922_camera_info.yaml"}],
+            remappings=[("image_raw", "image_raw")]
         ),
 
         # Static TF base_link → camera_link

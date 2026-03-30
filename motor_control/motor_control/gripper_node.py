@@ -88,8 +88,8 @@ class GripperNode(Node):
 
         # ---- Parameters you can tune later ----
         self.servo_channel = 1
-        self.open_angle = 50.0
-        self.closed_angle = 180.0
+        self.open_angle = 0.0
+        self.closed_angle = 45.0
 
         self.step_size_deg = 2.0          # degrees per step
         self.step_period_sec = 0.05       # time between steps

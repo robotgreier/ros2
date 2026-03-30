@@ -5,7 +5,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
-from launch.launch_description_sources import XMLLaunchDescriptionSource
+from launch.launch_description_sources import AnyLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 import os
 import yaml
@@ -24,7 +24,7 @@ def generate_launch_description():
         return _all.get(node_name, {}).get('ros__parameters', {})
    
     foxglove_launch = IncludeLaunchDescription(
-        XMLLaunchDescriptionSource(
+        AnyLaunchDescriptionSource(
             os.path.join(
                 get_package_share_directory('foxglove_bridge'),
                 'launch',

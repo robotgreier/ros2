@@ -1,7 +1,11 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.substitutions import PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
+from launch.launch_description_sources import XMLLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 import os
 import yaml
@@ -17,23 +21,21 @@ def generate_launch_description():
     def p(node_name):
         return _all.get(node_name, {}).get('ros__parameters', {})
 
-    # Path to the camera config file inside the ROS2 package
-    camera_config = PathJoinSubstitution([
-        FindPackageShare("robot_camera_config"),
-        "config",
-        "c922.yaml"
-    ])
-
     return LaunchDescription([
 
         # Camera node with link to .yaml config file for camera parameters
         Node(
             package="v4l2_camera",
             executable="v4l2_camera_node",
-            name="c922_camera",
-            namespace="camera",
-            parameters=[camera_config],
-            remappings=[("image_raw", "image_raw")]
+            name="camera",
+            namespace="",
+            output="screen",
+            parameters=[{
+                "camera_info_url": "file:///opt/robot_ws/install/robot_camera_config/share/robot_camera_config/config/c922_camera_info.yaml",
+            }],
+            remappings=[
+                ("image_raw", "image_raw")
+            ]
         ),
 
         # Static TF base_link → camera_link
@@ -152,5 +154,29 @@ def generate_launch_description():
             name='task_manager',
             output='screen'
         ),
+
+        # Power monitor node
+        Node(
+            package='power_monitor',
+            executable='system_power_node',
+            name='system_power_node',
+            output='screen'
+        ),
+
+        Node(
+            package='power_monitor',
+            executable='fpga_power_node',
+            name='fpga_power_node',
+            output='screen'
+        ),
+
+        Node(
+            package='power_monitor',
+            executable='power_logger',
+            name='power_logger',
+            output='screen'
+        ),
+    
+        foxglove_launch,
 
     ])

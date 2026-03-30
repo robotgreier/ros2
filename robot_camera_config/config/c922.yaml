@@ -1,4 +1,4 @@
-v4l2_camera_node:
+c922_camera::
   ros__parameters:
 
     # Device

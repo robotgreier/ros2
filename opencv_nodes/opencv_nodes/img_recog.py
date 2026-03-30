@@ -313,6 +313,13 @@ class ImgRecog(Node):
         # default: largest area
         return max(candidates, key=lambda c: c["area_px"])
 
+    def cb_info(self, msg: CameraInfo):
+        self.K = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        self.D = np.array(msg.d, dtype=np.float64) if len(msg.d) > 0 else np.zeros((5,), dtype=np.float64)
+
+        self.get_logger().warn(f"cb_info K=\n{self.K}")
+        self.get_logger().warn(f"cb_info D={self.D}")
+
     def cb_img(self, msg: Image):
         # Convert ROS image -> OpenCV
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
@@ -474,24 +481,14 @@ class ImgRecog(Node):
             f"K_is_none={self.K is None}, D_is_none={self.D is None}, marker_length_m={self.marker_length_m}"
         )
 
-        # Pose estimation if camera intrinsics available
-        rvecs = None
-        tvecs = None
-
+       # Pose estimation if camera intrinsics available
         distance_m = -1.0
         tvec = (0.0, 0.0, 0.0)
         rvec = (0.0, 0.0, 0.0)
 
-        self.get_logger().warn("ENTERING POSE BLOCK CHECK")
-
         if self.K is not None and self.D is not None and self.marker_length_m > 0.0:
-            self.get_logger().warn("POSE BLOCK ENTERED")
             try:
-                self.get_logger().warn(f"K={self.K}")
-                self.get_logger().warn(f"D={self.D}")
-
                 c = best["corners"].astype(np.float32).reshape(1, 4, 2)
-                self.get_logger().warn(f"corners_for_pose={c}")
 
                 rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
                     c,
@@ -508,20 +505,16 @@ class ImgRecog(Node):
 
                     rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
                     tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
+
+                    # Forward distance from camera to marker
                     distance_m = float(tv[2])
 
                     self.get_logger().warn(
                         f"POSE USED: distance_m={distance_m}, tvec={tvec}, rvec={rvec}"
                     )
-                else:
-                    self.get_logger().error("Pose arrays returned empty or None.")
 
             except Exception as e:
                 self.get_logger().error(f"Pose estimation failed: {e}")
-        else:
-            self.get_logger().error("Pose prerequisites failed.")
-
-
         out.data = [
             1.0,
             float(best["id"]),

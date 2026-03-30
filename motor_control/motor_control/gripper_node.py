@@ -87,7 +87,7 @@ class GripperNode(Node):
         super().__init__('gripper_node')
 
         # ---- Parameters you can tune later ----
-        self.servo_channel = 1
+        self.servo_channel = 2
         self.open_angle = 0.0
         self.closed_angle = 45.0
 

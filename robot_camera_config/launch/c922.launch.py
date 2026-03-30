@@ -6,20 +6,23 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
-    config = PathJoinSubstitution([
+    config_file = PathJoinSubstitution([
         FindPackageShare("robot_camera_config"),
         "config",
-        "c922.yaml"
+        "c922_camera_info.yaml"
     ])
 
     return LaunchDescription([
         Node(
             package="v4l2_camera",
             executable="v4l2_camera_node",
-            name="c922_camera",
-            namespace="camera",
+            name="camera",
+            namespace="",
+            output="screen",
 
-            parameters=[config],
+            parameters=[{
+                "camera_info_url": config_file",
+            }],
 
             # Remapping so output becomes /camera/image_raw
             remappings=[

@@ -26,4 +26,4 @@ v4l2_camera_node:
 
     # Topic override (optional)
     image_raw_topic: "/camera/image_raw"
-    camera_info_url: "ros2/robot_camera_config/config/calibrationdata.tar.gz"
+    camera_info_url: "/opt/robot_ws/src/ros2/robot_camera_config/config/calibrationdata.tar.gz"

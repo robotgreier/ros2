@@ -178,5 +178,12 @@ def generate_launch_description():
             name='power_logger',
             output='screen'
         ),
+
+        Node(
+            package='dataset_tools',
+            executable='raw_dataset_logger',
+            name='raw_dataset_logger',
+            output='screen'
+        ),
     
     ])

@@ -18,7 +18,10 @@ def generate_launch_description():
             name="c922_camera",
             namespace="camera",
             output="screen",
-            parameters=[{
+            parameters=[
+                camera_config,
+                { 
+                "camera_name": "c922",
                 "camera_info_url": "file:///opt/robot_ws/install/robot_camera_config/share/robot_camera_config/config/c922_camera_info.yaml",
             }],
             remappings=[

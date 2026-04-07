@@ -7,7 +7,7 @@ c922_camera:
     # Image format
     image_size: [640, 480]
     pixel_format: "YUYV"
-    output_encoding: "RGB8"
+    output_encoding: "yuyv422"
     framerate: 30.0
 
     # Exposure

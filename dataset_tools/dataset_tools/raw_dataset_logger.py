@@ -62,7 +62,8 @@ class RawDatasetLogger(Node):
         self.declare_parameter("scan_topic", "/ultrasonic/front/scan")
         self.declare_parameter("aruco_topic", "/vision/aruco/target")
         self.declare_parameter("teleop_topic", "/cmd_vel/teleop")
-        self.declare_parameter("dataset_root", os.path.expanduser("~/.ros/datasets/trening_1"))
+        self.declare_parameter("dataset_root", os.path.expanduser("ros2/dataset_tools/trening_1"))
+        # self.declare_parameter("dataset_root", os.path.expanduser("~/.ros/datasets/trening_1"))
 
         camera_topic = self.get_parameter("camera_topic").value
         scan_topic = self.get_parameter("scan_topic").value

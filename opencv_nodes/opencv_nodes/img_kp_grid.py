@@ -35,7 +35,7 @@ class ImgKpGrid(Node):
         self.declare_parameter('clahe_tile_grid', 8)
 
         # Optional debug image
-        self.declare_parameter('publish_debug_image', True)
+        self.declare_parameter('publish_debug_image', False)
         self.declare_parameter('debug_topic', '/debug/img_kp_grid')
         self.declare_parameter('debug_width', 320)
         self.declare_parameter('debug_height', 240)

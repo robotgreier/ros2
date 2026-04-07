@@ -5,10 +5,10 @@ c922_camera:
     video_device: "/dev/video0"
 
     # Image format
-    image_size: [640, 480]
+    image_size: [320, 240]
     pixel_format: "YUYV"
     output_encoding: "mono8"
-    framerate: 30.0
+    framerate: 15.0
 
     # Exposure
     # auto_exposure: false

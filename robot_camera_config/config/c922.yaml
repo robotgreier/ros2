@@ -1,5 +1,6 @@
-camera.c922_camera:
-  ros__parameters:
+camera:
+  c922_camera:
+   ros__parameters:
 
     # Device
     video_device: "/dev/video0"

@@ -1,6 +1,6 @@
 image_width: 640
 image_height: 480
-camera_name: c922
+camera_name: c922_pro_stream_webcam
 camera_matrix:
   rows: 3
   cols: 3

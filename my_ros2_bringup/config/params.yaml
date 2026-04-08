@@ -47,7 +47,7 @@ python_snn_node:
     num_actions: 3           # LEFT, FORWARD, RIGHT
 
     # Timer and idle behaviour
-    timer_hz: 30.0
+    timer_hz: 15.0
     idle_timeout_sec: 1.0
 
     # Robot speeds

@@ -4,7 +4,7 @@
     image_size: [640, 480]
     pixel_format: "YUYV"
     output_encoding: "yuv422_yuy2"
-    framerate: 30.0
+    framerate: 15.0
 
     focus_auto: false
     focus_absolute: 0

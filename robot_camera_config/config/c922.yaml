@@ -1,4 +1,4 @@
-c922_camera:
+camera/c922_camera:
    ros__parameters:
 
     # Device

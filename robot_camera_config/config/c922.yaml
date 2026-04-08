@@ -1,28 +1,17 @@
-/**:
-   ros__parameters:
+/camera/c922_camera:
+  ros__parameters:
+    video_device: "/dev/video0"
+    image_size: [640, 480]
+    pixel_format: "YUYV"
+    output_encoding: "yuv422_yuy2"
+    framerate: 30.0
 
-      # Device
-      video_device: "/dev/video0"
+    focus_auto: false
+    focus_absolute: 0
 
-      # Image format
-      image_size: [640, 480]
-      pixel_format: "YUYV"
-      output_encoding: "yuv422"
-      framerate: 30.0
+    brightness: 128
+    contrast: 128
+    saturation: 128
+    sharpness: 128
 
-      # Exposure
-      # auto_exposure: false
-      # exposure: 200
-
-      # Focus
-      focus_auto: false
-      focus_absolute: 0
-
-      # Basic controls
-      brightness: 128
-      contrast: 128
-      saturation: 128
-      sharpness: 128
-
-      # Topics
-      image_raw_topic: "/camera/image_raw"
+    image_raw_topic: "image_raw"

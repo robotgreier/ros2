@@ -12,7 +12,7 @@ class ServoTestNode(Node):
 
         self.get_logger().info("Initialiserer Emakefun MotorHAT...")
         self.mh = Emakefun_MotorHAT(addr=0x60)
-        self.servo = self.mh.getServo(1)
+        self.servo = self.mh.getServo(2) # channel for servo
 
         atexit.register(self.cleanup)
 

@@ -212,7 +212,7 @@ def generate_launch_description():
             output='screen'
         ),
     
-        # Rosbag regorder
+        # Rosbag recorder
         OpaqueFunction(function=launch_setup),
 
     ])

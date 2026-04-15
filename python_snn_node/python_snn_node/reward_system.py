@@ -74,7 +74,7 @@ class DopamineComputer:
         elif not seen and action_idx in (0, 2):
             dopamine = 0   # searching
         else:
-            dopamine = -4  # everything else: punish
+            dopamine = -3  # everything else: punish
 
         if not seen and dopamine > 0:
             comps["searching"] = dopamine
@@ -92,10 +92,10 @@ class DopamineComputer:
                     dopamine = -1
                     comps["lost_target"] = dopamine"""
 
-        """# Priority 3: proximity stop penalty
+        # Priority 3: proximity stop penalty
         if proximity_stop:
-            dopamine = -1
-            comps["proximity_stop"] = dopamine"""
+            dopamine = -6
+            comps["proximity_stop"] = dopamine
 
         """# Priority 2: state transitions
         if task_state is not None:

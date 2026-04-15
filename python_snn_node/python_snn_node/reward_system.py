@@ -72,7 +72,7 @@ class DopamineComputer:
         ):
             dopamine = 1   # correct action: reward
         elif not seen and action_idx in (0, 2, 3):
-            dopamine = 1   # searching: turning is neutral
+            dopamine = 1   # searching: turning and backwards
         elif seen and action_idx == 3:
             dopamine = -4  # backward when target visible: punish
         else:

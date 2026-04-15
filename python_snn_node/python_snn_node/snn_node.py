@@ -166,9 +166,9 @@ class SNNNode(Node):
         self.learning_mode = str(self.get_parameter('learning_mode').value)
         self.feedback = bool(self.get_parameter('feedback').value)
         
-        seed = self.get_parameter('seed').value
+        """seed = self.get_parameter('seed').value
         if seed is not None:
-            np.random.seed(int(seed))
+            np.random.seed(int(seed))"""
 
         # --- Derived Logic ---
         self.segment_offsets = self._compute_offsets(self.pack_order, self.channel_sizes)

@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='gudmundur',
     maintainer_email='guara1010@oslomet.no',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Package to handle gripper operations',
+    license='Apache License 2.0',
     extras_require={
         'test': [
             'pytest',
@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
            'grab_node = grab_node.grab_node:main',
+           'prox_node = grab_node.prox_node:main',
         ],
     },
 )

@@ -70,11 +70,11 @@ class DopamineComputer:
             (pos  < 0 and action_idx == 0) or
             (pos  > 0 and action_idx == 2)
         ):
-            dopamine = 3   # correct action: reward
+            dopamine = 1   # correct action: reward
         elif not seen and action_idx in (0, 2):
-            dopamine = 0   # searching: weak reward
+            dopamine = 0   # searching
         else:
-            dopamine = -3  # everything else: punish
+            dopamine = -4  # everything else: punish
 
         if not seen and dopamine > 0:
             comps["searching"] = dopamine

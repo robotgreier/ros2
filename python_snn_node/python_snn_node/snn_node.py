@@ -197,9 +197,9 @@ class SNNNode(Node):
         share_dir = get_package_share_directory('python_snn_node')
         weight_path = os.path.join(share_dir, 'config', 'weights.mem')
 
-        # Load weights if file exists
+        """# Load weights if file exists
         if os.path.exists(weight_path):
-            self.network.load_weights(weight_file=weight_path)
+            self.network.load_weights(weight_file=weight_path)"""
 
         ###########################################
 

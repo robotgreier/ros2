@@ -143,12 +143,12 @@ class CmdArbiter(Node):
     def publish_zero(self) -> None:
         self.pub.publish(Twist())
 
-    def publish_turn_only(self, cmd: Twist) -> None:
+    def publish_turn_or_reverse(self, cmd: Twist) -> None:
         """
-        Safety behavior: allow turning away, but prevent forward motion.
+        Safety behavior: allow turning and backward motion, but prevent forward motion.
         """
         safe = Twist()
-        safe.linear.x = 0.0
+        safe.linear.x = min(0.0, cmd.linear.x)  # pass through backward, block forward
         safe.linear.y = 0.0
         safe.linear.z = 0.0
         safe.angular.x = 0.0
@@ -157,21 +157,21 @@ class CmdArbiter(Node):
         self.pub.publish(safe)
 
     def on_timer(self) -> None:
-        # Safety gate: block linear motion but allow turning away
+        # Safety gate: block forward motion but allow turning and backward
         if self.proximity_stop:
             now = self.get_clock().now()
             chosen = self.pick_source(now)
 
-            if self.last_published_source != "PROX_TURN_ONLY":
-                self.get_logger().warn("Proximity stop active -> blocking linear.x, allowing angular.z")
-                self.last_published_source = "PROX_TURN_ONLY"
+            if self.last_published_source != "PROX_TURN_OR_REVERSE":
+                self.get_logger().warn("Proximity stop active -> blocking forward, allowing angular.z and backward")
+                self.last_published_source = "PROX_TURN_OR_REVERSE"
 
             if chosen is None:
                 # No fresh source -> no safe turn command available
                 self.publish_zero()
                 return
 
-            self.publish_turn_only(chosen.last_msg)
+            self.publish_turn_or_reverse(chosen.last_msg)
             return
 
         now = self.get_clock().now()

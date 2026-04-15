@@ -71,12 +71,10 @@ class DopamineComputer:
             (pos  > 0 and action_idx == 2)
         ):
             dopamine = 1   # correct action: reward
-        elif not seen and action_idx in (0, 2):
-            dopamine = 0   # searching: turning is neutral
+        elif not seen and action_idx in (0, 2, 3):
+            dopamine = 1   # searching: turning is neutral
         elif seen and action_idx == 3:
-            dopamine = -3  # backward when target visible: punish
-        elif action_idx == 3:
-            dopamine = 0   # backward when searching (not seen): neutral
+            dopamine = -4  # backward when target visible: punish
         else:
             dopamine = -3  # everything else: punish
 
@@ -96,10 +94,14 @@ class DopamineComputer:
                     dopamine = -1
                     comps["lost_target"] = dopamine"""
 
-        # Priority 3: proximity stop penalty
+        # Priority 3: proximity stop — reward backward (escape), punish everything else
         if proximity_stop:
-            dopamine = -6
-            comps["proximity_stop"] = dopamine
+            if action_idx == 3:
+                dopamine = 3
+                comps["proximity_stop"] = dopamine
+            else:
+                dopamine = -6
+                comps["proximity_stop"] = dopamine
 
         """# Priority 2: state transitions
         if task_state is not None:

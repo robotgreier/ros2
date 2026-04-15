@@ -72,7 +72,7 @@ python_snn_node:
     feedback: true  
     learning_mode: "rstdp"   # none | stdp | rstdp
 
-    seed: 666
+    seed: 33
 
     # CSV logging
     log_enable: true

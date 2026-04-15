@@ -56,7 +56,7 @@ class DopamineComputer:
         self,
         obj_bits: list[int],         # [L,C,R]
         proximity_spike: int,        # 0/1 (distance bracket change spike)
-        action_idx: int,             # 0=LEFT, 1=FORWARD, 2=RIGHT
+        action_idx: int,             # 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
         task_state: int | None,      # UInt8 or None if not yet received
         grab_event: int,             # UInt8
         proximity_stop: bool,        # Bool
@@ -73,6 +73,8 @@ class DopamineComputer:
             dopamine = 1   # correct action: reward
         elif not seen and action_idx in (0, 2):
             dopamine = 0   # searching
+        elif action_idx == 3:
+            dopamine = 0   # backward: neutral
         else:
             dopamine = -3  # everything else: punish
 

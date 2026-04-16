@@ -31,13 +31,13 @@ def generate_launch_description():
             parameters=[p('cmd_arbiter')],
         ),
 
-        # Proximity adapter node
-        Node(
-            package='distance_sensor',
-            executable='proximity_adapter_node',
-            name='proximity_adapter_node',
-            output='screen'
-        ),
+        # # Proximity adapter node
+        # Node(
+        #     package='distance_sensor',
+        #     executable='proximity_adapter_node',
+        #     name='proximity_adapter_node',
+        #     output='screen'
+        # ),
 
         Node(
             package='encoding_node',
@@ -67,13 +67,13 @@ def generate_launch_description():
             output='screen',
             parameters=[p('proximity_stop')],
         ),
-        # Node(
-        #     package='python_snn_node',
-        #     executable='snn_node',
-        #     name='python_snn_node',
-        #     parameters=[p('python_snn_node')],
-        #     output='screen'
-        # ),
+        Node(
+            package='python_snn_node',
+            executable='snn_node',
+            name='python_snn_node',
+            parameters=[p('python_snn_node')],
+            output='screen'
+        ),
         Node(
             package='task_manager',
             executable='task_manager',

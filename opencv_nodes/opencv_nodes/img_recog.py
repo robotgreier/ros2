@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Image, CameraInfo
-from std_msgs.msg import UInt8, Float32MultiArray
+from std_msgs.msg import UInt8, Float32MultiArray, Empty
 from cv_bridge import CvBridge
 
 import cv2
@@ -103,6 +103,21 @@ class ImgRecog(Node):
 
         self.item_ids = set(int(x) for x in self.get_parameter("item_ids").value)
         self.dropoff_ids = set(int(x) for x in self.get_parameter("dropoff_ids").value)
+
+        self.episode_end_sent = False
+
+        self.episode_complete_pub = self.create_publisher(
+            Empty,
+            '/episode_complete',
+            10
+        )
+
+        self.episode_reset_sub = self.create_subscription(
+            Empty,
+            '/episode_reset',
+            self._on_episode_reset,
+            10
+        )
 
         # Grab node event codes
         self.EVENT_IDLE = 0
@@ -226,10 +241,7 @@ class ImgRecog(Node):
             # self.get_logger().info("EVENT_DROPPED -> grab_sequence_active=False")
 
             if self.delivered_item_ids == self.item_ids:
-                # self.get_logger().info(
-                #     "All items delivered. Starting episode reset timer."
-                # )
-                self._start_episode_reset_timer()
+                self._publish_episode_complete()
 
         elif event == self.EVENT_IDLE:
             self.grab_sequence_active = False
@@ -237,6 +249,24 @@ class ImgRecog(Node):
 
         else:
             self.get_logger().warn(f"Unknown grab event code: {event}")
+
+    def _on_episode_reset(self, msg):
+        self.delivered_item_ids.clear()
+        self.held_item_id = None
+        self.locked_item_id = None
+
+        self._consec_found = 0
+        self._consec_lost = 0
+
+        self.reset_pending = False
+        self.episode_end_sent = False
+
+        if self.reset_timer is not None:
+            self.reset_timer.cancel()
+            self.destroy_timer(self.reset_timer)
+            self.reset_timer = None
+
+        self.get_logger().info("Episode tracking reset after /episode_reset")
 
     def _start_episode_reset_timer(self):
         if self.reset_pending:
@@ -579,6 +609,15 @@ class ImgRecog(Node):
                 self.get_logger().warn(f"State change rejected: {resp.message}")
         except Exception as e:
             self.get_logger().warn(f"State change call failed: {e}")
+
+    def _publish_episode_complete(self):
+        if self.episode_end_sent:
+            self.get_logger().warn("Episode complete already published; ignoring duplicate")
+            return
+
+        self.episode_complete_pub.publish(Empty())
+        self.episode_end_sent = True
+        self.get_logger().info("Published /episode_complete")
 
 def main(args=None):
     rclpy.init(args=args)

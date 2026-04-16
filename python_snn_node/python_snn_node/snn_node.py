@@ -23,6 +23,9 @@ from ament_index_python.packages import get_package_share_directory
 import os
 from datetime import datetime
 
+from taskbot_interfaces.srv import SaveWeights
+from pathlib import Path
+
 ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT", "BACKWARD"]  # index 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
 
 class SNNNode(Node):
@@ -101,6 +104,16 @@ class SNNNode(Node):
         self.grab_event: int = EVENT_IDLE
         self.proximity_stop: bool = False
         self.last_distance_m: float = float('nan')
+
+        # ---- For episode weight logging ----
+        self.weights_log_dir = Path.home() / "ros2_ws" / "src" / "ros2" / "weights_logs"
+        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
+
+        self.save_weights_srv = self.create_service(
+            SaveWeights,
+            'save_weights',
+            self.handle_save_weights
+        )
 
         self.create_subscription(
             UInt8,
@@ -546,6 +559,41 @@ class SNNNode(Node):
             self.get_logger().warn(f"STOP: {reason}")
         self.cmd_vel_pub.publish(Twist())
         self.pub_decision.publish(String(data="IDLE"))
+
+    def save_weights(self, weight_file="weights.mem"):
+        """
+        Save weights to a hex .mem file, one 32-bit value per line.
+        """
+        weights = self.network.get_weights()
+        flat_weights = weights.flatten()
+
+        with open(weight_file, "w") as f:
+            for value in flat_weights:
+                f.write(f"{int(value) & 0xFF:02X}\n")
+
+    def handle_save_weights(self, request, response):
+        try:
+            filename = request.filename.strip()
+
+            if not filename:
+                response.success = False
+                response.message = "Filename was empty"
+                return response
+
+            full_path = self.weights_log_dir / filename
+
+            self.save_weights(str(full_path))
+
+            response.success = True
+            response.message = f"Saved weights to {full_path}"
+            self.get_logger().info(response.message)
+
+        except Exception as e:
+            response.success = False
+            response.message = f"Failed to save weights: {e}"
+            self.get_logger().error(response.message)
+
+        return response
 
     def destroy_node(self):
         if self.logger_csv is not None:

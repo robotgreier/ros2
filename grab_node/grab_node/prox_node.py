@@ -18,6 +18,22 @@ ENABLE_PEN  = 0x04
 PPCOUNT     = 0x8E
 PPULSE_8US  = 0x20
 PDATA       = 0x9C  # Proximity data (2 bytes)
+CONTROL     = 0x8F
+
+
+# PPCOUNT configuration:
+# Upper 2 bits: pulse length
+# Lower 6 bits: pulse count
+PPULSE_LEN_8US = 0x00          # 8 µs pulse
+PPLUSES_32     = 32            # 32 pulses
+PPULSE_8US_32  = PPULSE_LEN_8US | PPLUSES_32
+
+# CONTROL register bits:
+# Bits [7:6]: LED drive current
+# Bits [5:4]: Proximity gain
+CONTROL_LED_50MA_PGAIN_1X = 0x20   # 
+
+
 
 # Sensor Driver 
 
@@ -33,7 +49,10 @@ class APDS9930:
         self.bus.write_byte_data(APDS_ADDR, ENABLE, ENABLE_PON | ENABLE_PEN)
 
         # 8us proximity pulse count (tune if needed, lower value gives faster readings but less sensitivity)
-        self.bus.write_byte_data(APDS_ADDR, PPCOUNT, PPULSE_8US)
+        self.bus.write_byte_data(APDS_ADDR, PPCOUNT, PPULSE_8US_32)
+
+        # Set control register (LED drive current and proximity gain)
+        self.bus.write_byte_data(APDS_ADDR, CONTROL, CONTROL_LED_50MA_PGAIN_1X)
 
     def read_proximity(self) -> int:
         low = self.bus.read_byte_data(APDS_ADDR, PDATA)

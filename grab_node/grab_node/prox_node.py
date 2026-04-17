@@ -11,14 +11,16 @@ from std_msgs.msg import Float32, Bool
 
 # APDS-9930 Registers
 
+cmd = 0x80 # command bit for register access
+
 APDS_ADDR   = 0x39
-ENABLE      = 0x80
-ENABLE_PON  = 0x01
-ENABLE_PEN  = 0x04
-PPCOUNT     = 0x8E
-PPULSE_8US  = 0x20
-PDATA       = 0x9C  # Proximity data (2 bytes)
-CONTROL     = 0x8F
+ENABLE      = cmd | 0x00
+ENABLE_PON  = cmd | 0x01
+ENABLE_PEN  = cmd | 0x04
+PPCOUNT     = cmd | 0x8E
+PPULSE_8US  = cmd | 0x20
+PDATA       = cmd | 0x9C  # Proximity data (2 bytes)
+CONTROL     = cmd | 0x8F
 
 
 # PPCOUNT configuration:
@@ -52,7 +54,11 @@ class APDS9930:
         self.bus.write_byte_data(APDS_ADDR, PPCOUNT, PPULSE_8US_32)
 
         # Set control register (LED drive current and proximity gain)
-        self.bus.write_byte_data(APDS_ADDR, CONTROL, CONTROL_LED_50MA_PGAIN_1X)
+       
+        def read_proximity(self) -> int:
+            data = self.bus.read_i2c_block_data(APDS_ADDR, PDATA, 2)
+            return (data[1] << 8) | data[0]
+
 
     def read_proximity(self) -> int:
         low = self.bus.read_byte_data(APDS_ADDR, PDATA)

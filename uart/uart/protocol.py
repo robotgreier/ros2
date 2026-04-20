@@ -17,7 +17,7 @@ from typing import List, Tuple, Optional
 # Protocol constants
 # -----------------------------
 
-SOF = 0xAA  # 170 decimal
+SOF = 0xFF  # 170 decimal
 
 # Pi -> FPGA commands
 CMD_INIT = 0

@@ -19,7 +19,7 @@ setup(
     maintainer='henrik',
     maintainer_email='henrik.torkildsen@gmail.com',
     description='ROS2 nodes for reading INA219 (DFRobot SEN0291) power sensors and logging/visualization.',
-    license='MIT',
+    license='Apache License 2.0',
     extras_require={
         'test': [
             'pytest',

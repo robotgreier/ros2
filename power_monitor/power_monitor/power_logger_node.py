@@ -175,12 +175,12 @@ class PowerLogger(Node):
         if self.system is None or self.fpga is None:
             return
 
-        if self.current_state is None:
-            return
+        #if self.current_state is None:
+        #    return
 
         # Test if data is within 0.5 seconds
-        if abs(self.system_time - self.fpga_time) > 0.5:
-            return
+        #if abs(self.system_time - self.fpga_time) > 0.5:
+        #    return
 
         # Voltage assumed identical source rail
         V = self.system.x

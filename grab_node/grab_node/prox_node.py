@@ -15,25 +15,21 @@ cmd = 0x80 # command bit for register access
 
 APDS_ADDR   = 0x39
 ENABLE      = cmd | 0x00
-ENABLE_PON  = cmd | 0x01
-ENABLE_PEN  = cmd | 0x04
-PPCOUNT     = cmd | 0x8E
-PPULSE_8US  = cmd | 0x20
-PDATA       = cmd | 0x9C  # Proximity data (2 bytes)
-CONTROL     = cmd | 0x8F
+STATUS      = cmd | 0x13
+PPULSE      = cmd | 0x0E
+CONTROL     = cmd | 0x0F
+PDATAL      = cmd | 0x18
+PDATAH      = cmd | 0x19
 
 
-# PPCOUNT configuration:
-# Upper 2 bits: pulse length
-# Lower 6 bits: pulse count
-PPULSE_LEN_8US = 0x00          # 8 µs pulse
-PPLUSES_32     = 32            # 32 pulses
-PPULSE_8US_32  = PPULSE_LEN_8US | PPLUSES_32
+# ENABLE register bits
+PON = 0x01 # power on
+PEN = 0x04 # proximity enable 
 
 # CONTROL register bits:
 # Bits [7:6]: LED drive current
 # Bits [5:4]: Proximity gain
-CONTROL_LED_50MA_PGAIN_1X = 0x20   # 
+CONTROL_50MA_CH1_1X = 0b01100000  # 0x60
 
 
 
@@ -44,27 +40,30 @@ class APDS9930:
         self.bus = SMBus(bus_id)
 
         # Power on
-        self.bus.write_byte_data(APDS_ADDR, ENABLE, ENABLE_PON)
+        self.bus.write_byte_data(APDS_ADDR, ENABLE, PON)
         time.sleep(0.01)
 
         # Enable proximity
-        self.bus.write_byte_data(APDS_ADDR, ENABLE, ENABLE_PON | ENABLE_PEN)
+        self.bus.write_byte_data(APDS_ADDR, ENABLE, PON | PEN)
 
         # 8us proximity pulse count (tune if needed, lower value gives faster readings but less sensitivity)
-        self.bus.write_byte_data(APDS_ADDR, PPCOUNT, PPULSE_8US_32)
+        self.bus.write_byte_data(APDS_ADDR, PPULSE, 8)
 
-        # Set control register (LED drive current and proximity gain)
+        # Set LED drive, diode select (CH1), gain
+        self.bus.write_byte_data(APDS_ADDR, CONTROL, CONTROL_50MA_CH1_1X)
+        time.sleep(0.01)
+
        
-        def read_proximity(self) -> int:
-            data = self.bus.read_i2c_block_data(APDS_ADDR, PDATA, 2)
-            return (data[1] << 8) | data[0]
+    def read_proximity(self) -> int | None:
+        # Check PVALID bit
+        status = self.bus.read_byte_data(APDS_ADDR, STATUS)
+        if not (status & 0x02):
+            return None
 
-
-    def read_proximity(self) -> int:
-        low = self.bus.read_byte_data(APDS_ADDR, PDATA)
-        high = self.bus.read_byte_data(APDS_ADDR, PDATA + 1)
+        low = self.bus.read_byte_data(APDS_ADDR, PDATAL)
+        high = self.bus.read_byte_data(APDS_ADDR, PDATAH)
         return (high << 8) | low
-
+ 
 
 # Node implementation
 
@@ -74,9 +73,9 @@ class ProxNode(Node):
         super().__init__("prox_node")
 
         # Parameters 
-        self.declare_parameter("sample_rate_hz", 100.0)
+        self.declare_parameter("sample_rate_hz", 30.0)
         self.declare_parameter("median_window", 5)
-        self.declare_parameter("trigger_threshold", 300.0)  # RAW proximity value
+        self.declare_parameter("trigger_threshold", 700.0)  # RAW proximity value
         self.declare_parameter("trigger_hold_ms", 40.0)
 
         self.sample_rate = float(self.get_parameter("sample_rate_hz").value)
@@ -90,6 +89,7 @@ class ProxNode(Node):
         # Filtering to stabilize readings
         self.samples = deque(maxlen=self.window_size)
 
+        # Trigger logic state
         self.trigger_start_time = None
         self.trigger_active = False
 
@@ -107,7 +107,7 @@ class ProxNode(Node):
         self.timer = self.create_timer(period, self.poll_sensor)
 
         self.get_logger().info(
-            f"prox_node started | "
+            f"prox_node started | rate={self.sample_rate} Hz,"
             f"median={self.window_size}, "
             f"threshold={self.threshold}, "
             f"hold={self.hold_time*1000:.0f} ms"
@@ -117,6 +117,8 @@ class ProxNode(Node):
 
     def poll_sensor(self):
         raw = self.sensor.read_proximity()
+        if value is None:
+            return # skip if no valid reading
         self.samples.append(raw)
 
         if len(self.samples) < self.window_size:

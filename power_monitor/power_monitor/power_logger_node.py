@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32
+from std_msgs.msg import UInt8
 from geometry_msgs.msg import Vector3
 import csv
 import os
@@ -79,7 +79,7 @@ class PowerLogger(Node):
         )
 
         self.create_subscription(
-            Int32, "/task/state", self.cb_state, 10
+            UInt8, "/task/state", self.cb_state, 10
         )
 
     # ---------------- Utility function to get ROS time in seconds ----------------
@@ -151,7 +151,7 @@ class PowerLogger(Node):
 
     # ---------------- Callbacks ----------------
 
-    def cb_state(self, msg: Int32):
+    def cb_state(self, msg: UInt8):
         self.current_state = msg.data
 
     def cb_system(self, msg):

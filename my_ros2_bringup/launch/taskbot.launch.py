@@ -106,6 +106,7 @@ def generate_launch_description():
            output='screen'
         ),
 
+        # Grab node / prox_node
         Node(
            package='grab_node',
            executable='prox_node',

@@ -1,9 +1,9 @@
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Int32
 from geometry_msgs.msg import Vector3
 import csv
 import os
-import time
 from datetime import datetime
 import math
 import uuid
@@ -79,16 +79,18 @@ class PowerLogger(Node):
         )
 
         self.create_subscription(
-            Int32, "/state/current", self.cb_state, 10
+            Int32, "/task/state", self.cb_state, 10
         )
 
-        # Utility function to get ROS time in seconds
-        def now_ros_seconds(self) -> float:
-            return self.get_clock().now().nanoseconds * 1e-9
+    # ---------------- Utility function to get ROS time in seconds ----------------
+    def now_ros_seconds(self) -> float:
+        return self.get_clock().now().nanoseconds * 1e-9
 
     # ---------------- CSV logging ----------------
 
     def write_csv(self, source, msg, energy_inc):
+        if self.file.closed:
+            return
         state_name = STATE_NAMES.get(self.current_state, "UNKNOWN")
         
         self.writer.writerow([
@@ -165,7 +167,6 @@ class PowerLogger(Node):
     def cb_fpga(self, msg: Vector3):
         self.fpga = msg
         self.fpga_time = self.now_ros_seconds()
-        self.write_csv("fpga", msg)
         self.try_publish_battery("fpga", msg)
 
     # ---------------- Battery aggregation ----------------
@@ -173,9 +174,12 @@ class PowerLogger(Node):
     def try_publish_battery(self, source, msg):
         if self.system is None or self.fpga is None:
             return
-    
-        # Test if data is close in time
-        if abs(self.system_time - self.fpga_time) > 0.1:
+
+        if self.current_state is None:
+            return
+
+        # Test if data is within 0.5 seconds
+        if abs(self.system_time - self.fpga_time) > 0.5:
             return
 
         # Voltage assumed identical source rail
@@ -208,8 +212,8 @@ class PowerLogger(Node):
         self.get_logger().info(
             f"[battery] V={V:.2f}V  I={I:.2f}A  "
             f"P={P:.1f}W  {percent:.0f}%  "
-            f"E={self.energy_total_Wh: 2f}Wh  "
-            f"state={STATE_NAMES.get(self.current_state, "UNKNOWN")}  "
+            f"E={self.energy_total_Wh:.2f}Wh  "
+            f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
             f"runtime={runtime_min:.0f} min"
         )
 
@@ -224,7 +228,7 @@ class PowerLogger(Node):
     def destroy_node(self):
         self.get_logger().info("Final energy per state [Wh]:")
         for state, energy in self.energy_per_state.items():
-            self.get_logger().info(f" {STATE_NAMES[state]:<18}: {energy:.3f} Wh")
+            self.get_logger().info(f" {STATE_NAMES.get(state, 'UNKNOWN'):<18}: {energy:.3f} Wh")
         self.file.close()
         super().destroy_node()
 

@@ -6,7 +6,7 @@ This node is responsible for:
 - sending UART packets to the FPGA
 - receiving UART packets from the FPGA
 - publishing status/debug information
-- later converting FPGA OUT packets to /cmd_vel/snn
+- publishing output spikes
 """
 
 # uart_node.py

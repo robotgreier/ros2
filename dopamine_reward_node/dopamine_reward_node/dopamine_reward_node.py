@@ -1,0 +1,174 @@
+import json
+from typing import List, Optional
+
+import rclpy
+from rclpy.node import Node
+
+from std_msgs.msg import UInt8, UInt8MultiArray, Bool, Int16, String, Empty
+from geometry_msgs.msg import Vector3
+
+from .energy_tracker import EnergyTracker
+
+from .dopamine_logic import DopamineComputer
+
+
+class DopamineRewardNode(Node):
+    def __init__(self) -> None:
+        super().__init__("dopamine_reward_node")
+
+        # Publishers
+        self.reward_pub = self.create_publisher(Int16, "/reward/dopamine", 10)
+        self.debug_pub = self.create_publisher(String, "/reward/debug", 10)
+
+        # Subscribers
+        self.create_subscription(UInt8, "/task/state", self.task_state_cb, 10)
+        self.create_subscription(Bool, "/proximity_stop", self.proximity_stop_cb, 10)
+        self.create_subscription(UInt8MultiArray, "/snn/aruco_dir", self.aruco_dir_cb, 10)
+        self.create_subscription(UInt8, "/snn/winner", self.winner_cb, 10)
+        self.create_subscription(Vector3, "/battery/status", self.battery_cb, 10)
+        self.create_subscription(Empty, "/episode_complete", self.episode_cb, 10)
+
+        # Latest inputs
+        self.task_state: Optional[int] = None
+        self.proximity_stop: bool = False
+        self.aruco_dir: List[int] = [0, 0, 0]
+
+        # Reward logic
+        self.dopamine = DopamineComputer()
+
+        self.get_logger().info(
+            "dopamine_reward_node started. Waiting for /snn/winner, /snn/aruco_dir, /proximity_stop, and /task/state"
+        )
+
+        #Energy tracker
+        self.energy_tracker = EnergyTracker()
+
+        self.declare_parameter("use_energy_reward", True)
+        self.declare_parameter("energy_reward_positive", 2)
+        self.declare_parameter("energy_reward_negative", -2)
+
+        self.use_energy_reward = self.get_parameter("use_energy_reward").value
+        self.energy_reward_positive = int(self.get_parameter("energy_reward_positive").value)
+        self.energy_reward_negative = int(self.get_parameter("energy_reward_negative").value)
+
+        self.pending_energy_reward = 0
+        self.pending_energy_debug = ""
+
+    def task_state_cb(self, msg: UInt8) -> None:
+        state = int(msg.data)
+        self.task_state = state
+
+        result = self.energy_tracker.on_task_state(state)
+
+        if result is not None:
+            self.get_logger().info(
+                f"[Energy] pickup={result.pickup_idx}, "
+                f"phase={result.phase_idx}, "
+                f"E={result.energy_joules:.2f}J, "
+                f"avg={result.average_joules}"
+            )
+
+            self.pending_energy_reward = 0
+            self.pending_energy_debug = ""
+
+            if self.use_energy_reward and result.average_joules is not None:
+                if result.energy_joules < result.average_joules:
+                    self.pending_energy_reward = self.energy_reward_positive
+                elif result.energy_joules > result.average_joules:
+                    self.pending_energy_reward = self.energy_reward_negative
+
+                self.pending_energy_debug = (
+                    f"pickup={result.pickup_idx}, phase={result.phase_idx}, "
+                    f"E={result.energy_joules:.2f}, avg={result.average_joules:.2f}, "
+                    f"energy_reward={self.pending_energy_reward}"
+                )
+
+    def proximity_stop_cb(self, msg: Bool) -> None:
+        self.proximity_stop = bool(msg.data)
+
+    def aruco_dir_cb(self, msg: UInt8MultiArray) -> None:
+        data = list(msg.data)
+
+        if len(data) == 0:
+            self.get_logger().warn("Received empty /snn/aruco_dir message")
+            return
+
+        self.aruco_dir = data
+
+    def winner_cb(self, msg: UInt8) -> None:
+        action_idx = int(msg.data)
+
+        if action_idx not in (0, 1, 2, 3):
+            self.get_logger().warn(f"Ignoring invalid winner/action: {action_idx}")
+            return
+
+        if len(self.aruco_dir) == 0:
+            self.get_logger().warn("No aruco direction data available yet")
+            return
+
+        reward, comps = self.dopamine.step(
+            obj_bits=self.aruco_dir,
+            action_idx=action_idx,
+            proximity_stop=self.proximity_stop,
+            task_state=self.task_state,
+        )
+
+        energy_reward = self.pending_energy_reward
+        final_reward = reward + energy_reward
+
+        if energy_reward != 0:
+            comps["energy_phase"] = energy_reward
+
+        reward_msg = Int16()
+        reward_msg.data = final_reward
+        self.reward_pub.publish(reward_msg)
+
+        debug_msg = String()
+        debug_msg.data = json.dumps(
+            {
+                "task_state": self.task_state,
+                "aruco_dir": self.aruco_dir,
+                "proximity_stop": self.proximity_stop,
+                "action_idx": action_idx,
+                "base_reward": reward,
+                "energy_reward": energy_reward,
+                "final_reward": final_reward,
+                "components": comps,
+            }
+        )
+        self.debug_pub.publish(debug_msg)
+
+        self.pending_energy_reward = 0
+        self.pending_energy_debug = ""
+
+        self.get_logger().info(
+            f"winner={action_idx}, reward={reward}, comps={comps}"
+        )
+
+    def battery_cb(self, msg: Vector3) -> None:
+        power_w = float(msg.x)
+
+        now_s = self.get_clock().now().nanoseconds / 1e9
+
+        self.energy_tracker.update_power(power_w, now_s)    
+
+    def episode_cb(self, msg: Empty) -> None:
+        self.get_logger().info("Episode complete → resetting energy tracker")
+        self.energy_tracker.reset_episode()
+
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+    node = DopamineRewardNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Shutting down dopamine_reward_node")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

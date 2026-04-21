@@ -70,8 +70,9 @@ class EncodingNode(Node):
         # range_min" — track the last valid reading so we can tell them apart.
         self._last_proximity_d: float = float("inf")
 
-        # ---- Publisher ----
+        # ---- Publishers ----
         self.pub = self.create_publisher(UInt8MultiArray, output_topic, 10)
+        self.aruco_dir_pub = self.create_publisher(UInt8MultiArray, "/snn/aruco_dir", 10)
 
         # ---- Subscribers ---- 
         self.create_subscription(Range, proximity_topic, self.on_proximity_scan, 10)
@@ -180,7 +181,14 @@ class EncodingNode(Node):
             x_norm=x_norm,
         )
 
+        # store in channels
         self.channels["aruco_dir"] = code
+
+        # NEW: publish for reward node
+        msg = UInt8MultiArray()
+        msg.data = code
+        self.aruco_dir_pub.publish(msg)
+
         self.publish_vector()
 
 def main():

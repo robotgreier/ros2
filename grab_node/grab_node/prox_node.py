@@ -117,7 +117,7 @@ class ProxNode(Node):
 
     def poll_sensor(self):
         raw = self.sensor.read_proximity()
-        if value is None:
+        if raw is None:
             return # skip if no valid reading
         self.samples.append(raw)
 

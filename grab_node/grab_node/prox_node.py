@@ -29,7 +29,7 @@ PEN = 0x04 # proximity enable
 # CONTROL register bits:
 # Bits [7:6]: LED drive current
 # Bits [5:4]: Proximity gain
-CONTROL_50MA_CH1_1X = 0b01100000  # 0x60
+CONTROL_100MA_CH1_1X = 0b00100000  # 100 mA, CH1, 1x gain
 
 
 
@@ -47,10 +47,10 @@ class APDS9930:
         self.bus.write_byte_data(APDS_ADDR, ENABLE, PON | PEN)
 
         # 8us proximity pulse count (tune if needed, lower value gives faster readings but less sensitivity)
-        self.bus.write_byte_data(APDS_ADDR, PPULSE, 8)
+        self.bus.write_byte_data(APDS_ADDR, PPULSE, 32)
 
         # Set LED drive, diode select (CH1), gain
-        self.bus.write_byte_data(APDS_ADDR, CONTROL, CONTROL_50MA_CH1_1X)
+        self.bus.write_byte_data(APDS_ADDR, CONTROL, CONTROL_100MA_CH1_1X)
         time.sleep(0.01)
 
        

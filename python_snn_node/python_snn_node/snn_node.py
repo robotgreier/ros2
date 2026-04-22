@@ -4,19 +4,18 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from std_msgs.msg import (UInt8,
-                           Float32,
-                             Bool,
-                               UInt8MultiArray,
-                                 Int32,
-                                   Int32MultiArray,
-                                     String)
+                           Bool,
+                           UInt8MultiArray,
+                           Int16,
+                           Int32,
+                           Int32MultiArray,
+                           String)
 from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import Range
 
 from geometry_msgs.msg import Twist
 
 from .LIF_SNN_network import SNNLayer
-from .reward_system import DopamineComputer, EVENT_IDLE
 from .csv_logger import CsvAsyncLogger
 
 from ament_index_python.packages import get_package_share_directory
@@ -25,6 +24,8 @@ from datetime import datetime
 
 from taskbot_interfaces.srv import SaveWeights
 from pathlib import Path
+
+EVENT_IDLE = 0
 
 ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT", "BACKWARD"]  # index 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
 
@@ -133,12 +134,14 @@ class SNNNode(Node):
             self._on_proximity_stop,
             10
         )
-        # Dopamine publisher for plotting/debugging
-        self.pub_dopamine = self.create_publisher(Float32, '/snn/dopamine', 10)
 
-        self.dopamine_computer = DopamineComputer(
-            lost_grace_ticks=int(self.get_parameter('lost_grace_ticks').value)
+        self.create_subscription(
+            Int16,
+            '/reward/dopamine',
+            self._on_reward_dopamine,
+            10
         )
+                
 
         # --- Read Parameters ---
         self.input_mode = str(self.get_parameter('input_mode').value).lower().strip()
@@ -220,6 +223,7 @@ class SNNNode(Node):
         self.last_input_stamp = self.get_clock().now()
         self.last_vector = np.zeros(self.input_size, dtype=np.int32)
         self.correct_output = -1
+        self.latest_dopamine = 0
 
         qos_sensor = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -301,23 +305,6 @@ class SNNNode(Node):
         d = msg.range
         self.last_distance_m = d if 0.0 < d < float('inf') else float('nan')
 
-    ### For training ###
-    def _extract_object_bits_from_last(self) -> list[int]:
-        """Extract the raw object_rec bits from the packed input vector."""
-        v = self.last_vector
-        obj_size = self.channel_sizes.get('object_rec', 5)
-        if v is None or v.size < obj_size:
-            return [0] * obj_size
-        return [int(x) for x in v[-obj_size:]]
-
-
-    def _extract_proximity_spike_from_last(self) -> int:
-        """Extract the first proximity bit using segment_offsets."""
-        v = self.last_vector
-        prox_start, _ = self.segment_offsets.get('proximity', (0, 0))
-        if v is None or v.size <= prox_start:
-            return 0
-        return int(v[prox_start])
 
     # Helpers 
     def _compute_offsets(self, order, sizes):
@@ -351,6 +338,9 @@ class SNNNode(Node):
     def cb_correct(self, msg: Int32):
         self.correct_output = int(msg.data)
 
+    def _on_reward_dopamine(self, msg: Int16):
+        self.latest_dopamine = int(msg.data)
+
     # Timer
     def on_timer(self):
         age_sec = (self.get_clock().now() - self.last_input_stamp).nanoseconds * 1e-9
@@ -377,36 +367,19 @@ class SNNNode(Node):
         spk_msg.data = [int(x) for x in output_spikes]
         self.pub_spikes.publish(spk_msg)
 
-        ## Reward computation ##
-        obj_bits = self._extract_object_bits_from_last()
-        prox_spike = self._extract_proximity_spike_from_last()
-
-        dopamine, dopamine_comps = self.dopamine_computer.step(
-            obj_bits=obj_bits,
-            proximity_spike=prox_spike,
-            action_idx=int(winner_idx),
-            task_state=self.task_state,
-            grab_event=self.grab_event,
-            proximity_stop=self.proximity_stop,
-        )
-
-        ## Dopamine component breakdown for logging ##
-        def _comp(key):
-            c = dopamine_comps.get(key)
-            return float(c) if c is not None else 0.0
-
-        dop_align      = _comp("align_action")
-        dop_action     = _comp("searching")
-        dop_lost       = _comp("lost_target")
-        dop_state      = _comp("state_progress") + _comp("state_regress")
-        dop_grabdrop   = _comp("grabbed") + _comp("dropped")
-        dop_prox_stop  = _comp("proximity_stop")
-        dop_prox_approach = 0.0  # prox_spike_gated is commented out
-
+        # Reward now comes from dopamine_reward_node via /reward/dopamine
+        dopamine = int(self.latest_dopamine)
         dopamine_float = float(dopamine)
-        self.pub_dopamine.publish(Float32(data=dopamine_float))
 
-        ## Apply dopamine based reward ##
+        # Component-wise internal reward breakdown is no longer computed here
+        dop_align = 0.0
+        dop_action = 0.0
+        dop_lost = 0.0
+        dop_state = 0.0
+        dop_grabdrop = 0.0
+        dop_prox_stop = 0.0
+        dop_prox_approach = 0.0
+
         if self.learning_mode == 'rstdp':
             self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
 

@@ -4,7 +4,7 @@ from typing import List, Optional
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import UInt8, UInt8MultiArray, Bool, Int16, String, Empty
+from std_msgs.msg import UInt8, UInt8MultiArray, Bool, Int16, Int32, String, Empty
 from geometry_msgs.msg import Vector3
 
 from .energy_tracker import EnergyTracker
@@ -24,7 +24,7 @@ class DopamineRewardNode(Node):
         self.create_subscription(UInt8, "/task/state", self.task_state_cb, 10)
         self.create_subscription(Bool, "/proximity_stop", self.proximity_stop_cb, 10)
         self.create_subscription(UInt8MultiArray, "/snn/aruco_dir", self.aruco_dir_cb, 10)
-        self.create_subscription(UInt8, "/snn/winner", self.winner_cb, 10)
+        self.create_subscription(Int32, "/snn/winner", self.winner_cb, 10)
         self.create_subscription(Vector3, "/battery/status", self.battery_cb, 10)
         self.create_subscription(Empty, "/episode_complete", self.episode_cb, 10)
 
@@ -95,7 +95,7 @@ class DopamineRewardNode(Node):
 
         self.aruco_dir = data
 
-    def winner_cb(self, msg: UInt8) -> None:
+    def winner_cb(self, msg: Int32) -> None:
         action_idx = int(msg.data)
 
         if action_idx not in (0, 1, 2, 3):

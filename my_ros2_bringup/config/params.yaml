@@ -60,7 +60,7 @@ python_snn_node:
     reset: 0 
 
     # Synapse / learning parameters
-    lr_shift: 3             # learning rate = 1 / (2^lr_shift)
+    lr_shift: 4             # learning rate = 1 / (2^lr_shift)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
     t_pre: 2                # time steps for pre-synaptic trace
     t_post: 2               # time steps for post-synaptic trace

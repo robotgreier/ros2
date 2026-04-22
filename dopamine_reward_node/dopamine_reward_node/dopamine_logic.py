@@ -67,7 +67,7 @@ class DopamineComputer:
         ):
             dopamine = 3
         elif not seen and action_idx in (0, 1, 2):
-            dopamine = 1
+            dopamine = 0
         elif seen and action_idx == 3:
             dopamine = -2
         else:

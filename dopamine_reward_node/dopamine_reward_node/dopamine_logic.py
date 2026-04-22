@@ -65,11 +65,11 @@ class DopamineComputer:
             (pos < 0 and action_idx == 0) or
             (pos > 0 and action_idx == 2)
         ):
-            dopamine = 2
-        elif not seen and action_idx in (0, 2):
+            dopamine = 3
+        elif not seen and action_idx in (0, 1, 2):
             dopamine = 1
         elif seen and action_idx == 3:
-            dopamine = -2
+            dopamine = -1
         else:
             dopamine = 0
 

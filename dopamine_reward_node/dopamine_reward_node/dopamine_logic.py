@@ -65,13 +65,13 @@ class DopamineComputer:
             (pos < 0 and action_idx == 0) or
             (pos > 0 and action_idx == 2)
         ):
-            dopamine = 1
+            dopamine = 2
         elif not seen and action_idx in (0, 2, 3):
-            dopamine = 1
+            dopamine = 0
         elif seen and action_idx == 3:
             dopamine = -4
         else:
-            dopamine = -3
+            dopamine = 0
 
         if not seen and dopamine > 0:
             comps["searching"] = dopamine

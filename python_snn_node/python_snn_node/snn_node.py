@@ -107,7 +107,11 @@ class SNNNode(Node):
         self.last_distance_m: float = float('nan')
 
         # ---- For episode weight logging ----
-        self.weights_log_dir = Path.home() / "ros2_ws" / "src" / "ros2" / "weights_logs"
+        self.declare_parameter(
+            'weights_log_dir',
+            str(Path.home() / "ros2_ws" / "src" / "ros2" / "weights_logs")
+        )
+        self.weights_log_dir = Path(self.get_parameter('weights_log_dir').value).expanduser()
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
         self.save_weights_srv = self.create_service(

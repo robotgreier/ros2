@@ -78,6 +78,9 @@ python_snn_node:
     log_enable: true
     log_mode: "A"            # A = log on new input, B = every tick, C = state changes
 
+    # Per-episode weight snapshot directory
+    weights_log_dir: "/opt/robot_ws/src/ros2/weights_logs"
+
 # ── Motor control node ─────────────────────────────────────────────────────────
 motor_control_node:
   ros__parameters:

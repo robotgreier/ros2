@@ -66,10 +66,10 @@ class DopamineComputer:
             (pos > 0 and action_idx == 2)
         ):
             dopamine = 2
-        elif not seen and action_idx in (0, 2, 3):
-            dopamine = 0
+        elif not seen and action_idx in (0, 2):
+            dopamine = 1
         elif seen and action_idx == 3:
-            dopamine = -4
+            dopamine = -2
         else:
             dopamine = 0
 
@@ -84,7 +84,7 @@ class DopamineComputer:
                 dopamine = 3
                 comps["proximity_stop"] = dopamine
             else:
-                dopamine = -6
+                dopamine = -4
                 comps["proximity_stop"] = dopamine
 
         return dopamine, comps

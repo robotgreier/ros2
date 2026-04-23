@@ -6,10 +6,7 @@ class DopamineComputer:
     Computes a signed dopamine reward from:
     - ArUco direction bits
     - selected action
-    - proximity stop flag
-
-    Version 1 includes only the currently active reward logic.
-    Energy-aware logic will be added later as a separate layer.
+    - proximity stop flag.
     """
 
     def __init__(self) -> None:
@@ -69,9 +66,9 @@ class DopamineComputer:
         elif not seen and action_idx in (0, 1, 2):
             dopamine = 0
         elif seen and action_idx == 3:
-            dopamine = -2
-        else:
             dopamine = -1
+        else:
+            dopamine = 0
 
         if not seen and dopamine > 0:
             comps["searching"] = dopamine
@@ -84,7 +81,7 @@ class DopamineComputer:
                 dopamine = 3
                 comps["proximity_stop"] = dopamine
             else:
-                dopamine = -4
+                dopamine = -2
                 comps["proximity_stop"] = dopamine
 
         return dopamine, comps

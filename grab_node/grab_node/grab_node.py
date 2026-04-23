@@ -75,7 +75,7 @@ class GrabNode(Node):
 
         self.declare_parameter("creep_speed", 0.125)
         self.declare_parameter("grip_timeout_sec", 2.0)
-        self.declare_parameter("failed_grab_backup_distance", 0.125)
+        self.declare_parameter("failed_grab_backup_distance", 0.25)
 
         # For simulation
         self.declare_parameter("use_sim_gripper", False)

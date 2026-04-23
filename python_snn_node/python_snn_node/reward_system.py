@@ -56,7 +56,7 @@ class DopamineComputer:
         self,
         obj_bits: list[int],         # [L,C,R]
         proximity_spike: int,        # 0/1 (distance bracket change spike)
-        action_idx: int,             # 0=LEFT, 1=FORWARD, 2=RIGHT
+        action_idx: int,             # 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
         task_state: int | None,      # UInt8 or None if not yet received
         grab_event: int,             # UInt8
         proximity_stop: bool,        # Bool
@@ -70,9 +70,11 @@ class DopamineComputer:
             (pos  < 0 and action_idx == 0) or
             (pos  > 0 and action_idx == 2)
         ):
-            dopamine = 3   # correct action: reward
-        elif not seen and action_idx in (0, 2):
-            dopamine = 0   # searching: weak reward
+            dopamine = 1   # correct action: reward
+        elif not seen and action_idx in (0, 2, 3):
+            dopamine = 1   # searching: turning and backwards
+        elif seen and action_idx == 3:
+            dopamine = -4  # backward when target visible: punish
         else:
             dopamine = -3  # everything else: punish
 
@@ -92,10 +94,14 @@ class DopamineComputer:
                     dopamine = -1
                     comps["lost_target"] = dopamine"""
 
-        """# Priority 3: proximity stop penalty
+        # Priority 3: proximity stop — reward backward (escape), punish everything else
         if proximity_stop:
-            dopamine = -1
-            comps["proximity_stop"] = dopamine"""
+            if action_idx == 3:
+                dopamine = 3
+                comps["proximity_stop"] = dopamine
+            else:
+                dopamine = -6
+                comps["proximity_stop"] = dopamine
 
         """# Priority 2: state transitions
         if task_state is not None:

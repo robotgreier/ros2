@@ -40,4 +40,4 @@ python_snn_node:
     learning_mode: 'rstdp' # 'None', 'stdp', 'rstdp'
 
 
-    seed: 42 # for reproducibility, or null for random.
+    seed: 11 # for reproducibility, or null for random.

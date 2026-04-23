@@ -1,28 +1,17 @@
-v4l2_camera_node:
+/camera/c922_camera:
   ros__parameters:
-
-    # Device
     video_device: "/dev/video0"
-
-    # Image format
     image_size: [640, 480]
-    pixel_format: "MJPG"
-    # output_encoding: "rgb8"
-    framerate: 30.0
+    pixel_format: "YUYV"
+    output_encoding: "yuv422_yuy2"
+    framerate: 15.0
 
-    # Exposure
-    auto_exposure: false
-    exposure: 200        # brukes bare hvis auto_exposure = false
-
-    # Focus
     focus_auto: false
-    focus_absolute: 0    # still inn ved behov
+    focus_absolute: 0
 
-    # Basic V4L2 controls
     brightness: 128
     contrast: 128
     saturation: 128
     sharpness: 128
 
-    # Topic override (optional)
-    image_raw_topic: "/camera/image_raw"
+    image_raw_topic: "image_raw"

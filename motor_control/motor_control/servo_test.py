@@ -12,7 +12,7 @@ class ServoTestNode(Node):
 
         self.get_logger().info("Initialiserer Emakefun MotorHAT...")
         self.mh = Emakefun_MotorHAT(addr=0x60)
-        self.servo = self.mh.getServo(1)
+        self.servo = self.mh.getServo(2)
 
         atexit.register(self.cleanup)
 
@@ -24,10 +24,10 @@ class ServoTestNode(Node):
     def timer_callback(self):
         """Kjøres hver 1. sekund"""
         if self.position == 0:
-            angle = 50
+            angle = 45
             self.position = 1
         else:
-            angle = 180
+            angle = 100
             self.position = 0
 
         self.get_logger().info(f"Setter servo til {angle} grader...")

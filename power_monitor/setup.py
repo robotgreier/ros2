@@ -11,7 +11,6 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/msg', ['msg/PowerReading.msg']),
         ('share/' + package_name + '/launch', ['launch/power_nodes.launch.py']),
     ],
 
@@ -20,7 +19,7 @@ setup(
     maintainer='henrik',
     maintainer_email='henrik.torkildsen@gmail.com',
     description='ROS2 nodes for reading INA219 (DFRobot SEN0291) power sensors and logging/visualization.',
-    license='MIT',
+    license='Apache License 2.0',
     extras_require={
         'test': [
             'pytest',

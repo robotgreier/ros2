@@ -18,8 +18,8 @@ class DistanceSensorNode(Node):
         chip = gpiod.Chip("gpiochip0")
 
         # Set GPIO pins på Raspberry Pi 
-        self.TRIG = 23
-        self.ECHO = 24
+        self.TRIG = 24
+        self.ECHO = 23
 
         self.trig_line = chip.get_line(self.TRIG)
         self.echo_line = chip.get_line(self.ECHO)

@@ -32,10 +32,14 @@ def generate_launch_description():
             executable="v4l2_camera_node",
             name="c922_camera",
             namespace="camera",
-            parameters=[camera_config],
+            parameters=[
+                camera_config,
+                {
+                "camera_name": "c922",
+                "camera_info_url": "file:///opt/robot_ws/install/robot_camera_config/share/robot_camera_config/config/c922_camera_info.yaml",
+                }],
             remappings=[("image_raw", "image_raw")]
         ),
-
         # Static TF base_link → camera_link
         Node(
             package='tf2_ros',

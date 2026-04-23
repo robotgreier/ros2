@@ -6,7 +6,7 @@ from enum import Enum
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
-from std_msgs.msg import UInt8
+from std_msgs.msg import UInt8, Bool
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
@@ -45,6 +45,7 @@ class GrabState(Enum):
     ACTUATING = 3
     EXECUTING_BACKUP = 4
     WAITING_SERVICE = 5
+    CREEPING_TO_ITEM = 6
 
 
 class GrabNode(Node):
@@ -57,12 +58,12 @@ class GrabNode(Node):
         self.declare_parameter("item_distance_threshold", 0.3)
         self.declare_parameter("dropoff_distance_threshold", 0.3)
 
-        self.declare_parameter("approach_speed", 0.1)
+        self.declare_parameter("approach_speed", 0.3)
         self.declare_parameter("approach_distance_item", 0.4)
         self.declare_parameter("approach_distance_dropoff", 0.3)
 
-        self.declare_parameter("backup_speed", 0.1)
-        self.declare_parameter("backup_distance", 0.3)
+        self.declare_parameter("backup_speed", 0.2)
+        self.declare_parameter("backup_distance", 0.6)
 
         self.declare_parameter("motion_publish_rate_hz", 20.0)
 
@@ -71,6 +72,10 @@ class GrabNode(Node):
 
         self.declare_parameter("min_forward_distance", 0.2)
         self.declare_parameter("max_forward_distance", 0.45)
+
+        self.declare_parameter("creep_speed", 0.15)
+        self.declare_parameter("grip_timeout_sec", 2.0)
+        self.declare_parameter("failed_grab_backup_distance", 0.15)
 
         # For simulation
         self.declare_parameter("use_sim_gripper", False)
@@ -96,6 +101,10 @@ class GrabNode(Node):
         self.min_forward_distance = self.get_parameter("min_forward_distance").value
         self.max_forward_distance = self.get_parameter("max_forward_distance").value
 
+        self.creep_speed = self.get_parameter("creep_speed").value
+        self.grip_timeout_sec = self.get_parameter("grip_timeout_sec").value
+        self.failed_grab_backup_distance = self.get_parameter("failed_grab_backup_distance").value
+
         self.gripper_state = None
         self.waiting_for_gripper = False
         self.expected_gripper_state = None
@@ -120,6 +129,11 @@ class GrabNode(Node):
                                                         '/gripper/state',
                                                         self.gripper_state_callback,
                                                         10)
+        
+        self.create_subscription(Bool,
+                                "/gripper/proximity_trigger",
+                                self.cb_proximity_trigger,
+                                10)
 
         # -------- Service Client --------
         self.cli = self.create_client(SetTaskState, "/task/set_state")
@@ -148,6 +162,15 @@ class GrabNode(Node):
 
         # To avoid state clash
         self.sequence_active = False
+        
+        # Latest proximity trigger from the gripper sensor
+        self.proximity_triggered = False
+
+        # Deadline used while creeping toward the item
+        self.grip_timeout_deadline = None
+
+        # Used to distinguish normal dropoff backup from failed-grab backup
+        self.backup_after_failed_grab = False
 
         # For simulation
         if self.use_sim_gripper:
@@ -168,11 +191,13 @@ class GrabNode(Node):
 
         if self.current_task_state in [APPROACH_ITEM, APPROACH_DROPOFF]:
             if self.state == GrabState.IDLE:
+                self.reset_creep_state()
                 self.state = GrabState.WAITING_ALIGNMENT
                 self.get_logger().info("Entering WAITING_ALIGNMENT")
             return
 
         if self.state == GrabState.WAITING_ALIGNMENT:
+            self.reset_creep_state()
             self.state = GrabState.IDLE
 
     def cb_aruco(self, msg: Float32MultiArray):
@@ -215,6 +240,7 @@ class GrabNode(Node):
             self.waiting_for_gripper = False
 
             if self.current_task_state == APPROACH_ITEM:
+                self.reset_creep_state()
                 self.publish_event(EVENT_GRABBED)
 
                 next_state = SEARCH_DROPOFF
@@ -227,6 +253,10 @@ class GrabNode(Node):
                 self.publish_event(EVENT_DROPPED)
                 self.start_backup_motion()
                 self.state = GrabState.EXECUTING_BACKUP
+
+    def cb_proximity_trigger(self, msg: Bool):
+        # Keep the latest trigger state from the gripper sensor.
+        self.proximity_triggered = bool(msg.data)
     
 
     # =====================================================
@@ -261,8 +291,32 @@ class GrabNode(Node):
             self.start_forward_motion()
 
     def start_forward_motion(self):
+        # Tell the rest of the system that grab_node has taken control.
         self.publish_event(EVENT_BUSY)
 
+        if self.current_task_state == APPROACH_ITEM:
+            # For item pickup, switch to a slow creep and wait for the
+            # proximity sensor to tell us when the object is inside the gripper zone.
+            self.sequence_active = True
+            self.proximity_triggered = False
+            self.grip_timeout_deadline = (
+                self.get_clock().now() + Duration(seconds=float(self.grip_timeout_sec))
+            )
+
+            self.active_cmd = Twist()
+            self.active_cmd.linear.x = float(self.creep_speed)
+            self.active_cmd.angular.z = 0.0
+
+            self.state = GrabState.CREEPING_TO_ITEM
+            self.cmd_pub.publish(self.active_cmd)
+
+            self.get_logger().info(
+                f"Starting creep toward item: speed={self.creep_speed:.3f}, "
+                f"timeout={self.grip_timeout_sec:.2f}s"
+            )
+            return
+
+        # Dropoff still uses the old distance-based timed forward motion.
         if self.distance is None or self.distance <= 0.0:
             self.get_logger().warn(
                 f"Invalid distance in start_forward_motion: {self.distance}"
@@ -270,17 +324,11 @@ class GrabNode(Node):
             self.state = GrabState.WAITING_ALIGNMENT
             return
 
-        if self.current_task_state == APPROACH_ITEM:
-            desired_final_distance = float(self.item_final_distance)
-        else:
-            desired_final_distance = float(self.dropoff_final_distance)
+        desired_final_distance = float(self.dropoff_final_distance)
 
-        # To avoid state clash
         self.sequence_active = True
 
         remaining_distance = float(self.distance) - desired_final_distance
-
-        # Clamp remaining distance
         remaining_distance = max(float(self.min_forward_distance), remaining_distance)
         remaining_distance = min(float(self.max_forward_distance), remaining_distance)
 
@@ -290,18 +338,6 @@ class GrabNode(Node):
             f"desired_final_distance={desired_final_distance:.3f}, "
             f"remaining_distance={remaining_distance:.3f}"
         )
-
-        # if remaining_distance <= 0.0:
-        #     self.get_logger().info("Already close enough. Skipping forward motion.")
-        #     self.state = GrabState.ACTUATING
-        #     self.perform_actuation()
-        #     return
-
-        # ###Temp
-        # if remaining_distance <= 0.0:
-        #     remaining_distance = 0.3
-        #     self.get_logger().warn("TEST MODE: forcing 0.3 m forward motion")
-        # ###Temp
 
         self.remaining_distance = remaining_distance
         duration = remaining_distance / float(self.approach_speed)
@@ -347,6 +383,7 @@ class GrabNode(Node):
 
             else:
                 self.get_logger().info("Publishing physical gripper GRIP command.")
+                self.proximity_triggered = False
                 self.waiting_for_gripper = True
                 self.expected_gripper_state = GRIPPER_STATE_CLOSED
                 self.gripper_pub.publish(UInt8(data=GRIPPER_GRIP))
@@ -415,6 +452,20 @@ class GrabNode(Node):
         self.stop_motion()
         self.motion_end_time = None
 
+        # Recovery path after a failed grab attempt.
+        if self.backup_after_failed_grab:
+            self.get_logger().warn("Failed grab recovery complete. Returning to SEARCH_ITEM.")
+
+            self.reset_creep_state()
+            self.sequence_active = False
+            self.state = GrabState.IDLE
+            self.publish_event(EVENT_IDLE)
+
+            next_state = SEARCH_ITEM
+            self.call_set_state(next_state)
+            return
+
+        # Normal dropoff backup path.
         self.sequence_active = False
         self.state = GrabState.IDLE
         self.publish_event(EVENT_IDLE)
@@ -441,6 +492,12 @@ class GrabNode(Node):
         self.motion_end_time = now + Duration(seconds=float(duration))
 
         self.cmd_pub.publish(self.active_cmd)
+
+    def reset_creep_state(self):
+        # Clear state used only during sensor-guided item pickup.
+        self.proximity_triggered = False
+        self.grip_timeout_deadline = None
+        self.backup_after_failed_grab = False
 
     # =====================================================
     # ------------------ Service --------------------------
@@ -501,7 +558,41 @@ class GrabNode(Node):
             self.cmd_stream_timer = self.create_timer(period, self.cmd_stream_callback)
 
     def cmd_stream_callback(self):
-        if self.state in [GrabState.EXECUTING_FORWARD, GrabState.EXECUTING_BACKUP]:
+        # Creep mode for item pickup:
+        # keep moving slowly until the proximity sensor triggers
+        # or until the timeout expires.
+        if self.state == GrabState.CREEPING_TO_ITEM:
+            self.cmd_pub.publish(self.active_cmd)
+
+            # Object is inside the gripper zone: stop and grip.
+            if self.proximity_triggered:
+                self.get_logger().info("Proximity trigger active. Stopping and gripping item.")
+                self.stop_motion()
+                self.grip_timeout_deadline = None
+                self.state = GrabState.ACTUATING
+                self.perform_actuation()
+                return
+
+            # Timed out before seeing the object.
+            now = self.get_clock().now()
+            if self.grip_timeout_deadline is not None and now >= self.grip_timeout_deadline:
+                self.get_logger().warn("Grip timeout expired. Stopping and starting recovery backup.")
+                self.stop_motion()
+                self.grip_timeout_deadline = None
+                self.proximity_triggered = False
+                self.backup_after_failed_grab = True
+
+                duration = float(self.failed_grab_backup_distance) / float(self.backup_speed)
+
+                self.start_timed_motion(
+                    linear_x=-float(self.backup_speed),
+                    duration=duration,
+                    new_state=GrabState.EXECUTING_BACKUP,
+                )
+                return
+
+        # Existing timed motion handling for forward/dropoff backup.
+        elif self.state in [GrabState.EXECUTING_FORWARD, GrabState.EXECUTING_BACKUP]:
             self.cmd_pub.publish(self.active_cmd)
 
             now = self.get_clock().now()

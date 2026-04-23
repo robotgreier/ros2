@@ -9,8 +9,8 @@ _globals:
   ros__parameters:
     aruco_n_bins:     &aruco_n_bins     3    # encoding_node/aruco_n_bins         → python_snn_node/object_rec_size
     proximity_n_bits: &proximity_n_bits 4    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
-    kp_rows:          &kp_rows          3    # img_kp_grid/rows → python_snn_node/kp_rows
-    kp_cols:          &kp_cols          8    # img_kp_grid/cols → python_snn_node/kp_cols
+    kp_rows:          &kp_rows          4    # img_kp_grid/rows → python_snn_node/kp_rows
+    kp_cols:          &kp_cols          6    # img_kp_grid/cols → python_snn_node/kp_cols
 
 # ── Encoding node ──────────────────────────────────────────────────────────────
 encoding_node:
@@ -18,7 +18,7 @@ encoding_node:
     output_topic: "/snn/input"
     proximity_topic: "/ultrasonic/front/scan"
     proximity_n_dist_bits: *proximity_n_bits
-    proximity_dist_max_m: 0.5
+    proximity_dist_max_m: 1.0
     aruco_n_bins: *aruco_n_bins
 
 # ── Keypoint grid node ─────────────────────────────────────────────────────────
@@ -44,10 +44,10 @@ python_snn_node:
     object_rec_size: *aruco_n_bins
 
     # Output actions
-    num_actions: 3           # LEFT, FORWARD, RIGHT
+    num_actions: 4           # LEFT, FORWARD, RIGHT, BACKWARD
 
     # Timer and idle behaviour
-    timer_hz: 30.0
+    timer_hz: 15.0
     idle_timeout_sec: 1.0
 
     # Robot speeds
@@ -56,19 +56,19 @@ python_snn_node:
 
     # Neuron parameters 
     decay: 128              # membrane potential decay per timestep (0-255, higher is faster decay)
-    threshold: 1024         # firing threshold higher means higher synaptic input needed to fire
+    threshold: 1536         # firing threshold higher means higher synaptic input needed to fire
     reset: 0 
 
     # Synapse / learning parameters
-    lr_shift: 3             # learning rate = 1 / (2^lr_shift)
+    lr_shift: 6             # learning rate = 1 / (2^lr_shift)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
-    t_pre: 3                # time steps for pre-synaptic trace
+    t_pre: 2                # time steps for pre-synaptic trace
     t_post: 2               # time steps for post-synaptic trace
-    tau_e_shift: 3          # 
-    dw_pos: 64              # weight change for causal spike pair (pre before post)
-    dw_neg: 32              # weight change for acausal spike pair (post before pre)
+    tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
+    dw_pos: 16              # weight change for causal spike pair (pre before post)
+    dw_neg: -8              # weight change for acausal spike pair (post before pre)
     min_weight: 8           # minimum synaptic weight (absolute value)
-    max_weight: 255         # maximum synaptic weight (absolute value)
+    max_weight: 254         # maximum synaptic weight (absolute value)
     feedback: true  
     learning_mode: "rstdp"   # none | stdp | rstdp
 
@@ -77,6 +77,9 @@ python_snn_node:
     # CSV logging
     log_enable: true
     log_mode: "A"            # A = log on new input, B = every tick, C = state changes
+
+    # Per-episode weight snapshot directory
+    weights_log_dir: "/opt/robot_ws/src/ros2/weights_logs"
 
 # ── Motor control node ─────────────────────────────────────────────────────────
 motor_control_node:

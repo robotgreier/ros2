@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Image, CameraInfo
-from std_msgs.msg import UInt8, Float32MultiArray
+from std_msgs.msg import UInt8, Float32MultiArray, Empty
 from cv_bridge import CvBridge
 
 import cv2
@@ -70,12 +70,22 @@ class ImgRecog(Node):
         self.declare_parameter("grab_event_topic", "/grab_node/event")
         self.declare_parameter("episode_reset_delay_sec", 5.0)
 
+        # Parameters for limited pose calculations
+        self.declare_parameter("enable_pose_gating", True)
+        self.declare_parameter("pose_every_n", 3)              # do pose every 3rd eligible frame
+        self.declare_parameter("pose_center_threshold", 0.35)  # require target fairly near image center
+
         self.set_state_service = self.get_parameter("set_state_service").value
         self.found_frames = int(self.get_parameter("found_frames").value)
         self.lost_frames = int(self.get_parameter("lost_frames").value)
         self.enable_state_auto = bool(self.get_parameter("enable_state_auto").value)
         self.grab_event_topic = self.get_parameter("grab_event_topic").value
         self.episode_reset_delay_sec = float(self.get_parameter("episode_reset_delay_sec").value)
+        
+        self.enable_pose_gating = bool(self.get_parameter("enable_pose_gating").value)
+        self.pose_every_n = int(self.get_parameter("pose_every_n").value)
+        self.pose_center_threshold = float(self.get_parameter("pose_center_threshold").value)
+        self._pose_frame_counter = 0
 
         # Create client for task_manager
         self.set_state_client = self.create_client(SetTaskState, self.set_state_service)
@@ -93,6 +103,21 @@ class ImgRecog(Node):
 
         self.item_ids = set(int(x) for x in self.get_parameter("item_ids").value)
         self.dropoff_ids = set(int(x) for x in self.get_parameter("dropoff_ids").value)
+
+        self.episode_end_sent = False
+
+        self.episode_complete_pub = self.create_publisher(
+            Empty,
+            '/episode_complete',
+            10
+        )
+
+        self.episode_reset_sub = self.create_subscription(
+            Empty,
+            '/episode_reset',
+            self._on_episode_reset,
+            10
+        )
 
         # Grab node event codes
         self.EVENT_IDLE = 0
@@ -138,15 +163,15 @@ class ImgRecog(Node):
         self.K: Optional[np.ndarray] = None
         self.D: Optional[np.ndarray] = None
 
-        self.get_logger().info(f"Subscribing image: {self.image_topic}")
-        self.get_logger().info(f"Subscribing camera_info: {self.camera_info_topic}")
-        self.get_logger().info(f"Subscribing state: {self.state_topic}")
-        self.get_logger().info(f"Subscribing grab events: {self.grab_event_topic}")
-        self.get_logger().info(f"Publishing: {self.out_topic}")
-        self.get_logger().info(f"Dictionary: {dict_name}")
-        self.get_logger().info(f"item_ids={sorted(self.item_ids)} dropoff_ids={sorted(self.dropoff_ids)}")
-        self.get_logger().info(f"episode_reset_delay_sec={self.episode_reset_delay_sec}")
-        self.get_logger().info(f"marker_length_m={self.marker_length_m} target_policy={self.target_policy}")
+        # self.get_logger().info(f"Subscribing image: {self.image_topic}")
+        # self.get_logger().info(f"Subscribing camera_info: {self.camera_info_topic}")
+        # self.get_logger().info(f"Subscribing state: {self.state_topic}")
+        # self.get_logger().info(f"Subscribing grab events: {self.grab_event_topic}")
+        # self.get_logger().info(f"Publishing: {self.out_topic}")
+        # self.get_logger().info(f"Dictionary: {dict_name}")
+        # self.get_logger().info(f"item_ids={sorted(self.item_ids)} dropoff_ids={sorted(self.dropoff_ids)}")
+        # self.get_logger().info(f"episode_reset_delay_sec={self.episode_reset_delay_sec}")
+        # self.get_logger().info(f"marker_length_m={self.marker_length_m} target_policy={self.target_policy}")
         # self.get_logger().info("Publishing EVENT_GRABBED")
         # self.publish_event(EVENT_GRABBED)
         # self.get_logger().info("Publishing EVENT_DROPPED")
@@ -169,17 +194,17 @@ class ImgRecog(Node):
     def cb_grab_event(self, msg: UInt8):
         event = int(msg.data)
 
-        self.get_logger().info(
-            f"Grab event received: event={event}, "
-            f"locked_item_id={self.locked_item_id}, "
-            f"held_item_id={self.held_item_id}, "
-            f"delivered={sorted(self.delivered_item_ids)}, "
-            f"grab_sequence_active={self.grab_sequence_active}"
-        )
+        # self.get_logger().info(
+        #     f"Grab event received: event={event}, "
+        #     f"locked_item_id={self.locked_item_id}, "
+        #     f"held_item_id={self.held_item_id}, "
+        #     f"delivered={sorted(self.delivered_item_ids)}, "
+        #     f"grab_sequence_active={self.grab_sequence_active}"
+        # )
 
         if event == self.EVENT_BUSY:
             self.grab_sequence_active = True
-            self.get_logger().info("EVENT_BUSY received -> grab_sequence_active=True")
+            # self.get_logger().info("EVENT_BUSY received -> grab_sequence_active=True")
 
         elif event == self.EVENT_GRABBED:
             if self.locked_item_id is not None:
@@ -200,33 +225,48 @@ class ImgRecog(Node):
                 delivered_id = int(self.held_item_id)
                 self.delivered_item_ids.add(delivered_id)
 
-                self.get_logger().info(
-                    f"EVENT_DROPPED -> added item {delivered_id}. "
-                    f"Delivered set now {sorted(self.delivered_item_ids)}"
-                )
+                # self.get_logger().info(
+                #     f"EVENT_DROPPED -> added item {delivered_id}. "
+                #     f"Delivered set now {sorted(self.delivered_item_ids)}"
+                # )
 
                 self.held_item_id = None
                 self.locked_item_id = None
-            else:
-                self.get_logger().warn(
-                    "EVENT_DROPPED received but held_item_id is None"
-                )
+            # else:
+                # self.get_logger().warn(
+                #     "EVENT_DROPPED received but held_item_id is None"
+                # )
 
             self.grab_sequence_active = False
-            self.get_logger().info("EVENT_DROPPED -> grab_sequence_active=False")
+            # self.get_logger().info("EVENT_DROPPED -> grab_sequence_active=False")
 
             if self.delivered_item_ids == self.item_ids:
-                self.get_logger().info(
-                    "All items delivered. Starting episode reset timer."
-                )
-                self._start_episode_reset_timer()
+                self._publish_episode_complete()
 
         elif event == self.EVENT_IDLE:
             self.grab_sequence_active = False
-            self.get_logger().info("EVENT_IDLE received -> grab_sequence_active=False")
+            # self.get_logger().info("EVENT_IDLE received -> grab_sequence_active=False")
 
         else:
             self.get_logger().warn(f"Unknown grab event code: {event}")
+
+    def _on_episode_reset(self, msg):
+        self.delivered_item_ids.clear()
+        self.held_item_id = None
+        self.locked_item_id = None
+
+        self._consec_found = 0
+        self._consec_lost = 0
+
+        self.reset_pending = False
+        self.episode_end_sent = False
+
+        if self.reset_timer is not None:
+            self.reset_timer.cancel()
+            self.destroy_timer(self.reset_timer)
+            self.reset_timer = None
+
+        self.get_logger().info("Episode tracking reset after /episode_reset")
 
     def _start_episode_reset_timer(self):
         if self.reset_pending:
@@ -261,7 +301,7 @@ class ImgRecog(Node):
         self._consec_found = 0
         self._consec_lost = 0
 
-        self.get_logger().info("Episode reset complete. Delivered-item list cleared.")
+        # self.get_logger().info("Episode reset complete. Delivered-item list cleared.")
 
     def cb_info(self, msg: CameraInfo):
         # Only need to parse once; but safe to update if it changes
@@ -313,12 +353,17 @@ class ImgRecog(Node):
         # default: largest area
         return max(candidates, key=lambda c: c["area_px"])
 
-    def cb_img(self, msg: Image):
-        # Convert ROS image -> OpenCV
-        frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="rgb8")
-        h, w = frame.shape[:2]
+    def cb_info(self, msg: CameraInfo):
+        self.K = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        self.D = np.array(msg.d, dtype=np.float64) if len(msg.d) > 0 else np.zeros((5,), dtype=np.float64)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        # self.get_logger().warn(f"cb_info K=\n{self.K}")
+        # self.get_logger().warn(f"cb_info D={self.D}")
+
+    def cb_img(self, msg: Image):
+        # Convert ROS image -> OpenCV grayscale
+        gray = self.bridge.imgmsg_to_cv2(msg, desired_encoding="mono8")
+        h, w = gray.shape[:2]
 
         corners_list, ids, _rejected = cv2.aruco.detectMarkers(
             gray, self.dictionary, parameters=self.detector_params
@@ -396,13 +441,13 @@ class ImgRecog(Node):
             return
 
         #Debug logger
-        self.get_logger().info(
-            f"cb_img: state={self.current_state}, "
-            f"grab_sequence_active={self.grab_sequence_active}, "
-            f"locked_item_id={self.locked_item_id}, "
-            f"held_item_id={self.held_item_id}, "
-            f"delivered={sorted(self.delivered_item_ids)}"
-        )
+        # self.get_logger().info(
+        #     f"cb_img: state={self.current_state}, "
+        #     f"grab_sequence_active={self.grab_sequence_active}, "
+        #     f"locked_item_id={self.locked_item_id}, "
+        #     f"held_item_id={self.held_item_id}, "
+        #     f"delivered={sorted(self.delivered_item_ids)}"
+        # )
 
         # Choose best candidate differently depending on state
         best = None
@@ -444,11 +489,11 @@ class ImgRecog(Node):
         else:
             best = self._choose_best(candidates, w, h)
 
-        self.get_logger().info(
-            f"STATE={self.current_state} BEST_ID={int(best['id'])} "
-            f"LOCKED={self.locked_item_id} HELD={self.held_item_id} "
-            f"DELIVERED={sorted(self.delivered_item_ids)}"
-            )
+        # self.get_logger().info(
+        #     f"STATE={self.current_state} BEST_ID={int(best['id'])} "
+        #     f"LOCKED={self.locked_item_id} HELD={self.held_item_id} "
+        #     f"DELIVERED={sorted(self.delivered_item_ids)}"
+        #     )
 
         if self.current_state == SEARCH_ITEM:
             self._consec_found += 1
@@ -469,26 +514,59 @@ class ImgRecog(Node):
             self._consec_lost = 0
             self._consec_found = 0
 
-        # Pose estimation if camera intrinsics available
+
+        # self.get_logger().info(
+        #     f"K_is_none={self.K is None}, D_is_none={self.D is None}, marker_length_m={self.marker_length_m}"
+        # )
+
+       # Pose estimation if camera intrinsics available
         distance_m = -1.0
         tvec = (0.0, 0.0, 0.0)
         rvec = (0.0, 0.0, 0.0)
 
-        self.get_logger().info(
-            f"K_is_none={self.K is None}, "
-            f"D_is_none={self.D is None}, "
-            f"marker_length_m={self.marker_length_m}"
-            )
+        # Decide whether to run pose estimation
+        do_pose = False
 
         if self.K is not None and self.D is not None and self.marker_length_m > 0.0:
-            # estimatePoseSingleMarkers expects corners as list/array shaped (N,1,4,2) or (N,4,2)
-            c = best["corners"].astype(np.float32).reshape(1, 1, 4, 2)
-            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(c, self.marker_length_m, self.K, self.D)
-            rv = rvecs[0][0]
-            tv = tvecs[0][0]
-            rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
-            tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
-            distance_m = float(math.sqrt(tv[0] ** 2 + tv[1] ** 2 + tv[2] ** 2))
+            if self.current_state in (APPROACH_ITEM, APPROACH_DROPOFF):
+                if not self.enable_pose_gating:
+                    do_pose = True
+                else:
+                    is_centered = abs(best["x_norm"]) <= self.pose_center_threshold
+
+                    if is_centered:
+                        self._pose_frame_counter += 1
+                        if self.pose_every_n <= 1 or (self._pose_frame_counter % self.pose_every_n == 0):
+                            do_pose = True
+                    else:
+                        self._pose_frame_counter = 0
+            else:
+                self._pose_frame_counter = 0
+        else:
+            self._pose_frame_counter = 0
+
+        if do_pose:
+            try:
+                c = best["corners"].astype(np.float32).reshape(1, 4, 2)
+
+                rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                    c,
+                    self.marker_length_m,
+                    self.K,
+                    self.D
+                )
+
+                if rvecs is not None and tvecs is not None and len(rvecs) > 0 and len(tvecs) > 0:
+                    rv = rvecs[0][0]
+                    tv = tvecs[0][0]
+
+                    rvec = (float(rv[0]), float(rv[1]), float(rv[2]))
+                    tvec = (float(tv[0]), float(tv[1]), float(tv[2]))
+
+                    distance_m = float(tv[2])
+
+            except Exception as e:
+                self.get_logger().error(f"Pose estimation failed: {e}")
 
         out.data = [
             1.0,
@@ -531,6 +609,15 @@ class ImgRecog(Node):
                 self.get_logger().warn(f"State change rejected: {resp.message}")
         except Exception as e:
             self.get_logger().warn(f"State change call failed: {e}")
+
+    def _publish_episode_complete(self):
+        if self.episode_end_sent:
+            self.get_logger().warn("Episode complete already published; ignoring duplicate")
+            return
+
+        self.episode_complete_pub.publish(Empty())
+        self.episode_end_sent = True
+        self.get_logger().info("Published /episode_complete")
 
 def main(args=None):
     rclpy.init(args=args)

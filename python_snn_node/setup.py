@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             # This registers: ros2 run python_snn_node snn_node
             'snn_node = python_snn_node.snn_node:main',
+            'weights_logger = python_snn_node.weights_logger:main',
         ],
     },
 )

@@ -95,6 +95,14 @@ def generate_launch_description():
            parameters=[p('grab_node')],
         ),
 
+        Node(
+           package='grab_node',
+           executable='prox_node',
+           name='prox_node',
+           parameters=[p('prox_node')],
+           output='screen'
+        ),
+
         # Command arbiter node
         Node(
             package='cmd_arbiter',

@@ -211,15 +211,20 @@ class SNNLayer:
         self.spike_count += output_arr
 
         if self.mode == 'stdp':
-            winner = self.winner_takes_all(output_arr)
-            # Lateral inhibition: suppress all non-winner membranes
-            self.mem[np.arange(self.n_outputs) != winner] = self.reset_val
-
-            # Only winner's synapses see real spikes; losers decay only
+            # SV behaviour: WTA and lateral inhibition only fire on an actual spike.
+            # On silent timesteps every neuron keeps integrating its sub-threshold input.
             pre_mat  = np.zeros((self.n_outputs, self.n_inputs), dtype=np.int32)
             post_mat = np.zeros((self.n_outputs, self.n_inputs), dtype=np.int32)
-            pre_mat[winner]  = input_arr
-            post_mat[winner] = output_arr[winner]
+
+            if output_arr.any():
+                winner = self.winner_takes_all(output_arr)
+                self.mem[np.arange(self.n_outputs) != winner] = self.reset_val
+                pre_mat[winner]  = input_arr
+                post_mat[winner] = output_arr[winner]
+            else:
+                # No post spike: pre activity still advances timers on all rows
+                pre_mat[:] = input_arr
+
             self._update_eligibility(pre_mat, post_mat)
 
             # Immediate weight update for all synapses (dopamine=1 → signed multiply ×1)

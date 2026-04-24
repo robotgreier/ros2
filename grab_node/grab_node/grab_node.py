@@ -65,7 +65,7 @@ class GrabNode(Node):
         self.declare_parameter("backup_speed", 0.125)
         self.declare_parameter("backup_distance", 0.6)
 
-        self.declare_parameter("motion_publish_rate_hz", 20.0)
+        self.declare_parameter("motion_publish_rate_hz", 15.0)
 
         self.declare_parameter("item_final_distance", -1.0)
         self.declare_parameter("dropoff_final_distance", 0.02)

@@ -75,7 +75,7 @@ class ProxNode(Node):
         # Parameters 
         self.declare_parameter("sample_rate_hz", 30.0)
         self.declare_parameter("median_window", 5)
-        self.declare_parameter("trigger_threshold", 700.0)  # RAW proximity value
+        self.declare_parameter("trigger_threshold", 300.0)  # RAW proximity value
         self.declare_parameter("trigger_hold_ms", 40.0)
 
         self.sample_rate = float(self.get_parameter("sample_rate_hz").value)

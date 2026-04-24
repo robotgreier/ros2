@@ -112,8 +112,10 @@ class PowerLogger(Node):
 
     def voltage_to_percentage(self, voltage):
         """
-        LiHV 3S open-circuit approximation.
+        LiHV 3S battery voltage to percentage based on typical discharge curve.
         """
+
+      
         cell_v = voltage / 3.0
 
         table = [

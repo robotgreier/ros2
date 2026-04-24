@@ -44,7 +44,7 @@ class DopamineRewardNode(Node):
         self.energy_tracker = EnergyTracker()
 
         self.declare_parameter("use_energy_reward", True)
-        self.declare_parameter("energy_reward_positive", 2)
+        self.declare_parameter("energy_reward_positive", 2)  
         self.declare_parameter("energy_reward_negative", -2)
 
         self.use_energy_reward = self.get_parameter("use_energy_reward").value

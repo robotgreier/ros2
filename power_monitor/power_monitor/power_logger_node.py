@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt8
+from std_msgs.msg import UInt8, Empty
 from geometry_msgs.msg import Vector3
 import csv
 import os
@@ -40,6 +40,7 @@ class PowerLogger(Node):
             "run_id", 
             "state_id",
             "state_name",
+            #"episode_id",
             "source",
             "voltage_V",
             "current_A",
@@ -56,6 +57,7 @@ class PowerLogger(Node):
         self.system_time = None
         self.fpga_time = None
         self.current_state = None
+        #self.episode_id = None
         self.last_time = None
         self.energy_total_Wh = 0.0
         self.energy_per_state = {
@@ -81,6 +83,10 @@ class PowerLogger(Node):
         self.create_subscription(
             UInt8, "/task/state", self.cb_state, 10
         )
+
+        #self.create_subscription(
+        #    Empty, "/episode_complete", self.episode_cb, 10
+        #    )
 
     # ---------------- Utility function to get ROS time in seconds ----------------
     def now_ros_seconds(self) -> float:
@@ -176,13 +182,6 @@ class PowerLogger(Node):
     def try_publish_battery(self, source, msg):
         if self.system is None or self.fpga is None:
             return
-
-        #if self.current_state is None:
-        #    return
-
-        # Test if data is within 0.5 seconds
-        #if abs(self.system_time - self.fpga_time) > 0.5:
-        #    return
 
         # Voltage assumed identical source rail
         V = self.system.x

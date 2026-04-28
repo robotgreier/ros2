@@ -32,7 +32,7 @@ class PowerLogger(Node):
         self.run_id = str(uuid.uuid4())
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs"
+        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
         os.makedirs(log_dir, exist_ok=True)
         self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 
@@ -42,25 +42,6 @@ class PowerLogger(Node):
         self.reset_episode_data()
 
         self.episode_id = 0
-
-
-
-        # CSV header
-        self.file = open(self.filename, 'w', newline='')
-        self.writer = csv.writer(self.file)
-        self.writer.writerow([
-            "ros_time_s",
-            "run_id", 
-            "state_id",
-            "state_name",
-            #"episode_id",
-            "source",
-            "voltage_V",
-            "current_A",
-            "power_W",
-            "energy_inc_Wh",
-            "energy_total_Wh",
-        ])
 
         self.get_logger().info(f"Logging to CSV: {self.filename}")
 

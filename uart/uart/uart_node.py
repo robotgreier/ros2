@@ -69,7 +69,6 @@ class UartBridgeNode(Node):
         # -----------------------------
         # ROS interfaces
         # -----------------------------
-        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel/snn", 10)
         self.status_pub = self.create_publisher(String, "/uart/status", 10)
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
         self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)

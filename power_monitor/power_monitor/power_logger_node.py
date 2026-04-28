@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt8, UInt8MultiArray,Empty
+from std_msgs.msg import UInt8, UInt8MultiArray, Empty
 from geometry_msgs.msg import Vector3
 import csv
 import os
@@ -26,8 +26,6 @@ class PowerLogger(Node):
         self.current_phase = None
         self.phase_active = False
 
-        self.phase_start_time = None
-
         # Run metadata for logging
         self.run_id = str(uuid.uuid4())
 
@@ -39,6 +37,42 @@ class PowerLogger(Node):
 
         self.get_logger().info(f"Run ID: {self.run_id}")
         self.get_logger().info(f"Logging to CSV: {self.filename}")
+
+        # CSV setup
+        self.file = open(self.filename, 'w', newline='')
+        self.writer = csv.writer(self.file)
+
+        header = [
+            "run_id",
+            "episode_id",
+            "episode_start_ros_time_s",
+            "episode_end_ros_time_s",
+            "episode_total_time_s",
+
+            "episode_energy_total_Wh",
+            "episode_energy_system_Wh",
+            "episode_energy_fpga_Wh",
+
+            "search_energy_total_Wh",
+            "approach_energy_total_Wh",
+
+            "search_time_total_s",
+            "approach_time_total_s",
+
+            "avg_power_total_W",
+            "avg_power_system_W",
+            "avg_power_fpga_W",
+        ]
+
+        for prefix in ["E_total", "E_system", "E_fpga", "time"]:
+            unit = "Wh" if prefix.startswith("E") else "s"
+
+            for pickup in range(3):
+                for phase in range(4):
+                    header.append(f"{prefix}_p{pickup}_ph{phase}_{unit}")
+
+        self.writer.writerow(header)
+        self.file.flush()
 
         self.reset_episode_data()
 
@@ -86,43 +120,7 @@ class PowerLogger(Node):
 
     # ---------------- CSV logging ----------------
 
-    def write_csv(self, source, msg, energy_inc):
-        if self.file.closed:
-            return
-        state_name = STATE_NAMES.get(self.current_state, "UNKNOWN")
-        
-        header = [
-            "run_id",
-            "episode_id",
-            "episode_start_ros_time_s",
-            "episode_end_ros_time_s",
-            "episode_total_time_s",
-
-            "episode_energy_total_Wh",
-            "episode_energy_system_Wh",
-            "episode_energy_fpga_Wh",
-
-            "search_energy_total_Wh",
-            "approach_energy_total_Wh",
-
-            "search_time_total_s",
-            "approach_time_total_s",
-
-            "avg_power_total_W",
-            "avg_power_system_W",
-            "avg_power_fpga_W",
-        ]
-
-        for prefix in ["E_total", "E_system", "E_fpga", "time"]:
-            unit = "Wh" if prefix.startswith("E") else "s"
-
-            for pickup in range(3):
-                for phase in range(4):
-                    header.append(f"{prefix}_p{pickup}_ph{phase}_{unit}")
-
-        self.writer.writerow(header)
-
-        self.file.flush()
+    
         
     def write_episode_row(self):
         now = self.now_ros_seconds()
@@ -348,7 +346,7 @@ class PowerLogger(Node):
             f"[battery] V={V:.2f}V  I={I:.2f}A  "
             f"P={P:.1f}W  {percent:.0f}%  "
             f"E_episode={self.episode_energy_total:.3f}Wh  "
-            f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active}"
+            f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active} "
             f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
             f"runtime={runtime_min:.0f} min"
         )
@@ -376,10 +374,8 @@ class PowerLogger(Node):
 
     # Cleanup on shutdown
     def destroy_node(self):
-        self.get_logger().info("Final energy per state [Wh]:")
-        for state, energy in self.energy_per_state.items():
-            self.get_logger().info(f" {STATE_NAMES.get(state, 'UNKNOWN'):<18}: {energy:.3f} Wh")
-        self.file.close()
+        if hasattr(self, "file") and not self.file.closed:
+            self.file.close()
         super().destroy_node()
 
 def main():

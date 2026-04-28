@@ -169,5 +169,10 @@ class EnergyTracker:
             self.next_phase_idx = 0
             if self.current_pickup_idx < 2:
                 self.current_pickup_idx += 1
+        
+        # Mark this phase as completed
+        self.phase_active = False
+        self.current_phase_idx = None
+        self.phase_energy_joules = 0.0
 
         return result

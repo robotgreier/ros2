@@ -198,6 +198,13 @@ def generate_launch_description():
             name='power_logger',
             output='screen'
         ),
+
+        Node(
+            package='dopamine_reward_node',
+            executable='dopamine_reward_node',
+            name='dopamine_reward_node',
+            output='screen'
+        ),
     
 
     ])

@@ -41,6 +41,7 @@ from .protocol import (
     CMD_RESEND_REPLY,
 )
 
+from .spike_codec import pack_input_spikes, unpack_output_spikes
 
 class UartBridgeNode(Node):
     def __init__(self):
@@ -68,9 +69,9 @@ class UartBridgeNode(Node):
         # -----------------------------
         # ROS interfaces
         # -----------------------------
-        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel/snn", 10)
         self.status_pub = self.create_publisher(String, "/uart/status", 10)
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
+        self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)
 
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
 
@@ -99,6 +100,9 @@ class UartBridgeNode(Node):
         self.open_serial_port()
         self.load_weights()
         self.try_send_init()
+
+        def send_spike(self, payload: List[int]):
+            self.send_packet(CMD_SPIKE, payload)
 
         self.create_timer(self.poll_period_sec, self.poll_serial)
         self.create_timer(0.05, self.check_for_timeouts)
@@ -174,8 +178,9 @@ class UartBridgeNode(Node):
             self.publish_status("Busy, ignoring input")
             return
 
-        payload = list(msg.data)
-        self.send_packet(CMD_SPIKE, payload)
+        raw_spikes = list(msg.data)
+        payload = pack_input_spikes(raw_spikes)
+        self.send_spike(payload)
 
     # =================================================
     # Sending
@@ -307,7 +312,17 @@ class UartBridgeNode(Node):
             self.publish_error("Invalid OUT payload")
             return
 
-        self.publish_status(f"OUT={payload[0]}")
+        out_byte = int(payload[0])
+        action_spikes = unpack_output_spikes(out_byte, expected_len=4)
+
+        msg = UInt8MultiArray()
+        msg.data = action_spikes
+        self.fpga_action_pub.publish(msg)
+
+        self.publish_status(
+            f"OUT byte={out_byte}, action_spikes={action_spikes}"
+        )
+
         self.clear_wait_state()
 
     def handle_update(self, payload):

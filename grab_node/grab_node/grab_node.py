@@ -58,14 +58,14 @@ class GrabNode(Node):
         self.declare_parameter("item_distance_threshold", 0.3)
         self.declare_parameter("dropoff_distance_threshold", 0.3)
 
-        self.declare_parameter("approach_speed", 0.3)
+        self.declare_parameter("approach_speed", 0.125)
         self.declare_parameter("approach_distance_item", 0.4)
         self.declare_parameter("approach_distance_dropoff", 0.3)
 
-        self.declare_parameter("backup_speed", 0.2)
+        self.declare_parameter("backup_speed", 0.125)
         self.declare_parameter("backup_distance", 0.6)
 
-        self.declare_parameter("motion_publish_rate_hz", 20.0)
+        self.declare_parameter("motion_publish_rate_hz", 15.0)
 
         self.declare_parameter("item_final_distance", -1.0)
         self.declare_parameter("dropoff_final_distance", 0.02)
@@ -73,9 +73,9 @@ class GrabNode(Node):
         self.declare_parameter("min_forward_distance", 0.2)
         self.declare_parameter("max_forward_distance", 0.45)
 
-        self.declare_parameter("creep_speed", 0.15)
-        self.declare_parameter("grip_timeout_sec", 2.0)
-        self.declare_parameter("failed_grab_backup_distance", 0.15)
+        self.declare_parameter("creep_speed", 0.125)
+        self.declare_parameter("grip_timeout_sec", 4.0)
+        self.declare_parameter("failed_grab_backup_distance", 0.3)
 
         # For simulation
         self.declare_parameter("use_sim_gripper", False)

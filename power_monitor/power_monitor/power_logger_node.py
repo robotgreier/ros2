@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt8
+from std_msgs.msg import UInt8, UInt8MultiArray, Empty
 from geometry_msgs.msg import Vector3
 import csv
 import os
@@ -21,32 +21,62 @@ class PowerLogger(Node):
     def __init__(self):
         super().__init__('power_logger')
 
+        # Phase tracking
+        self.current_pickup = None
+        self.current_phase = None
+        self.phase_active = False
+
         # Run metadata for logging
         self.run_id = str(uuid.uuid4())
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs"
+        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
+        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
         os.makedirs(log_dir, exist_ok=True)
         self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 
         self.get_logger().info(f"Run ID: {self.run_id}")
         self.get_logger().info(f"Logging to CSV: {self.filename}")
 
-        # CSV header
+        # CSV setup
         self.file = open(self.filename, 'w', newline='')
         self.writer = csv.writer(self.file)
-        self.writer.writerow([
-            "ros_time_s",
-            "run_id", 
-            "state_id",
-            "state_name",
-            "source",
-            "voltage_V",
-            "current_A",
-            "power_W",
-            "energy_inc_Wh",
-            "energy_total_Wh",
-        ])
+
+        header = [
+            "run_id",
+            "episode_id",
+            "episode_start_ros_time_s",
+            "episode_end_ros_time_s",
+            "episode_total_time_s",
+
+            "episode_energy_total_Wh",
+            "episode_energy_system_Wh",
+            "episode_energy_fpga_Wh",
+
+            "search_energy_total_Wh",
+            "approach_energy_total_Wh",
+
+            "search_time_total_s",
+            "approach_time_total_s",
+
+            "avg_power_total_W",
+            "avg_power_system_W",
+            "avg_power_fpga_W",
+        ]
+
+        for prefix in ["E_total", "E_system", "E_fpga", "time"]:
+            unit = "Wh" if prefix.startswith("E") else "s"
+
+            for pickup in range(3):
+                for phase in range(4):
+                    header.append(f"{prefix}_p{pickup}_ph{phase}_{unit}")
+
+        self.writer.writerow(header)
+        self.file.flush()
+
+        self.reset_episode_data()
+
+        self.episode_id = 0
 
         self.get_logger().info(f"Logging to CSV: {self.filename}")
 
@@ -56,14 +86,8 @@ class PowerLogger(Node):
         self.system_time = None
         self.fpga_time = None
         self.current_state = None
+        #self.episode_id = None
         self.last_time = None
-        self.energy_total_Wh = 0.0
-        self.energy_per_state = {
-            0: 0.0, # SEARCH_ITEM
-            1: 0.0, # APPROACH_ITEM
-            2: 0.0, # SEARCH_DROPOFF
-            3: 0.0, # APPROACH_DROPOFF
-        }
 
         # battery status publisher
         self.battery_pub = self.create_publisher(
@@ -82,32 +106,100 @@ class PowerLogger(Node):
             UInt8, "/task/state", self.cb_state, 10
         )
 
+        self.create_subscription(
+            UInt8MultiArray, "/task/phase", self.cb_phase, 10
+        )
+
+        self.create_subscription(
+            Empty, "/episode_complete", self.episode_cb, 10
+            )
+
     # ---------------- Utility function to get ROS time in seconds ----------------
     def now_ros_seconds(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
 
     # ---------------- CSV logging ----------------
 
-    def write_csv(self, source, msg, energy_inc):
-        if self.file.closed:
-            return
-        state_name = STATE_NAMES.get(self.current_state, "UNKNOWN")
+    
         
-        self.writer.writerow([
-            self.now_ros_seconds(),
-            self.run_id,
-            self.current_state,
-            state_name,
-            source,
-            msg.x,
-            msg.y,
-            msg.z,
-            energy_inc,
-            self.energy_total_Wh,
-        ])
+    def write_episode_row(self):
+        now = self.now_ros_seconds()
+        total_time = now - self.episode_start_time
 
+        # --- Search vs Approach ---
+        search_energy = 0.0
+        approach_energy = 0.0
+        search_time = 0.0
+        approach_time = 0.0
+
+        for p in range(3):
+            for ph in range(4):
+                if ph in (0, 2):  # SEARCH phases
+                    search_energy += self.energy_total_phase[p][ph]
+                    search_time += self.time_phase[p][ph]
+                elif ph in (1, 3):  # APPROACH phases
+                    approach_energy += self.energy_total_phase[p][ph]
+                    approach_time += self.time_phase[p][ph]
+
+        # --- Average power ---
+        avg_power_total = (
+            self.episode_energy_total / total_time * 3600.0
+            if total_time > 0 else 0.0
+        )
+        avg_power_system = (
+            self.episode_energy_system / total_time * 3600.0
+            if total_time > 0 else 0.0
+        )
+        avg_power_fpga = (
+            self.episode_energy_fpga / total_time * 3600.0
+            if total_time > 0 else 0.0
+        )
+
+        # --- Base row ---
+        row = [
+            self.run_id,
+            self.episode_id,
+            self.episode_start_time,
+            now,
+            total_time,
+
+            self.episode_energy_total,
+            self.episode_energy_system,
+            self.episode_energy_fpga,
+
+            search_energy,
+            approach_energy,
+
+            search_time,
+            approach_time,
+
+            avg_power_total,
+            avg_power_system,
+            avg_power_fpga,
+        ]
+
+        # --- Flatten phase data ---
+        for prefix in ["total", "system", "fpga", "time"]:
+            for p in range(3):
+                for ph in range(4):
+                    if prefix == "total":
+                        row.append(self.energy_total_phase[p][ph])
+                    elif prefix == "system":
+                        row.append(self.energy_system_phase[p][ph])
+                    elif prefix == "fpga":
+                        row.append(self.energy_fpga_phase[p][ph])
+                    elif prefix == "time":
+                        row.append(self.time_phase[p][ph])
+
+        # --- Write ---
+        self.writer.writerow(row)
         self.file.flush()
 
+        self.get_logger().info(
+            f"[EPISODE {self.episode_id}] "
+            f"E_total={self.episode_energy_total:.3f}Wh, "
+            f"time={total_time:.2f}s"
+        )
     # ---------------- Battery math ----------------
 
     def voltage_to_percentage(self, voltage):
@@ -171,18 +263,28 @@ class PowerLogger(Node):
         self.fpga_time = self.now_ros_seconds()
         self.try_publish_battery("fpga", msg)
 
+    def cb_phase(self, msg: UInt8MultiArray):
+        data = list(msg.data)
+
+        if len(data) < 3:
+            return
+
+        pickup, phase, active = data
+
+        self.current_pickup = pickup
+        self.current_phase = None if phase == 255 else phase
+        self.phase_active = bool(active)
+
+    def episode_cb(self, msg: Empty):
+        self.write_episode_row()
+        self.episode_id += 1
+        self.reset_episode_data()
+
     # ---------------- Battery aggregation ----------------
 
     def try_publish_battery(self, source, msg):
         if self.system is None or self.fpga is None:
             return
-
-        #if self.current_state is None:
-        #    return
-
-        # Test if data is within 0.5 seconds
-        #if abs(self.system_time - self.fpga_time) > 0.5:
-        #    return
 
         # Voltage assumed identical source rail
         V = self.system.x
@@ -193,19 +295,48 @@ class PowerLogger(Node):
 
         # Energy integration
         now = self.now_ros_seconds()
-        energy_inc = 0.0
+
         if self.last_time is not None:
             dt = now - self.last_time
+
             if dt > 0.0:
-                energy_inc = (P * dt) / 3600.0
-                self.energy_total_Wh += energy_inc
-                if self.current_state in self.energy_per_state:
-                    self.energy_per_state[self.current_state] += energy_inc
+                # --- Power split ---
+                P_total = P
+                P_system = self.system.z
+                P_fpga = self.fpga.z
+
+                # --- Energy increments (Wh) ---
+                E_total = (P_total * dt) / 3600.0
+                E_system = (P_system * dt) / 3600.0
+                E_fpga = (P_fpga * dt) / 3600.0
+
+                # --- Episode totals ---
+                self.episode_energy_total += E_total
+                self.episode_energy_system += E_system
+                self.episode_energy_fpga += E_fpga
+
+                # --- Phase-based logging ---
+                if (
+                    self.phase_active and
+                    self.current_pickup is not None and
+                    self.current_phase is not None and
+                    0 <= self.current_pickup < 3 and
+                    0 <= self.current_phase < 4
+                ):
+                    p = self.current_pickup
+                    ph = self.current_phase
+
+                    self.energy_total_phase[p][ph] += E_total
+                    self.energy_system_phase[p][ph] += E_system
+                    self.energy_fpga_phase[p][ph] += E_fpga
+
+                    # time in seconds
+                    self.time_phase[p][ph] += dt
 
         self.last_time = now
 
         # Log CSV
-        self.write_csv(source, msg, energy_inc)
+        #self.write_csv(source, msg, energy_inc)
 
         # Battery status estimation for dashboard
         percent = self.voltage_to_percentage(V)
@@ -214,7 +345,8 @@ class PowerLogger(Node):
         self.get_logger().info(
             f"[battery] V={V:.2f}V  I={I:.2f}A  "
             f"P={P:.1f}W  {percent:.0f}%  "
-            f"E={self.energy_total_Wh:.2f}Wh  "
+            f"E_episode={self.episode_energy_total:.3f}Wh  "
+            f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active} "
             f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
             f"runtime={runtime_min:.0f} min"
         )
@@ -226,12 +358,24 @@ class PowerLogger(Node):
         out.z = runtime_min    # remaining time [min]
         self.battery_pub.publish(out)
 
+    def reset_episode_data(self):
+        def zero_3x4():
+            return [[0.0 for _ in range(4)] for _ in range(3)]
+
+        self.energy_total_phase = zero_3x4()
+        self.energy_fpga_phase = zero_3x4()
+        self.energy_system_phase = zero_3x4()
+        self.time_phase = zero_3x4()
+
+        self.episode_energy_total = 0.0
+        self.episode_energy_fpga = 0.0
+        self.episode_energy_system = 0.0
+        self.episode_start_time = self.now_ros_seconds()
+
     # Cleanup on shutdown
     def destroy_node(self):
-        self.get_logger().info("Final energy per state [Wh]:")
-        for state, energy in self.energy_per_state.items():
-            self.get_logger().info(f" {STATE_NAMES.get(state, 'UNKNOWN'):<18}: {energy:.3f} Wh")
-        self.file.close()
+        if hasattr(self, "file") and not self.file.closed:
+            self.file.close()
         super().destroy_node()
 
 def main():

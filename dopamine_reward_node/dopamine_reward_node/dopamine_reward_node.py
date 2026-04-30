@@ -19,6 +19,7 @@ class DopamineRewardNode(Node):
         # Publishers
         self.reward_pub = self.create_publisher(Int16, "/reward/dopamine", 10)
         self.debug_pub = self.create_publisher(String, "/reward/debug", 10)
+        self.phase_pub = self.create_publisher(UInt8MultiArray, "/task/phase", 10)
 
         # Subscribers
         self.create_subscription(UInt8, "/task/state", self.task_state_cb, 10)
@@ -82,6 +83,8 @@ class DopamineRewardNode(Node):
                     f"E={result.energy_joules:.2f}, avg={result.average_joules:.2f}, "
                     f"energy_reward={self.pending_energy_reward}"
                 )
+
+            self.publish_phase()
 
     def proximity_stop_cb(self, msg: Bool) -> None:
         self.proximity_stop = bool(msg.data)
@@ -155,6 +158,21 @@ class DopamineRewardNode(Node):
     def episode_cb(self, msg: Empty) -> None:
         self.get_logger().info("Episode complete → resetting energy tracker")
         self.energy_tracker.reset_episode()
+
+    def publish_phase(self) -> None:
+        msg = UInt8MultiArray()
+
+        pickup_idx = int(self.energy_tracker.current_pickup_idx)
+
+        if self.energy_tracker.current_phase_idx is None:
+            phase_idx = 255
+        else:
+            phase_idx = int(self.energy_tracker.current_phase_idx)
+
+        phase_active = 1 if self.energy_tracker.phase_active else 0
+
+        msg.data = [pickup_idx, phase_idx, phase_active]
+        self.phase_pub.publish(msg)
 
 
 def main(args=None) -> None:

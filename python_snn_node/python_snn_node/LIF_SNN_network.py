@@ -303,10 +303,26 @@ class SNNLayer:
         return self.weights.copy()
 
     def load_weights(self, weight_file="weights.mem"):
-        """Load weights from a hex file (one value per line)."""
-        with open(weight_file) as f:
-            hex_values = [int(line.strip(), 16) for line in f]
-        self.weights[:] = np.array(hex_values, dtype=np.int32).reshape(self.n_outputs, self.n_inputs)
+        """Load weights from a hex .mem file, one value per line."""
+        with open(weight_file, "r") as f:
+            hex_values = [
+                int(line.strip(), 16)
+                for line in f
+                if line.strip()
+            ]
+
+        expected = self.n_outputs * self.n_inputs
+
+        if len(hex_values) != expected:
+            raise ValueError(
+                f"Weight file has {len(hex_values)} values, expected {expected} "
+                f"for shape ({self.n_outputs}, {self.n_inputs})"
+            )
+
+        self.weights[:] = np.array(hex_values, dtype=np.int32).reshape(
+            self.n_outputs,
+            self.n_inputs
+        )
 
     def reset_state(self):
         """Reset all neuron and synapse trace state."""

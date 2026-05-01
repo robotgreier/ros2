@@ -214,13 +214,30 @@ class SNNNode(Node):
             feedback=self.feedback
         )
 
-        share_dir = get_package_share_directory('python_snn_node')
-        weight_path = os.path.join(share_dir, 'config', 'weights.mem')
+        
+        # Path to shared weights file in repo
+        weight_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'config',
+            'weights_current.mem'
+        )
 
-        """# Load weights if file exists
         if os.path.exists(weight_path):
-            self.network.load_weights(weight_file=weight_path)"""
+            try:
+                self.network.load_weights(weight_file=weight_path)
+                self.get_logger().info(f"Loaded weights from {weight_path}")
+            except Exception as e:
+                self.get_logger().error(f"Failed to load weights: {e}")
+        else:
+            self.get_logger().warn(
+                f"No weights file found at {weight_path}, using initial weights"
+            )
 
+        self.weights_current_file = Path(weight_path)
+
+        self.weights_log_dir = self.weights_current_file.parent / "weights_logs"
+        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
+        
         ###########################################
 
         # --- State and Communication ---
@@ -537,16 +554,24 @@ class SNNNode(Node):
         self.cmd_vel_pub.publish(Twist())
         self.pub_decision.publish(String(data="IDLE"))
 
-    def save_weights(self, weight_file="weights.mem"):
+    def save_weights(self, weight_file):
         """
-        Save weights to a hex .mem file, one 32-bit value per line.
+        Save weights to a hex .mem file, one 8-bit value per line.
+        Atomic save: write temp file first, then replace final file.
         """
+        weight_file = Path(weight_file).expanduser()
+        weight_file.parent.mkdir(parents=True, exist_ok=True)
+
         weights = self.network.get_weights()
         flat_weights = weights.flatten()
 
-        with open(weight_file, "w") as f:
+        tmp_file = weight_file.with_suffix(weight_file.suffix + ".tmp")
+
+        with open(tmp_file, "w") as f:
             for value in flat_weights:
                 f.write(f"{int(value) & 0xFF:02X}\n")
+
+        tmp_file.replace(weight_file)
 
     def handle_save_weights(self, request, response):
         try:

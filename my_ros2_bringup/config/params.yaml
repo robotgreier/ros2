@@ -55,8 +55,8 @@ python_snn_node:
     turn_speed: 0.3          # rad/s
 
     # Neuron parameters 
-    decay: 512              # membrane potential decay per timestep (0-255, higher is faster decay)
-    threshold: 8192         # firing threshold higher means higher synaptic input needed to fire
+    decay: 2048              # membrane potential decay per timestep (0-255, higher is faster decay)
+    threshold: 16384         # firing threshold higher means higher synaptic input needed to fire
     reset: 0 
 
     # Synapse / learning parameters

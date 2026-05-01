@@ -171,7 +171,8 @@ def generate_launch_description():
                     get_package_share_directory('python_snn_node'),
                     'config', 'weights.mem'
                 ),
-                'serial_port': '/dev/ttyAMA5',
+                'tx_pin': 14,
+                'rx_pin': 15,
             }],
         ),
 

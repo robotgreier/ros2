@@ -11,7 +11,7 @@ class LIF:
         reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=256, threshold=1024, reset=0):
+    def __init__(self, decay=256, threshold=2048, reset=0):
         self.decay = decay
         self.threshold = threshold
         self.reset = reset
@@ -53,10 +53,10 @@ class RSTDPSynapse:
 
     DISABLED = -1
 
-    def __init__(self, lr_shift=2, w_init=None,
-                 t_pre=2, t_post=2, tau_e_shift=2,
-                 dw_pos=16, dw_neg=64,
-                 w_min=8, w_max=255,
+    def __init__(self, lr_shift=7, w_init=None,
+                 t_pre=3, t_post=3, tau_e_shift=3,
+                 dw_pos=16, dw_neg=-8,
+                 w_min=16, w_max=254,
                  mode='rstdp'):
 
         self.mode = mode
@@ -159,8 +159,8 @@ class SNNLayer:
         self.n_inputs = n_inputs + 1 if feedback else n_inputs
 
         # Neuron state (n_outputs,)
-        self.decay     = neuron_params.get('decay',     128)
-        self.threshold = neuron_params.get('threshold', 1024)
+        self.decay     = neuron_params.get('decay',     256)
+        self.threshold = neuron_params.get('threshold', 2048)
         self.reset_val = neuron_params.get('reset',     0)
 
         self.mem           = np.zeros(n_outputs, dtype=np.int32)
@@ -169,14 +169,14 @@ class SNNLayer:
         self.spike_count   = np.zeros(n_outputs, dtype=np.int32)
 
         # Synapse state (n_outputs, n_inputs)
-        self.lr_shift    = synapse_params.get('lr_shift',    3)
-        self.t_pre       = synapse_params.get('t_pre',       2)
+        self.lr_shift    = synapse_params.get('lr_shift',    7)
+        self.t_pre       = synapse_params.get('t_pre',       3)
         self.t_post      = synapse_params.get('t_post',      3)
-        self.tau_e_shift = synapse_params.get('tau_e_shift', 4)
-        self.dw_pos      = synapse_params.get('dw_pos',      64)
-        self.dw_neg      = synapse_params.get('dw_neg',      32)
-        self.w_min       = synapse_params.get('w_min',       64)
-        self.w_max       = synapse_params.get('w_max',       255)
+        self.tau_e_shift = synapse_params.get('tau_e_shift', 3)
+        self.dw_pos      = synapse_params.get('dw_pos',      16)
+        self.dw_neg      = synapse_params.get('dw_neg',      -8)
+        self.w_min       = synapse_params.get('w_min',       16)
+        self.w_max       = synapse_params.get('w_max',       254)
 
         w_init = synapse_params.get('w_init', "None")
         if w_init == -1:
@@ -271,15 +271,14 @@ class SNNLayer:
 
     def winner_takes_all(self, output_spikes):
         """
-        Returns index of winning neuron.
-        Spiking neurons beat non-spiking ones; pre-reset membrane breaks ties.
+        Returns index of winning neuron, or -1 if no neuron spiked.
+        Pre-reset membrane breaks ties among spiking neurons.
         """
         spikes = np.asarray(output_spikes, dtype=np.int32)
         spiking = np.where(spikes == 1)[0]
-        # If any neurons spiked, compete among them; otherwise all compete
-        pool = spiking if len(spiking) > 0 else np.arange(len(spikes))
-        # Highest pre-reset membrane potential wins (deterministic, no index bias)
-        return int(pool[np.argmax(self.pre_reset_mem[pool])])
+        if len(spiking) == 0:
+            return -1
+        return int(spiking[np.argmax(self.pre_reset_mem[spiking])])
 
     def apply_reward(self, dopamine, winner_idx):
         """

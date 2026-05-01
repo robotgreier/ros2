@@ -18,24 +18,24 @@ python_snn_node:
     idle_timeout_sec: 1.0
 
     # Robot speed settings
-    forward_speed: 0.08 # m/s
-    turn_speed: 0.3 # rad/s
+    forward_speed: 2.0 # m/s
+    turn_speed: 1.0 # rad/s
 
     ##### Neuron parameters #####
-    decay: 128
-    threshold: 1024
+    decay: 256
+    threshold: 2048
     reset: 0
 
     ##### Synapse parameters #####
-    lr_shift: 3 
+    lr_shift: 7 
     initial_weight: -1  # -1 for random init, or specify a value between min_weight and max_weight
     t_pre: 3
-    t_post: 2
+    t_post: 3
     tau_e_shift: 3
-    dw_pos: 64
-    dw_neg: 32
-    min_weight: 8
-    max_weight: 255
+    dw_pos: 16
+    dw_neg: -8
+    min_weight: 16
+    max_weight: 254
     feedback: True
     learning_mode: 'rstdp' # 'None', 'stdp', 'rstdp'
 

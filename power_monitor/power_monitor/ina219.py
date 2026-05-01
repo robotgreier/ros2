@@ -12,14 +12,13 @@ class INA219:
         self.bus = smbus.SMBus(bus)
         self.addr = address
 
-        # Calibration SEN0219 / INA219, 8A max, 0.01 ohm shunt
+        # Calibration SEN0219 / INA219, 3.2A max, 0.1 ohm shunt
         calibration_value = 4096
         self.bus.write_word_data(self.addr, self.REG_CALIB, calibration_value)
-
         time.sleep(0.01)
 
         # Conversion factors
-        self.current_lsb = 0.001                    # 0.01 mA per bit
+        self.current_lsb = 0.0001                   # 0.1 mA per bit
         self.power_lsb   = self.current_lsb * 20    # 20 mW per bit
 
     def read_voltage(self):

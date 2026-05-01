@@ -63,7 +63,7 @@ class DistanceSensorNode(Node):
         # Beregn avstand (mm)
         duration_ns = echo_end - echo_start  # ns
         duration_s = duration_ns / 1e9 # s
-        distance_mm = (duration_s * 343000) / 2
+        distance_mm = (duration_s * 343000) / 2 # 343m/s: speed of sound in dry air at 20 degrees Celsius, divided by 2 for back/forth
         distance_m = distance_mm / 1000.0 
 
         # Validation

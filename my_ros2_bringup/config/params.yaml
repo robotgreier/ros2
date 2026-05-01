@@ -61,11 +61,11 @@ python_snn_node:
 
     # Synapse / learning parameters
     lr_shift: 7             # learning rate = 1 / (2^lr_shift)
-    t_pre: 2                # time steps for pre-synaptic trace
-    t_post: 2               # time steps for post-synaptic trace
+    t_pre: 3                # time steps for pre-synaptic trace
+    t_post: 3               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
-    dw_pos: 32              # weight change for causal spike pair (pre before post)
-    dw_neg: -16              # weight change for acausal spike pair (post before pre)
+    dw_pos: 16              # weight change for causal spike pair (pre before post)
+    dw_neg: -8              # weight change for acausal spike pair (post before pre)
     min_weight: 40          # minimum synaptic weight (absolute value)
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value

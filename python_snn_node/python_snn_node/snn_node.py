@@ -235,9 +235,6 @@ class SNNNode(Node):
 
         self.weights_current_file = Path(weight_path)
 
-        self.weights_log_dir = self.weights_current_file.parent / "weights_logs"
-        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
-
         ###########################################
 
         # --- State and Communication ---

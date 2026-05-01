@@ -49,7 +49,7 @@ class UartBridgeNode(Node):
         # -----------------------------
         # Parameters
         # -----------------------------
-        self.declare_parameter("serial_port", "/dev/ttyAMA0")
+        self.declare_parameter("serial_port", "/dev/ttyUSB0")
         self.declare_parameter("baudrate", 250000)
         self.declare_parameter("timeout", 1.0)
         self.declare_parameter("weights_file", "")

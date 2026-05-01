@@ -18,7 +18,7 @@ class INA219:
         self.bus.write_i2c_block_data(
             self.addr,
             self.REG_CALIB,
-            [(cal >> 8) & 0xFF, cal & 0xFF]
+            [(calibration_value >> 8) & 0xFF, calibration_value & 0xFF]
         )
         time.sleep(0.01)
 

@@ -23,7 +23,7 @@ class INA219:
         time.sleep(0.01)
 
         # Conversion factors
-        self.current_lsb = 0.0001                   # 0.1 mA per bit
+        self.current_lsb = 0.001                   # 0.1 mA per bit
         self.power_lsb   = self.current_lsb * 20    # 20 mW per bit
 
     def read_voltage(self):

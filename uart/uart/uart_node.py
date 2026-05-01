@@ -12,13 +12,12 @@ This node is responsible for:
 # uart_node.py
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import UInt8MultiArray, String
-from geometry_msgs.msg import Twist
 
 import serial
 
@@ -31,13 +30,6 @@ from .protocol import (
     CMD_INIT,
     CMD_SPIKE,
     CMD_STOP,
-    CMD_RESET,
-    CMD_RESEND,
-    CMD_AFFIRM,
-    CMD_OUT,
-    CMD_ERR,
-    CMD_UPDATE,
-    CMD_RESEND_REPLY,
 )
 
 from .spike_codec import pack_input_spikes, unpack_output_spikes
@@ -172,7 +164,7 @@ class UartBridgeNode(Node):
             self.publish_status("Ignoring input: not initialized")
             return
 
-        if self.waiting_for_affirm or self.waiting_for_out:
+        if self.waiting_for_out or self.waiting_for_update:
             self.publish_status("Busy, ignoring input")
             return
 
@@ -195,10 +187,17 @@ class UartBridgeNode(Node):
             self.last_command_sent = cmd
             self.retry_count = 0
 
-            self.waiting_for_affirm = True
-            self.waiting_for_out = False
+            self.waiting_for_affirm = False
             self.waiting_for_update = False
             self.wait_start_time = self.get_clock().now()
+
+            if cmd == CMD_SPIKE:
+                self.waiting_for_out = True
+            elif cmd == CMD_STOP:
+                self.waiting_for_out = False
+                self.waiting_for_update = True
+            else:
+                self.waiting_for_out = False
 
             self.publish_status(f"Sending CMD={cmd}, LEN={len(payload)}")
 
@@ -214,8 +213,16 @@ class UartBridgeNode(Node):
         if not self.weights:
             self.publish_error("INIT skipped, no weights")
             return
-        self.publish_status("Sending INIT")
-        self.send_packet(CMD_INIT, self.weights)
+        if not self.ser:
+            self.publish_error("Serial unavailable, INIT not sent")
+            return
+        try:
+            packet = build_packet(CMD_INIT, self.weights)
+            self.ser.write(packet)
+            self.initialized = True
+            self.publish_status("INIT sent, initialized")
+        except Exception as e:
+            self.publish_error(f"INIT send error: {e}")
 
     # =================================================
     # RX processing
@@ -270,43 +277,18 @@ class UartBridgeNode(Node):
     # =================================================
 
     def dispatch_command(self, cmd, payload):
-        if cmd == CMD_AFFIRM:
-            self.handle_affirm()
-        elif cmd == CMD_OUT:
+        if cmd == 0:    # spike output (after SPIKE)
             self.handle_out(payload)
-        elif cmd == CMD_ERR:
-            self.publish_error(f"FPGA ERR: {payload}")
-        elif cmd == CMD_UPDATE:
+        elif cmd == 1:  # weight update (after STOP)
             self.handle_update(payload)
-        elif cmd == CMD_RESEND_REPLY:
-            self.handle_resend_request()
+        elif cmd == 2:  # error from FPGA
+            self.publish_error(f"FPGA ERR: {payload}")
         else:
             self.publish_error(f"Unknown CMD {cmd}")
 
     # =================================================
     # Command handlers
     # =================================================
-
-    def handle_affirm(self):
-        if not self.waiting_for_affirm:
-            self.publish_status("Unexpected AFFIRM")
-            return
-
-        self.waiting_for_affirm = False
-        self.wait_start_time = None
-
-        self.publish_status(f"AFFIRM for CMD {self.last_command_sent}")
-
-        if self.last_command_sent == CMD_INIT:
-            self.initialized = True
-
-        elif self.last_command_sent == CMD_SPIKE:
-            self.waiting_for_out = True
-            self.wait_start_time = self.get_clock().now()
-
-        elif self.last_command_sent == CMD_STOP:
-            self.waiting_for_update = True
-            self.wait_start_time = self.get_clock().now()
 
     def handle_out(self, payload):
         if len(payload) != 1:
@@ -330,10 +312,6 @@ class UartBridgeNode(Node):
         self.weights = payload
         self.save_weights()
         self.clear_wait_state()
-
-    def handle_resend_request(self):
-        self.publish_status("FPGA requested RESEND")
-        self.resend_last_packet()
 
     # =================================================
     # Timeout + retry

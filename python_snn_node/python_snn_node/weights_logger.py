@@ -76,7 +76,7 @@ class WeightsLogger(Node):
 
                 # ---- NEW: update current weights file ----
                 req_current = SaveWeights.Request()
-                req_current.filename = "../config/weights_current.mem"
+                req_current.filename = "weights_current.mem"
 
                 self.get_logger().info("Updating weights_current.mem")
                 future_current = self.save_weights_client.call_async(req_current)

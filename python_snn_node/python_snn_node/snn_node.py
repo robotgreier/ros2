@@ -237,7 +237,7 @@ class SNNNode(Node):
 
         self.weights_log_dir = self.weights_current_file.parent / "weights_logs"
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         ###########################################
 
         # --- State and Communication ---
@@ -582,7 +582,10 @@ class SNNNode(Node):
                 response.message = "Filename was empty"
                 return response
 
-            full_path = self.weights_log_dir / filename
+            if filename == "weights_current.mem":
+                full_path = self.weights_current_file
+            else:
+                full_path = self.weights_log_dir / filename
 
             self.save_weights(str(full_path))
 

@@ -27,7 +27,7 @@ class UartBridgeNode(Node):
         # -----------------------------
         # On Ubuntu Pi, /dev/ttyAMA0 is the default hardware UART 
         # (mapped to pins 8/10 if Bluetooth is disabled)
-        self.declare_parameter("port", "/dev/ttyAMA0")
+        self.declare_parameter("port", "/dev/ttyAMA3")
         self.declare_parameter("baudrate", 250000)
         self.declare_parameter("weights_file", "")
         self.declare_parameter("response_timeout_sec", 1.0)

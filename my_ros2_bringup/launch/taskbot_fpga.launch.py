@@ -176,6 +176,14 @@ def generate_launch_description():
             }],
         ),
 
+        #FPGA decoder node
+        Node(
+            package='fpga_action_decoder',
+            executable='fpga_action_decoder_node',
+            name='fpga_action_decoder_node',
+            output='screen'
+        ),
+
         # Task manager node to coordinate
         Node(
             package='task_manager',

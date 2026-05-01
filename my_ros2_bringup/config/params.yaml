@@ -85,8 +85,8 @@ python_snn_node:
 motor_control_node:
   ros__parameters:
     wheel_base: 0.13         # m, distance between wheels
-    max_lin_vel: 1.2         # m/s
-    max_ang_vel: 1.5         # rad/s
+    max_lin_vel: 1.8         # m/s
+    max_ang_vel: 1.0         # rad/s
     cmd_vel_timeout: 0.5     # s, stop if no command received
 
 # ── Grab node ──────────────────────────────────────────────────────────────────

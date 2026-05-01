@@ -75,7 +75,7 @@ class DistanceSensorNode(Node):
         median_val = statistics.median(self.median_window)
 
         # Exponential smooth (IIR filter)
-        alpha = 0.4
+        alpha = 0.6
         if self.filtered_value is None:
             self.filtered_value = median_val
         else: 

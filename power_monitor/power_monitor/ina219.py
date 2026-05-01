@@ -13,8 +13,13 @@ class INA219:
         self.addr = address
 
         # Calibration SEN0219 / INA219, 3.2A max, 0.1 ohm shunt
-        calibration_value = 4096
-        self.bus.write_word_data(self.addr, self.REG_CALIB, calibration_value)
+        
+        calibration_value = 4096  # 0x1000
+        self.bus.write_i2c_block_data(
+            self.addr,
+            self.REG_CALIB,
+            [(calibration_value >> 8) & 0xFF, calibration_value & 0xFF]
+        )
         time.sleep(0.01)
 
         # Conversion factors

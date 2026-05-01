@@ -66,7 +66,7 @@ class DopamineComputer:
             (pos < 0 and action_idx == 0) or
             (pos > 0 and action_idx == 2)
         ):
-            dopamine = 4
+            dopamine = 6
 
         # New reward: structured search when no ArUco is visible
         elif not seen:

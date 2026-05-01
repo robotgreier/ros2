@@ -55,8 +55,8 @@ python_snn_node:
     turn_speed: 0.3          # rad/s
 
     # Neuron parameters 
-    decay: 2048              # membrane potential decay per timestep (0-255, higher is faster decay)
-    threshold: 16384         # firing threshold higher means higher synaptic input needed to fire
+    decay: 4000              # membrane potential decay per timestep (0-255, higher is faster decay)
+    threshold: 32000         # firing threshold higher means higher synaptic input needed to fire
     reset: 0 
 
     # Synapse / learning parameters
@@ -85,7 +85,7 @@ python_snn_node:
 motor_control_node:
   ros__parameters:
     wheel_base: 0.13         # m, distance between wheels
-    max_lin_vel: 1.8         # m/s
+    max_lin_vel: 2.0         # m/s
     max_ang_vel: 1.0         # rad/s
     cmd_vel_timeout: 0.5     # s, stop if no command received
 

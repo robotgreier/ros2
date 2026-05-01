@@ -56,7 +56,7 @@ python_snn_node:
 
     # Neuron parameters 
     decay: 512              # membrane potential decay per timestep (0-255, higher is faster decay)
-    threshold: 4096         # firing threshold higher means higher synaptic input needed to fire
+    threshold: 8192         # firing threshold higher means higher synaptic input needed to fire
     reset: 0 
 
     # Synapse / learning parameters
@@ -66,7 +66,7 @@ python_snn_node:
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
     dw_pos: 16              # weight change for causal spike pair (pre before post)
     dw_neg: -8              # weight change for acausal spike pair (post before pre)
-    min_weight: 40          # minimum synaptic weight (absolute value)
+    min_weight: 16          # minimum synaptic weight (absolute value)
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
     feedback: true  

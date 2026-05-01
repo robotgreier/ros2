@@ -51,45 +51,45 @@ class SNNNode(Node):
         self.declare_parameter('pack_order', ['keypoints_grid','proximity', 'object_rec'])
 
         # Channel sizes (matches YAML)
-        self.declare_parameter('kp_rows', 3)
-        self.declare_parameter('kp_cols', 8)
+        self.declare_parameter('kp_rows', 4)
+        self.declare_parameter('kp_cols', 6)
         self.declare_parameter('proximity_size', 4)
         self.declare_parameter('object_rec_size', 3)
 
         # Action parameters
-        self.declare_parameter('num_actions', 3)
+        self.declare_parameter('num_actions', 4)
 
         # Driving parameters
-        self.declare_parameter('timer_hz', 30.0)
+        self.declare_parameter('timer_hz', 15.0)
         self.declare_parameter('idle_timeout_sec', 1.0)
         self.declare_parameter('use_proximity_for_stop', True)
         self.declare_parameter('proximity_stop_active_high', True)
 
         # Robot speed parameters
-        self.declare_parameter('forward_speed', 0.05)
-        self.declare_parameter('turn_speed', 0.1)
+        self.declare_parameter('forward_speed', 0.125)
+        self.declare_parameter('turn_speed', 0.3)
 
         # Neuron parameters (integer-scaled)
-        self.declare_parameter('decay', 128)
-        self.declare_parameter('threshold', 1024)
+        self.declare_parameter('decay', 256)
+        self.declare_parameter('threshold', 2048)
         self.declare_parameter('reset', 0)
 
         # Synapse & Learning parameters
-        self.declare_parameter('lr_shift', 3)
-        self.declare_parameter('initial_weight', 64)
+        self.declare_parameter('lr_shift', 7)
+        self.declare_parameter('initial_weight', -1)
         self.declare_parameter('t_pre', 3)
-        self.declare_parameter('t_post', 2)
+        self.declare_parameter('t_post', 3)
         self.declare_parameter('tau_e_shift', 3)
-        self.declare_parameter('dw_pos', 32)
-        self.declare_parameter('dw_neg', 32)
-        self.declare_parameter('min_weight', 8)
-        self.declare_parameter('max_weight', 127)
-        self.declare_parameter('learning_mode', 'none')
+        self.declare_parameter('dw_pos', 16)
+        self.declare_parameter('dw_neg', -8)
+        self.declare_parameter('min_weight', 16)
+        self.declare_parameter('max_weight', 254)
+        self.declare_parameter('learning_mode', 'rstdp')
         self.declare_parameter('feedback', True)
         self.declare_parameter('seed', 42)
 
         # ---- CSV logging ----
-        self.declare_parameter('log_enable', False)
+        self.declare_parameter('log_enable', True)
         self.declare_parameter('log_mode', 'A')  # 'A', 'B', or 'C'
         self.declare_parameter('log_dir', '')    # default resolved to ~/.ros/snn_logs
         self.declare_parameter('log_queue_size', 5000)
@@ -109,7 +109,7 @@ class SNNNode(Node):
         # ---- For episode weight logging ----
         self.declare_parameter(
             'weights_log_dir',
-            str(Path.home() / "ros2_ws" / "src" / "ros2" / "weights_logs")
+            "/opt/robot_ws/src/ros2/weights_logs"
         )
         self.weights_log_dir = Path(self.get_parameter('weights_log_dir').value).expanduser()
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)
@@ -398,7 +398,7 @@ class SNNNode(Node):
         dop_prox_stop = 0.0
         dop_prox_approach = 0.0
 
-        if self.learning_mode == 'rstdp':
+        if self.learning_mode == 'rstdp' and int(winner_idx) >= 0:
             self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
 
         ## Logging ##
@@ -520,6 +520,8 @@ class SNNNode(Node):
 
         if force_stop:
             decision = "STOP_PROXIMITY"
+        elif winner_idx < 0:
+            decision = "IDLE"
         else:
             if winner_idx == 0:      # LEFT
                 cmd.linear.x = 0.0

@@ -70,7 +70,7 @@ python_snn_node:
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
     feedback: true  
-    learning_mode: "stdp"   # none | stdp | rstdp
+    learning_mode: "rstdp"   # none | stdp | rstdp
 
     seed: 42
 

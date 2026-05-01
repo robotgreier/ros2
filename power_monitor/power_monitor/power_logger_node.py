@@ -200,7 +200,7 @@ class PowerLogger(Node):
             f"E_total={self.episode_energy_total:.3f}Wh, "
             f"time={total_time:.2f}s"
         )
-    # ---------------- Battery math ----------------
+    # ---------------- Battery calculations ----------------
 
     def voltage_to_percentage(self, voltage):
         """

@@ -170,7 +170,8 @@ def generate_launch_description():
                 'weights_file': os.path.join(
                     get_package_share_directory('python_snn_node'),
                     'config', 'weights.mem'
-                )
+                ),
+                'serial_port': '/dev/ttyS0',
             }],
         ),
 

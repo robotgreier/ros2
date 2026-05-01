@@ -13,13 +13,13 @@ from std_msgs.msg import Float32, Bool
 
 cmd = 0x80 # command bit for register access
 
-APDS_ADDR   = 0x39
-ENABLE      = cmd | 0x00
-STATUS      = cmd | 0x13
-PPULSE      = cmd | 0x0E
-CONTROL     = cmd | 0x0F
-PDATAL      = cmd | 0x18
-PDATAH      = cmd | 0x19
+APDS_ADDR   = 0x39          # I2C address
+ENABLE      = cmd | 0x00    # enable register (power on, proximity enable)
+STATUS      = cmd | 0x13    # status register (flags for new data, new proximity data available)
+PPULSE      = cmd | 0x0E    # pulse register (sets number of IR LED pulses for one proximity measurement)
+CONTROL     = cmd | 0x0F    # control register ([7:6]: IR LED current, [5:4]: Proximity receiver gain, [3:2]: Proximity selection)
+PDATAL      = cmd | 0x18    # proximity data low byte (LSB) ADC result
+PDATAH      = cmd | 0x19    # proximity data high byte (MSB) ADC result
 
 
 # ENABLE register bits

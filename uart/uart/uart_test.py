@@ -12,7 +12,7 @@ def send_packet(ser, cmd, payload):
     s1 = s2 = 0
     for b in pkt_body:
         s1 = (s1 + b) % 255
-        s2 = (s2 + s1) % 255[cite: 6]
+        s2 = (s2 + s1) % 255
     
     full_pkt = bytes(pkt_body + [s1, s2])
     ser.write(full_pkt)

@@ -11,7 +11,6 @@ This node is responsible for:
 
 # uart_node.py
 
-import json
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -53,7 +52,7 @@ class UartBridgeNode(Node):
         self.declare_parameter("serial_port", "/dev/ttyUSB1")
         self.declare_parameter("baudrate", 250000)
         self.declare_parameter("timeout", 1.0)
-        self.declare_parameter("weights_file", "weights.json")
+        self.declare_parameter("weights_file", "")
         self.declare_parameter("response_timeout_sec", 1.0)
         self.declare_parameter("max_retry_count", 2)
         self.declare_parameter("poll_period_sec", 0.01)
@@ -101,9 +100,6 @@ class UartBridgeNode(Node):
         self.load_weights()
         self.try_send_init()
 
-        def send_spike(self, payload: List[int]):
-            self.send_packet(CMD_SPIKE, payload)
-
         self.create_timer(self.poll_period_sec, self.poll_serial)
         self.create_timer(0.05, self.check_for_timeouts)
 
@@ -148,11 +144,12 @@ class UartBridgeNode(Node):
     def load_weights(self):
         try:
             path = Path(self.weights_file)
-            if path.exists():
-                self.weights = json.load(open(path))
-                self.publish_status(f"Loaded {len(self.weights)} weights")
-            else:
-                self.publish_error("Weights file not found")
+            if not path.exists():
+                self.publish_error(f"Weights file not found: {self.weights_file}")
+                return
+            with open(path) as f:
+                self.weights = [int(line.strip(), 16) for line in f if line.strip()]
+            self.publish_status(f"Loaded {len(self.weights)} weights from {path.name}")
         except Exception as e:
             self.publish_error(f"Weight load error: {e}")
             self.weights = []
@@ -160,7 +157,8 @@ class UartBridgeNode(Node):
     def save_weights(self):
         try:
             with open(self.weights_file, "w") as f:
-                json.dump(self.weights, f)
+                for w in self.weights:
+                    f.write(f"{w:02X}\n")
             self.publish_status("Saved updated weights")
         except Exception as e:
             self.publish_error(f"Failed to save weights: {e}")
@@ -185,6 +183,9 @@ class UartBridgeNode(Node):
     # =================================================
     # Sending
     # =================================================
+
+    def send_spike(self, payload: List[int]):
+        self.send_packet(CMD_SPIKE, payload)
 
     def send_packet(self, cmd: int, payload: List[int]):
         try:

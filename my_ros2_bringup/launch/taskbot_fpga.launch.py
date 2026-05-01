@@ -166,6 +166,12 @@ def generate_launch_description():
             executable='uart_node',
             name='uart_node',
             output='screen',
+            parameters=[{
+                'weights_file': os.path.join(
+                    get_package_share_directory('python_snn_node'),
+                    'config', 'weights.mem'
+                )
+            }],
         ),
 
         # Task manager node to coordinate

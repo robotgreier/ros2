@@ -73,6 +73,18 @@ class UartBridgeNode(Node):
 
         self.publish_status("UART Hardware Node started.")
 
+    def publish_status(self, text: str):
+        msg = String()
+        msg.data = text
+        self.status_pub.publish(msg)
+        self.get_logger().info(text)
+
+    def publish_error(self, text: str):
+        msg = String()
+        msg.data = text
+        self.error_pub.publish(msg)
+        self.get_logger().error(text)
+
     def open_serial_port(self):
         try:
             # timeout=0 makes read() non-blocking
@@ -159,6 +171,22 @@ class UartBridgeNode(Node):
             self.handle_update(payload)
         elif cmd == 2:
             self.publish_error(f"FPGA Error Code: {payload}")
+
+    def save_weights(self):
+        if not self.weights_file:
+            return
+        try:
+            with open(self.weights_file, "w") as f:
+                for w in self.weights:
+                    f.write(f"{w:02X}\n")
+            self.publish_status("Saved updated weights")
+        except Exception as e:
+            self.publish_error(f"Failed to save weights: {e}")
+
+    def handle_update(self, payload):
+        self.weights = list(payload)
+        self.save_weights()
+        self.wait_start_time = None
 
     def handle_out(self, payload):
         if payload:

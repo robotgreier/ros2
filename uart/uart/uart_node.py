@@ -218,7 +218,7 @@ class UartBridgeNode(Node):
 
     def load_weights(self):
         path = Path(self.weights_file)
-        if path.exists():
+        if path.is_file():
             with open(path) as f:
                 self.weights = [int(line.strip(), 16) for line in f if line.strip()]
 

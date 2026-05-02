@@ -56,17 +56,27 @@ class DopamineComputer:
         comps: Dict[str, int] = {}
 
         # If we see an ArUco, stop/reset search pattern
-        if seen:
-            self.search_counter = 0
-            self.search_phase = "turn"
+#        if seen:
+#            self.search_counter = 0
+#            self.search_phase = "turn"
+
+        dopamine = 0
 
         # Existing reward: correct action when ArUco is visible
-        if seen and pos is not None and (
-            (pos == 0 and action_idx == 1) or
-            (pos < 0 and action_idx == 0) or
-            (pos > 0 and action_idx == 2)
-        ):
-            dopamine = 6
+        if seen and pos == 0 and action_idx == 1:
+            dopamine += 6
+        elif seen and pos is not None and pos < 0 and action_idx == 0:
+            dopamine += 3
+        elif seen and pos is not None and pos > 0 and action_idx == 2:
+            dopamine += 3
+
+        # Existing reward: correct action when ArUco is visible
+        if seen and pos is not None and pos < 0 and action_idx == 2:
+            dopamine += -2
+        elif seen and pos is not None and pos > 0 and action_idx == 0:
+            dopamine += -2
+
+        
 
         # New reward: structured search when no ArUco is visible
 #        elif not seen:
@@ -87,26 +97,23 @@ class DopamineComputer:
 #                dopamine = 0 if action_idx == 1 else 0
 
         # Existing penalty: backing away while ArUco is visible
-        elif seen and action_idx == 3:
-            dopamine = -2
-
-        # Existing default: no reward / no penalty
-        else:
-            dopamine = 0
-
-        # Label reward component for debugging
-        if not seen and dopamine > 0:
-            comps[f"search_{self.search_phase}"] = dopamine
-        else:
-            comps["align_action"] = dopamine
+        if seen and action_idx == 3:
+            dopamine += -2
 
         # Existing proximity override
         if proximity_stop:
             if action_idx == 3:
-                dopamine = 4
+                dopamine += 4
                 comps["proximity_stop"] = dopamine
             else:
-                dopamine = -3
+                dopamine += -3
                 comps["proximity_stop"] = dopamine
+
+
+                # Label reward component for debugging
+        if not seen and dopamine > 0:
+            comps[f"search_{self.search_phase}"] = dopamine
+        else:
+            comps["align_action"] = dopamine
 
         return dopamine, comps

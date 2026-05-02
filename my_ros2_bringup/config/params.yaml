@@ -60,7 +60,7 @@ python_snn_node:
     reset: 0
 
     # Synapse / learning parameters
-    lr_shift: 7             # learning rate = 1 / (2^lr_shift)
+    lr_shift: 4             # learning rate = 1 / (2^lr_shift)
     t_pre: 4                # time steps for pre-synaptic trace
     t_post: 4               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)

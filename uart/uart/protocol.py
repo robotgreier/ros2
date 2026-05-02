@@ -17,7 +17,7 @@ from typing import List, Tuple, Optional
 # Protocol constants
 # -----------------------------
 
-SOF = 0xFF  # 170 decimal
+SOF = 0xFF  # 255 decimal
 
 # Pi -> FPGA commands (must match master.sv localparam values)
 CMD_INIT = 0
@@ -40,22 +40,16 @@ CMD_RESEND_REPLY = 4  # Same numeric value as CMD_RESEND, named for clarity
 # -----------------------------
 
 def fletcher_checksum(data: List[int]) -> Tuple[int, int]:
-    """
-    Compute Fletcher checksum over a list of byte values.
-
-    Args:
-        data: List of integers in range 0-255.
-
-    Returns:
-        (sum_1, sum_2) as a tuple of ints.
-    """
     sum_1 = 0
     sum_2 = 0
-
     for value in data:
-        sum_1 = (sum_1 + value) % 255
-        sum_2 = (sum_2 + sum_1) % 255
-
+        # Match Verilog: temp_sum_1 = (sum_1 + data >= 255) ? ...
+        sum_1 = (sum_1 + value)
+        if sum_1 >= 255: sum_1 -= 255
+        
+        # Match Verilog: temp_sum_2 = (temp_sum_1 + sum_2 >= 255) ? ...[cite: 1]
+        sum_2 = (sum_2 + sum_1)
+        if sum_2 >= 255: sum_2 -= 255
     return sum_1, sum_2
 
 
@@ -80,18 +74,9 @@ def build_packet(cmd: int, payload: List[int]) -> bytes:
     Raises:
         ValueError: If payload is too large or contains invalid byte values.
     """
-    if len(payload) > 255:
-        raise ValueError("Payload too large. LEN field is one byte, max 255.")
-
-    for value in payload:
-        if not 0 <= value <= 255:
-            raise ValueError(f"Invalid payload byte: {value}")
-
     header_and_data = [SOF, cmd, len(payload)] + payload
     sum_1, sum_2 = fletcher_checksum(header_and_data)
-
-    full_packet = header_and_data + [sum_1, sum_2]
-    return bytes(full_packet)
+    return bytes(header_and_data + [sum_1, sum_2])
 
 
 # -----------------------------

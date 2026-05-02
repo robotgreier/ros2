@@ -69,22 +69,22 @@ class DopamineComputer:
             dopamine = 6
 
         # New reward: structured search when no ArUco is visible
-        elif not seen:
-            self.search_counter += 1
+#        elif not seen:
+#            self.search_counter += 1
 
             # Tune these numbers depending on your control loop speed
-            turn_steps = 30       # reward LEFT for this many steps
-            forward_steps = 10    # then reward FORWARD for this many steps
+#            turn_steps = 30       # reward LEFT for this many steps
+#            forward_steps = 10    # then reward FORWARD for this many steps
 
-            cycle_length = turn_steps + forward_steps
-            phase_step = self.search_counter % cycle_length
+#            cycle_length = turn_steps + forward_steps
+#            phase_step = self.search_counter % cycle_length
 
-            if phase_step < turn_steps:
-                self.search_phase = "turn"
-                dopamine = 0 if action_idx == 0 else 0
-            else:
-                self.search_phase = "forward"
-                dopamine = 0 if action_idx == 1 else 0
+#            if phase_step < turn_steps:
+#                self.search_phase = "turn"
+#                dopamine = 0 if action_idx == 0 else 0
+#            else:
+#                self.search_phase = "forward"
+#                dopamine = 0 if action_idx == 1 else 0
 
         # Existing penalty: backing away while ArUco is visible
         elif seen and action_idx == 3:

@@ -66,7 +66,7 @@ class DopamineComputer:
             (pos < 0 and action_idx == 0) or
             (pos > 0 and action_idx == 2)
         ):
-            dopamine = 2
+            dopamine = 4
 
         # New reward: structured search when no ArUco is visible
         elif not seen:
@@ -88,7 +88,7 @@ class DopamineComputer:
 
         # Existing penalty: backing away while ArUco is visible
         elif seen and action_idx == 3:
-            dopamine = -1
+            dopamine = -2
 
         # Existing default: no reward / no penalty
         else:
@@ -103,7 +103,7 @@ class DopamineComputer:
         # Existing proximity override
         if proximity_stop:
             if action_idx == 3:
-                dopamine = 2
+                dopamine = 4
                 comps["proximity_stop"] = dopamine
             else:
                 dopamine = -3

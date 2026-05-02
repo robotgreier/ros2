@@ -211,9 +211,11 @@ class UartBridgeNode(Node):
 
     def try_send_init(self):
         if self.weights and self.ser:
-            self.send_packet(CMD_INIT, self.weights)
+            packet = build_packet(CMD_INIT, self.weights)
+            self.ser.write(packet)
+            self.ser.flush()
             self.initialized = True
-            self.publish_status("Sent CMD_INIT")
+            self.publish_status("Sent CMD_INIT (no ACK expected)")
 
     def load_weights(self):
         path = Path(self.weights_file)

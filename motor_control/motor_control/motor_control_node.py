@@ -5,7 +5,7 @@ from geometry_msgs.msg import Twist
 import time
 import atexit
 
-# Lokale Emakefun-filer (samme mappe)
+# Emakefun MotorHAT code (same folder)
 from .Emakefun_MotorHAT import Emakefun_MotorHAT, Emakefun_DCMotor, Emakefun_Servo
 from .Emakefun_MotorDriver import PWM
 from .Emakefun_I2C import Emakefun_I2C
@@ -15,32 +15,36 @@ class MotorControlNode(Node):
         super().__init__('motor_control_node')
 
         # --- ROS-parameteroppsett ---
-        self.declare_parameter('wheel_base', 0.15)       # meter
-        self.declare_parameter('max_lin_vel', 1.8)       # Higher number = lower speed
-        self.declare_parameter('max_ang_vel', 1.5)       # rad/s
-        self.declare_parameter('cmd_vel_timeout', 0.5)   # sekunder
+        self.declare_parameter('wheel_base', 0.15)      # meter
+        self.declare_parameter('max_lin_vel', 0.25)     # m/s
+        self.declare_parameter('max_ang_vel', 1.0)      # rad/s
+        self.declare_parameter('max_pwm', 120)          # pwm upper limit
+        self.declare_parameter('min_pwm', 40)           # pwm lower limit (smooth start)
+        self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
 
         self.wheel_base = float(self.get_parameter('wheel_base').value)
         self.max_lin_vel = float(self.get_parameter('max_lin_vel').value)
         self.max_ang_vel = float(self.get_parameter('max_ang_vel').value)
+        self.max_pwm = int(self.get_parameter('max_pwm').value)
+        self.min_pwm = int(self.get_parameter('min_pwm').value)
         self.timeout = float(self.get_parameter('cmd_vel_timeout').value)
 
-        # --- Emakefun Motorhat (I2C-adresse 0x60 iht. DRI0054-dokumentasjon) ---
+        # Emakefun Motorhat (I2C-address 0x60 - DRI0054-documentation)
         self.get_logger().info("Initialiserer Emakefun_MotorHAT på I2C 0x60...")
         self.mh = Emakefun_MotorHAT(addr=0x60)
 
-        # Vi bruker M1 og M2
+        # DC Motor connection M1 og M2
         self.m_left  = self.mh.getMotor(1)
         self.m_right = self.mh.getMotor(2)
         
         self.left_dir = 1
-        self.right_dir = -1   # inverter høyre motor
+        self.right_dir = -1   # invert right motor
 
 
-        # Slå av motorer ved avslutning
+        # Turn off motors on shutdown
         atexit.register(self.turn_off_motors)
 
-        # ROS2-kommunikasjon
+        # ROS2 subscription and timer
         self.last_cmd_time = time.time()
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.create_timer(0.02, self.timer_callback)  # 50 Hz watchdog
@@ -58,32 +62,32 @@ class MotorControlNode(Node):
             pass
 
     # -----------------------
-    # cmd_vel mottatt
+    # cmd_vel callback
     # -----------------------
     def cmd_vel_callback(self, msg):
         self.last_cmd_time = time.time()
 
-        v = msg.linear.x
-        w = msg.angular.z
+        v = msg.linear.x        # m/s, cmd_vel message: 0.125
+        w = msg.angular.z       # rad/s, cmd_vel message: 0.3
 
-        # Begrens til maksverdier
+        # Limit velocities to max values
         v = max(-self.max_lin_vel, min(self.max_lin_vel, v))
         w = max(-self.max_ang_vel, min(self.max_ang_vel, w))
 
-        # Normaliser lineær og angular uavhengig til [-1, 1]
+        # Normalize velocities to [-1, 1]
         v_norm = v / self.max_lin_vel if self.max_lin_vel > 0 else 0.0
         w_norm = w / self.max_ang_vel if self.max_ang_vel > 0 else 0.0
 
-        # Differensialdrift i normalisert rom
+        # Differential drive mixing for left and right motors
         pwm_l_norm = v_norm - w_norm
         pwm_r_norm = v_norm + w_norm
 
-        # Skaler til [-255, 255], bevar forholdet ved overflow
+        # Scale PWM values to fit within [-255, 255] while preserving the ratio
         scale = max(1.0, abs(pwm_l_norm), abs(pwm_r_norm))
-        pwm_l = int(255 * pwm_l_norm / scale)
-        pwm_r = int(255 * pwm_r_norm / scale)
+        pwm_l = int(self.max_pwm * pwm_l_norm / scale)
+        pwm_r = int(self.max_pwm * pwm_r_norm / scale)
 
-        # Påfør med retningskoreksjon
+        # Apply PWM to motors
         self.apply_pwm(self.m_left,  self.left_dir  * pwm_l)
         self.apply_pwm(self.m_right, self.right_dir * pwm_r)
 
@@ -96,7 +100,7 @@ class MotorControlNode(Node):
             self.apply_pwm(self.m_right, 0)
 
     # -----------------------
-    # Påfør PWM til motor
+    # Apply PWM to motor with direction and speed control
     # -----------------------
     def apply_pwm(self, motor, pwm_value):
         if pwm_value == 0:
@@ -105,8 +109,12 @@ class MotorControlNode(Node):
             return
 
         speed = abs(pwm_value)
-        if speed > 255:
-            speed = 255
+
+        if speed < self.min_pwm:
+            speed = self.min_pwm
+
+        if speed > self.max_pwm:
+            speed = self.max_pwm
 
         if pwm_value > 0:
             motor.run(Emakefun_MotorHAT.FORWARD)

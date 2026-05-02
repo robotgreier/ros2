@@ -55,7 +55,7 @@ class RSTDPSynapse:
 
     def __init__(self, lr_shift=7, w_init=None,
                  t_pre=3, t_post=3, tau_e_shift=3,
-                 dw_pos=16, dw_neg=-8,
+                 dw_pos=32, dw_neg=16,
                  w_min=16, w_max=254,
                  mode='rstdp'):
 
@@ -173,8 +173,8 @@ class SNNLayer:
         self.t_pre       = synapse_params.get('t_pre',       3)
         self.t_post      = synapse_params.get('t_post',      3)
         self.tau_e_shift = synapse_params.get('tau_e_shift', 3)
-        self.dw_pos      = synapse_params.get('dw_pos',      16)
-        self.dw_neg      = synapse_params.get('dw_neg',      -8)
+        self.dw_pos      = synapse_params.get('dw_pos',      32)
+        self.dw_neg      = synapse_params.get('dw_neg',      16)
         self.w_min       = synapse_params.get('w_min',       16)
         self.w_max       = synapse_params.get('w_max',       254)
 

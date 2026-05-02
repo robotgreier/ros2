@@ -100,15 +100,15 @@ grab_node:
     approach_speed: 0.05            # m/s
     approach_distance_item: 0.25     # m
     approach_distance_dropoff: 0.25  # m
-    backup_speed: 0.01              # m/s
+    backup_speed: 0.05              # m/s
     backup_distance: 0.2            # m
-    failed_grab_backup_distance: 0.05
-    motion_publish_rate_hz: 20.0
+    failed_grab_backup_distance: 0.02
+    motion_publish_rate_hz: 15.0
     item_final_distance: -1.0       # -1 = disabled
     dropoff_final_distance: 0.02    # m
     min_forward_distance: 0.2       # m
     max_forward_distance: 0.45      # m
-    creep_speed: 0.01                # m/s
+    creep_speed: 0.05                # m/s
     use_sim_gripper: false
 
 # ── Command arbiter ────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ proximity_stop:
     scan_topic: "/ultrasonic/front/scan"
     state_topic: "/task/state"
     stop_topic: "/proximity_stop"
-    distance_threshold: 0.10         # m
+    distance_threshold: 0.20         # m
     disabled_states: [1, 3]          # 1=APPROACH_ITEM, 3=APPROACH_DROPOFF
 
 # ── ArUco / image recognition node ────────────────────────────────────────────

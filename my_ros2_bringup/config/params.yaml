@@ -99,15 +99,15 @@ grab_node:
     dropoff_distance_threshold: 0.3 # m
     approach_speed: 0.05            # m/s
     approach_distance_item: 0.25     # m
-    approach_distance_dropoff: 0.3  # m
+    approach_distance_dropoff: 0.25  # m
     backup_speed: 0.05              # m/s
-    backup_distance: 0.3            # m
+    backup_distance: 0.2            # m
     motion_publish_rate_hz: 20.0
     item_final_distance: -1.0       # -1 = disabled
     dropoff_final_distance: 0.02    # m
     min_forward_distance: 0.2       # m
-    max_forward_distance: 0.30      # m
-    creep_speed: 0.3                # m/s
+    max_forward_distance: 0.20      # m
+    creep_speed: 0.03                # m/s
     use_sim_gripper: false
 
 # ── Command arbiter ────────────────────────────────────────────────────────────

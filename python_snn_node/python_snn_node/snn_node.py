@@ -23,6 +23,7 @@ import os
 from datetime import datetime
 
 from taskbot_interfaces.srv import SaveWeights
+from taskbot_interfaces.msg import Int32Array
 from pathlib import Path
 
 EVENT_IDLE = 0
@@ -256,6 +257,15 @@ class SNNNode(Node):
         self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10)
         self.pub_spikes = self.create_publisher(Int32MultiArray, '/snn/spikes', 10)
         self.pub_decision = self.create_publisher(String, '/snn/decision', 10)
+
+        qos_monitor = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+        self.pub_mem = self.create_publisher(Int32Array, '/snn/mem', qos_monitor)
+        self.pub_weights = self.create_publisher(Int32Array, '/snn/weights', qos_monitor)
+        self.pub_eligibility = self.create_publisher(Int32Array, '/snn/eligibility', qos_monitor)
         
         self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn')
         cmd_topic = self.get_parameter('cmd_vel_topic').value
@@ -372,6 +382,8 @@ class SNNNode(Node):
         # Forward pass
         output_spikes = self.network.forward(input_spikes=self.last_vector)
 
+        self.pub_mem.publish(Int32Array(data=self.network.pre_reset_mem.tolist()))
+
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
         
@@ -400,6 +412,9 @@ class SNNNode(Node):
 
         if self.learning_mode == 'rstdp' and int(winner_idx) >= 0:
             self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
+
+        self.pub_weights.publish(Int32Array(data=self.network.weights.flatten().tolist()))
+        self.pub_eligibility.publish(Int32Array(data=self.network.eligibility.flatten().tolist()))
 
         ## Logging ##
 

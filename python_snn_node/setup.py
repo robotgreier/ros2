@@ -1,3 +1,4 @@
+from glob import glob
 from setuptools import find_packages, setup
 
 package_name = 'python_snn_node'
@@ -12,6 +13,7 @@ setup(
         ('share/python_snn_node/config', [
         'config/weights_current.mem',
         ]),
+        ('share/python_snn_node/launch', glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

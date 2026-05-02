@@ -46,7 +46,7 @@ class CmdArbiter(Node):
         self.declare_parameter("source_timeouts_sec", [0.5, 0.5, 0.5])
 
         # Behavior
-        self.declare_parameter("publish_rate_hz", 30.0)
+        self.declare_parameter("publish_rate_hz", 15.0)
         self.declare_parameter("proximity_stop_active_high", True)
         self.declare_parameter("publish_zero_when_idle", True)
 

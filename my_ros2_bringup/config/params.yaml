@@ -107,8 +107,8 @@ grab_node:
     item_final_distance: -1.0       # -1 = disabled
     dropoff_final_distance: 0.02    # m
     min_forward_distance: 0.2       # m
-    max_forward_distance: 0.20      # m
-    creep_speed: 0.1                # m/s
+    max_forward_distance: 0.45      # m
+    creep_speed: 0.2                # m/s
     use_sim_gripper: false
 
 # ── Command arbiter ────────────────────────────────────────────────────────────

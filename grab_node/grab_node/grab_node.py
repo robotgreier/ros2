@@ -73,7 +73,7 @@ class GrabNode(Node):
         self.declare_parameter("min_forward_distance", 0.2)
         self.declare_parameter("max_forward_distance", 0.45)
 
-        self.declare_parameter("creep_speed", 0.1)
+        self.declare_parameter("creep_speed", 0.2)
         self.declare_parameter("grip_timeout_sec", 4.0)
         self.declare_parameter("failed_grab_backup_distance", 0.1)
 

@@ -13,6 +13,7 @@ from .protocol import (
     validate_packet,
     CMD_INIT,
     CMD_SPIKE,
+    CMD_DOPAMINE,
     CMD_STOP,
 )
 
@@ -25,8 +26,6 @@ class UartBridgeNode(Node):
         # -----------------------------
         # Parameters
         # -----------------------------
-        # On Ubuntu Pi, /dev/ttyAMA0 is the default hardware UART 
-        # (mapped to pins 8/10 if Bluetooth is disabled)
         self.declare_parameter("port", "/dev/ttyAMA3")
         self.declare_parameter("baudrate", 250000)
         self.declare_parameter("weights_file", "")

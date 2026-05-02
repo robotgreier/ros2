@@ -19,12 +19,13 @@ from typing import List, Tuple, Optional
 
 SOF = 0xFF  # 170 decimal
 
-# Pi -> FPGA commands
+# Pi -> FPGA commands (must match master.sv localparam values)
 CMD_INIT = 0
 CMD_SPIKE = 1
-CMD_STOP = 2
-CMD_RESET = 3
-CMD_RESEND = 4
+CMD_DOPAMINE = 2
+CMD_STOP = 3
+CMD_RESET = 4
+CMD_ERR = 5
 
 # FPGA -> Pi commands
 CMD_AFFIRM = 0

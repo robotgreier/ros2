@@ -16,10 +16,10 @@ class MotorControlNode(Node):
 
         # --- ROS-parameteroppsett ---
         self.declare_parameter('wheel_base', 0.15)      # meter
-        self.declare_parameter('max_lin_vel', 0.25)     # m/s
-        self.declare_parameter('max_ang_vel', 1.0)      # rad/s
-        self.declare_parameter('max_pwm', 120)          # pwm upper limit
-        self.declare_parameter('min_pwm', 40)           # pwm lower limit (smooth start)
+        self.declare_parameter('max_lin_vel', 0.1)     # m/s
+        self.declare_parameter('max_ang_vel', 0.1)      # rad/s
+        self.declare_parameter('max_pwm', 100)          # pwm upper limit
+        self.declare_parameter('min_pwm', 30)           # pwm lower limit (smooth start)
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
 
         self.wheel_base = float(self.get_parameter('wheel_base').value)
@@ -67,8 +67,8 @@ class MotorControlNode(Node):
     def cmd_vel_callback(self, msg):
         self.last_cmd_time = time.time()
 
-        v = msg.linear.x        # m/s, cmd_vel message: 0.125
-        w = msg.angular.z       # rad/s, cmd_vel message: 0.3
+        v = msg.linear.x        # m/s, cmd_vel message: 0.1
+        w = msg.angular.z       # rad/s, cmd_vel message: 0.1
 
         # Limit velocities to max values
         v = max(-self.max_lin_vel, min(self.max_lin_vel, v))

@@ -71,7 +71,7 @@ class DopamineComputer:
                 elif action_idx == 3:   # centered → backing away
                     dopamine = -1
                 else:                   # turning in place when centered
-                    dopamine = 0
+                    dopamine = -1
             elif pos is not None and pos < 0:   # target is left
                 if action_idx == 0:     # correct: turn left
                     dopamine = 3

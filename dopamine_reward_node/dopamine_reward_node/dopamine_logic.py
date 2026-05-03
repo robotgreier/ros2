@@ -89,11 +89,11 @@ class DopamineComputer:
         # silent zeros that produce no learning signal at all.
         else:
             if action_idx == 1:         # FORWARD — explore open space
-                dopamine = 0
+                dopamine = 1
             elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
                 dopamine = 1
             else:                       # BACKWARD — retreating during search
-                dopamine = -1
+                dopamine = -2
             comps[f"search_{self.search_phase}"] = dopamine
 
         return dopamine, comps

@@ -196,7 +196,8 @@ class SNNLayer:
         else:
             self.weights = np.full((n_outputs, self.n_inputs), w_init, dtype=np.int32)
 
-        self.eligibility = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
+        self.eligibility          = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
+        self.eligibility_snapshot = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
         self.pre_timer   = np.full((n_outputs, self.n_inputs), -1, dtype=np.int32)
         self.post_timer  = np.full((n_outputs, self.n_inputs), -1, dtype=np.int32)
         self.last_delta_w = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
@@ -255,6 +256,7 @@ class SNNLayer:
             pre_mat  = np.broadcast_to(input_arr[np.newaxis, :],  (self.n_outputs, self.n_inputs))
             post_mat = np.broadcast_to(output_arr[:, np.newaxis], (self.n_outputs, self.n_inputs))
             self._update_eligibility(pre_mat, post_mat)
+            self.eligibility_snapshot = self.eligibility.copy()
 
         if self.feedback:
             self._feedback_reg = int(not np.any(output_arr))
@@ -314,7 +316,7 @@ class SNNLayer:
         if self.mode == 'stdp':
             return
 
-        delta_w = (self.eligibility[winner_idx] * dopamine) >> self.lr_shift
+        delta_w = (self.eligibility_snapshot[winner_idx] * dopamine) >> self.lr_shift
         self.last_delta_w[winner_idx] = delta_w
         new_row = self.weights[winner_idx] + delta_w
         np.clip(new_row, self.w_min, self.w_max, out=self.weights[winner_idx])
@@ -350,7 +352,8 @@ class SNNLayer:
         self.mem[:]           = 0
         self.spk[:]           = 0
         self.pre_reset_mem[:] = 0
-        self.eligibility[:]   = 0
+        self.eligibility[:]          = 0
+        self.eligibility_snapshot[:] = 0
         self.pre_timer[:]     = -1
         self.post_timer[:]    = -1
         self._feedback_reg    = 0

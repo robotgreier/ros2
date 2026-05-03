@@ -245,6 +245,7 @@ class SNNNode(Node):
         self.last_vector = np.zeros(self.input_size, dtype=np.int32)
         self.correct_output = -1
         self.latest_dopamine = 0
+        self.previous_winner_idx = -1
 
         qos_sensor = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -413,8 +414,11 @@ class SNNNode(Node):
         dop_prox_stop = 0.0
         dop_prox_approach = 0.0
 
-        if self.learning_mode == 'rstdp' and int(winner_idx) >= 0:
-            self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
+        # Apply reward to the PREVIOUS winner using the eligibility snapshot captured
+        # at the end of that tick — before this tick's post-spike LTD accumulates.
+        if self.learning_mode == 'rstdp' and self.previous_winner_idx >= 0:
+            self.network.apply_reward(dopamine=dopamine, winner_idx=self.previous_winner_idx)
+        self.previous_winner_idx = int(winner_idx)
 
         self.pub_weights.publish(Int32Array(data=self.network.weights.flatten().tolist()))
         self.pub_eligibility.publish(Int32Array(data=self.network.eligibility.flatten().tolist()))

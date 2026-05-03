@@ -60,13 +60,6 @@ class WeightsLogger(Node):
         future = self.save_weights_client.call_async(req)
         future.add_done_callback(self.on_save_weights_done)
 
-        req = SaveWeights.Request()
-        req.filename = filename
-
-        self.get_logger().info(f"Requesting weight save to {filename}")
-        future = self.save_weights_client.call_async(req)
-        future.add_done_callback(self.on_save_weights_done)
-
     def on_save_weights_done(self, future):
         try:
             response = future.result()

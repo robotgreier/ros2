@@ -74,6 +74,7 @@ class SNNNode(Node):
         self.declare_parameter('decay', 256)
         self.declare_parameter('threshold', 2048)
         self.declare_parameter('reset', 0)
+        self.declare_parameter('refractory', 0)
 
         # Synapse & Learning parameters
         self.declare_parameter('lr_shift', 7)
@@ -173,6 +174,7 @@ class SNNNode(Node):
         self.decay = int(self.get_parameter('decay').value)
         self.threshold = int(self.get_parameter('threshold').value)
         self.reset = int(self.get_parameter('reset').value)
+        self.refractory = int(self.get_parameter('refractory').value)
 
         # Synapse params
         self.lr_shift = int(self.get_parameter('lr_shift').value)
@@ -198,7 +200,7 @@ class SNNNode(Node):
 
 
         #### Initialize SNN Layer ####
-        neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset}
+        neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset, "refractory": self.refractory}
         synapse_params = {
             "lr_shift": self.lr_shift, "w_init": self.initial_weight,
             "t_pre": self.t_pre, "t_post": self.t_post, "tau_e_shift": self.tau_e_shift,

@@ -11,23 +11,33 @@ class LIF:
         reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=256, threshold=2048, reset=0):
+    def __init__(self, decay=256, threshold=2048, reset=0, refractory=0):
         self.decay = decay
         self.threshold = threshold
         self.reset = reset
+        self.refractory = refractory
         self.mem = 0            # uint16, never negative
         self.pre_reset_mem = 0  # Membrane potential before reset, used for WTA
         self.spk = 0
+        self.refractory_timer = 0
 
     def update(self, synaptic_input):
         """Membrane update. Returns spike (0 or 1)."""
         self.spk = 0
+
+        if self.refractory_timer > 0:
+            self.mem = self.reset
+            self.pre_reset_mem = self.mem
+            self.refractory_timer -= 1
+            return 0
+
         self.mem = max(0, self.mem - self.decay) + synaptic_input
         self.pre_reset_mem = self.mem
 
         if self.mem >= self.threshold:
             self.spk = 1
             self.mem = self.reset
+            self.refractory_timer = self.refractory
 
         return self.spk
 
@@ -162,11 +172,13 @@ class SNNLayer:
         self.decay     = neuron_params.get('decay',     256)
         self.threshold = neuron_params.get('threshold', 2048)
         self.reset_val = neuron_params.get('reset',     0)
+        self.refractory = neuron_params.get('refractory', 0)
 
-        self.mem           = np.zeros(n_outputs, dtype=np.int32)
-        self.pre_reset_mem = np.zeros(n_outputs, dtype=np.int32)
-        self.spk           = np.zeros(n_outputs, dtype=np.int32)
-        self.spike_count   = np.zeros(n_outputs, dtype=np.int32)
+        self.mem              = np.zeros(n_outputs, dtype=np.int32)
+        self.pre_reset_mem    = np.zeros(n_outputs, dtype=np.int32)
+        self.spk              = np.zeros(n_outputs, dtype=np.int32)
+        self.spike_count      = np.zeros(n_outputs, dtype=np.int32)
+        self.refractory_timer = np.zeros(n_outputs, dtype=np.int32)
 
         # Synapse state (n_outputs, n_inputs)
         self.lr_shift    = synapse_params.get('lr_shift',    7)
@@ -205,12 +217,17 @@ class SNNLayer:
         if self.feedback:
             input_arr = np.append(input_arr, self._feedback_reg)
 
-        # LIF membrane update
+        # LIF membrane update (refractory neurons are held at reset and cannot spike)
         synaptic_inputs = self.weights @ input_arr
-        self.mem = np.maximum(0, self.mem - self.decay) + synaptic_inputs
+        in_refractory = self.refractory_timer > 0
+        integrated = np.maximum(0, self.mem - self.decay) + synaptic_inputs
+        self.mem = np.where(in_refractory, self.reset_val, integrated)
         self.pre_reset_mem = self.mem.copy()
-        output_arr = (self.mem >= self.threshold).astype(np.int32)
+        output_arr = ((self.mem >= self.threshold) & ~in_refractory).astype(np.int32)
         self.mem = np.where(output_arr, self.reset_val, self.mem)
+        self.refractory_timer = np.where(
+            output_arr, self.refractory, np.maximum(0, self.refractory_timer - 1)
+        )
         self.spike_count += output_arr
 
         if self.mode == 'stdp':
@@ -339,3 +356,4 @@ class SNNLayer:
         self._feedback_reg    = 0
         self.spike_count[:]   = 0
         self.last_delta_w[:]  = 0
+        self.refractory_timer[:] = 0

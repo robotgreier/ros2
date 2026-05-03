@@ -266,6 +266,7 @@ class SNNNode(Node):
         self.pub_mem = self.create_publisher(Int32Array, '/snn/mem', qos_monitor)
         self.pub_weights = self.create_publisher(Int32Array, '/snn/weights', qos_monitor)
         self.pub_eligibility = self.create_publisher(Int32Array, '/snn/eligibility', qos_monitor)
+        self.pub_delta_w = self.create_publisher(Int32Array, '/snn/delta_w', qos_monitor)
         
         self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn')
         cmd_topic = self.get_parameter('cmd_vel_topic').value
@@ -415,6 +416,7 @@ class SNNNode(Node):
 
         self.pub_weights.publish(Int32Array(data=self.network.weights.flatten().tolist()))
         self.pub_eligibility.publish(Int32Array(data=self.network.eligibility.flatten().tolist()))
+        self.pub_delta_w.publish(Int32Array(data=self.network.last_delta_w.flatten().tolist()))
 
         ## Logging ##
 

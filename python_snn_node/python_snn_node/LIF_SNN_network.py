@@ -187,6 +187,7 @@ class SNNLayer:
         self.eligibility = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
         self.pre_timer   = np.full((n_outputs, self.n_inputs), -1, dtype=np.int32)
         self.post_timer  = np.full((n_outputs, self.n_inputs), -1, dtype=np.int32)
+        self.last_delta_w = np.zeros((n_outputs, self.n_inputs), dtype=np.int32)
 
     def forward(self, input_spikes):
         """
@@ -198,6 +199,8 @@ class SNNLayer:
         Returns:
             List of output spikes (length n_outputs)
         """
+        self.last_delta_w[:] = 0
+
         input_arr = np.asarray(input_spikes, dtype=np.int32)
         if self.feedback:
             input_arr = np.append(input_arr, self._feedback_reg)
@@ -229,6 +232,7 @@ class SNNLayer:
 
             # Immediate weight update for all synapses (dopamine=1 → signed multiply ×1)
             delta_w = self.eligibility >> self.lr_shift
+            self.last_delta_w[:] = delta_w
             self.weights = np.clip(self.weights + delta_w, self.w_min, self.w_max)
         else:
             pre_mat  = np.broadcast_to(input_arr[np.newaxis, :],  (self.n_outputs, self.n_inputs))
@@ -294,6 +298,7 @@ class SNNLayer:
             return
 
         delta_w = (self.eligibility[winner_idx] * dopamine) >> self.lr_shift
+        self.last_delta_w[winner_idx] = delta_w
         new_row = self.weights[winner_idx] + delta_w
         np.clip(new_row, self.w_min, self.w_max, out=self.weights[winner_idx])
 
@@ -333,3 +338,4 @@ class SNNLayer:
         self.post_timer[:]    = -1
         self._feedback_reg    = 0
         self.spike_count[:]   = 0
+        self.last_delta_w[:]  = 0

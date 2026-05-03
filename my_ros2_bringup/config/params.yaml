@@ -56,7 +56,7 @@ python_snn_node:
 
     # Neuron parameters
     decay: 150               # membrane potential decay per timestep (higher is faster decay)
-    threshold: 1250          # firing threshold; higher means more synaptic input needed to fire
+    threshold: 1100          # firing threshold; higher means more synaptic input needed to fire
     reset: 0
 
     # Synapse / learning parameters
@@ -64,9 +64,9 @@ python_snn_node:
     t_pre: 4                # time steps for pre-synaptic trace
     t_post: 4               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
-    dw_pos: 32              # weight change for causal spike pair (pre before post)
-    dw_neg: 16              # weight change for acausal spike pair (post before pre)
-    min_weight: 8          # minimum synaptic weight (absolute value)
+    dw_pos: 16              # weight change for causal spike pair (pre before post)
+    dw_neg: 6              # weight change for acausal spike pair (post before pre)
+    min_weight: 24          # minimum synaptic weight (absolute value)
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
     feedback: true  
@@ -130,7 +130,7 @@ proximity_stop:
     scan_topic: "/ultrasonic/front/scan"
     state_topic: "/task/state"
     stop_topic: "/proximity_stop"
-    distance_threshold: 0.20         # m
+    distance_threshold: 0.25         # m
     disabled_states: [1, 3]          # 1=APPROACH_ITEM, 3=APPROACH_DROPOFF
 
 # ── ArUco / image recognition node ────────────────────────────────────────────

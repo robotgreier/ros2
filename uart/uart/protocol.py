@@ -28,11 +28,9 @@ CMD_RESET = 4
 CMD_ERR = 5
 
 # FPGA -> Pi commands
-CMD_AFFIRM = 0
-CMD_OUT = 1
+CMD_OUT = 0
+CMD_WEIGHT = 1
 CMD_ERR = 2
-CMD_UPDATE = 3
-CMD_RESEND_REPLY = 4  # Same numeric value as CMD_RESEND, named for clarity
 
 
 # -----------------------------

@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt8MultiArray, String
+from std_msgs.msg import UInt8MultiArray, String, Int16
 from pathlib import Path
 from typing import List, Optional
 import serial  # Replacing pigpio with pyserial
@@ -15,9 +15,16 @@ from .protocol import (
     CMD_SPIKE,
     CMD_DOPAMINE,
     CMD_STOP,
+    CMD_OUT,
+    CMD_WEIGHT,
+    CMD_ERR,
 )
 
 from .spike_codec import pack_input_spikes, unpack_output_spikes
+
+STATE_READY = "READY"
+STATE_WAIT_OUT = "WAIT_OUT"
+STATE_WAIT_DOPAMINE = "WAIT_DOPAMINE"
 
 class UartBridgeNode(Node):
     def __init__(self):
@@ -47,6 +54,7 @@ class UartBridgeNode(Node):
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
         self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
+        self.create_subscription(Int16, "/reward/dopamine", self.dopamine_callback, 10)
 
         # -----------------------------
         # Internal state
@@ -58,6 +66,7 @@ class UartBridgeNode(Node):
         self.retry_count = 0
         self.initialized = False
         self.rx_buffer = bytearray()
+        self.state = STATE_READY
 
         # -----------------------------
         # Startup
@@ -101,12 +110,30 @@ class UartBridgeNode(Node):
     def snn_input_callback(self, msg: UInt8MultiArray):
         if not self.initialized:
             return
-        # Basic flow control: don't overwhelm FPGA if still waiting for previous response
-        if self.wait_start_time is not None:
+
+        if self.state != STATE_READY:
             return
 
         payload = pack_input_spikes(list(msg.data))
         self.send_packet(CMD_SPIKE, payload)
+        self.state = STATE_WAIT_OUT
+
+    def dopamine_callback(self, msg: Int16):
+        if self.state != STATE_WAIT_DOPAMINE:
+            return
+
+        dopamine_value = int(msg.data)
+
+        if dopamine_value < -128 or dopamine_value > 127:
+            self.publish_error(f"Dopamine value out of Int8 range: {dopamine_value}")
+            return
+
+        dopamine_byte = dopamine_value & 0xFF
+
+        self.send_packet(CMD_DOPAMINE, [dopamine_byte])
+        self.publish_status(f"Sent dopamine reward: {dopamine_value}")
+
+        self.state = STATE_READY
 
     def send_packet(self, cmd: int, payload: List[int]):
         if not self.ser or not self.ser.is_open:
@@ -161,15 +188,15 @@ class UartBridgeNode(Node):
                 self.publish_error("Checksum failed")
 
     def dispatch_command(self, cmd, payload):
-        # Reset timeout state once any valid packet returns
-        self.wait_start_time = None 
-        
-        if cmd == 0: # SPIKE Output
+        if cmd == CMD_OUT:
             self.handle_out(payload)
-        elif cmd == 1: # Weight update
+        elif cmd == CMD_WEIGHT:
             self.handle_update(payload)
-        elif cmd == 2:
+        elif cmd == CMD_ERR:
             self.publish_error(f"FPGA Error Code: {payload}")
+            self.wait_start_time = None
+        else:
+            self.publish_error(f"Unknown FPGA command: {cmd}")
 
     def save_weights(self):
         if not self.weights_file:
@@ -188,10 +215,22 @@ class UartBridgeNode(Node):
         self.wait_start_time = None
 
     def handle_out(self, payload):
-        if payload:
-            action_spikes = unpack_output_spikes(payload[0], expected_len=4)
-            msg = UInt8MultiArray(data=action_spikes)
-            self.fpga_action_pub.publish(msg)
+        if not payload:
+            self.publish_error("OUT packet had empty payload")
+            self.state = STATE_READY
+            self.wait_start_time = None
+            return
+
+        action_spikes = unpack_output_spikes(payload[0], expected_len=4)
+
+        msg = UInt8MultiArray()
+        msg.data = action_spikes
+        self.fpga_action_pub.publish(msg)
+
+        self.publish_status(f"Published action spikes: {action_spikes}")
+
+        self.state = STATE_WAIT_DOPAMINE
+        self.wait_start_time = None
 
     def check_for_timeouts(self):
         if self.wait_start_time is None:

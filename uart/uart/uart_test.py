@@ -23,12 +23,12 @@ def run_test():
     
     # 1. Hardware Reset
     print(f"Resetting... {send_packet(ser, 4, [])}")
-    time.sleep(0.5) 
+    time.sleep(2) 
 
     # 2. Initialize Weights (128 bytes required)
     weights = [0x7F] * 128 
     print(f"Initializing Weights... {send_packet(ser, 0, weights)[:30]}...")
-    time.sleep(0.5) 
+    time.sleep(2) 
 
     # 3. Send Spikes (11 bytes required)[cite: 8]
     # Stimulates neurons using 3-bit-per-byte doubling[cite: 3]

@@ -53,18 +53,17 @@ class DopamineComputer:
         comps: Dict[str, int] = {}
         dopamine = 0
 
-        # Priority 1: wall avoidance dominates — alignment rewards must not
-        # contaminate or partially cancel this signal.
+        # Priority 1: wall avoidance
         if proximity_stop:
             if action_idx == 3:         # BACKWARD — escape
                 dopamine = 4
-            elif action_idx in (0, 2):  # LEFT / RIGHT — also valid escape
+            elif action_idx in (0, 2):  # LEFT / RIGHT — escape
                 dopamine = 2
             else:                       # FORWARD — into the wall
                 dopamine = -6
             comps["proximity"] = dopamine
 
-        # Priority 2: ArUco visible — unambiguous alignment rewards.
+        # Priority 2: ArUco visible — alignment rewards.
         elif seen:
             if pos == 0:
                 if action_idx == 1:     # centered → drive forward
@@ -78,15 +77,11 @@ class DopamineComputer:
                     dopamine = 3
                 elif action_idx == 2:   # wrong: turn right
                     dopamine = -3
-                elif action_idx == 3:   # backing away
-                    dopamine = -2
             elif pos is not None and pos > 0:   # target is right
                 if action_idx == 2:     # correct: turn right
                     dopamine = 3
                 elif action_idx == 0:   # wrong: turn left
                     dopamine = -3
-                elif action_idx == 3:   # backing away
-                    dopamine = -2
             comps["align"] = dopamine
 
         # Priority 3: searching — no ArUco, no wall threat.

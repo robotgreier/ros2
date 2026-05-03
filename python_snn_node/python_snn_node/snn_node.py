@@ -217,12 +217,9 @@ class SNNNode(Node):
             feedback=self.feedback
         )
 
-        
-        # Path to shared weights file in repo
-        weight_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            'config',
-            'weights_current.mem'
+        # Shared weights location (used by both Python SNN and FPGA system)
+        weight_path = os.path.expanduser(
+            "~/ros2_ws/src/ros2/weights_logs/weights_current.mem"
         )
 
         if os.path.exists(weight_path):
@@ -237,6 +234,9 @@ class SNNNode(Node):
             )
 
         self.weights_current_file = Path(weight_path)
+
+        self.weights_log_dir = self.weights_current_file.parent / "episode_logs"
+        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
         ###########################################
 

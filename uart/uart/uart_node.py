@@ -35,7 +35,7 @@ class UartBridgeNode(Node):
         # -----------------------------
         self.declare_parameter("port", "/dev/ttyAMA3")
         self.declare_parameter("baudrate", 250000)
-        self.declare_parameter("weights_file", "")
+        self.declare_parameter("weights_file",str(Path.home() / "ros2_ws/src/ros2/weights_logs/weights_current.mem"))
         self.declare_parameter("response_timeout_sec", 1.0)
         self.declare_parameter("max_retry_count", 2)
         self.declare_parameter("poll_period_sec", 0.01)
@@ -67,6 +67,7 @@ class UartBridgeNode(Node):
         self.initialized = False
         self.rx_buffer = bytearray()
         self.state = STATE_READY
+        self.waiting_for_dopamine = False
 
         # -----------------------------
         # Startup
@@ -119,7 +120,7 @@ class UartBridgeNode(Node):
         self.state = STATE_WAIT_OUT
 
     def dopamine_callback(self, msg: Int16):
-        if self.state != STATE_WAIT_DOPAMINE:
+        if self.state != STATE_WAIT_DOPAMINE or not self.waiting_for_dopamine:
             return
 
         dopamine_value = int(msg.data)
@@ -133,6 +134,7 @@ class UartBridgeNode(Node):
         self.send_packet(CMD_DOPAMINE, [dopamine_byte])
         self.publish_status(f"Sent dopamine reward: {dopamine_value}")
 
+        self.waiting_for_dopamine = False
         self.state = STATE_READY
 
     def send_packet(self, cmd: int, payload: List[int]):
@@ -229,6 +231,7 @@ class UartBridgeNode(Node):
 
         self.publish_status(f"Published action spikes: {action_spikes}")
 
+        self.waiting_for_dopamine = True
         self.state = STATE_WAIT_DOPAMINE
         self.wait_start_time = None
 
@@ -248,18 +251,66 @@ class UartBridgeNode(Node):
                 self.wait_start_time = None
 
     def try_send_init(self):
-        if self.weights and self.ser:
-            packet = build_packet(CMD_INIT, self.weights)
-            self.ser.write(packet)
-            self.ser.flush()
-            self.initialized = True
-            self.publish_status("Sent CMD_INIT")
+        if not self.ser or not self.ser.is_open:
+            self.publish_error("INIT not sent: serial port is not open")
+            return
+
+        if not self.weights:
+            self.publish_error("INIT not sent: no weights loaded")
+            return
+
+        packet = build_packet(CMD_INIT, self.weights)
+
+        self.ser.write(packet)
+        self.ser.flush()
+
+        self.initialized = True
+        self.publish_status(
+            f"Sent CMD_INIT with {len(self.weights)} weights from {self.weights_file}"
+        )
 
     def load_weights(self):
+        if not self.weights_file:
+            self.publish_error("No weights_file parameter set")
+            self.weights = []
+            return
+
         path = Path(self.weights_file)
-        if path.is_file():
-            with open(path) as f:
-                self.weights = [int(line.strip(), 16) for line in f if line.strip()]
+
+        if not path.is_file():
+            self.publish_error(f"Weights file not found: {path}")
+            self.weights = []
+            return
+
+        try:
+            weights = []
+
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    if line.startswith("#") or line.startswith("//"):
+                        continue
+
+                    line = line.split("#")[0]
+                    line = line.split("//")[0]
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    for token in line.split():
+                        weights.append(int(token, 16) & 0xFF)
+
+            self.weights = weights
+            self.publish_status(f"Loaded {len(self.weights)} weights from {path}")
+
+        except Exception as e:
+            self.weights = []
+            self.publish_error(f"Failed to load weights from {path}: {e}")
 
 def main():
     rclpy.init()

@@ -56,9 +56,9 @@ class DopamineComputer:
         # Priority 1: wall avoidance
         if proximity_stop:
             if action_idx == 3:         # BACKWARD — escape
-                dopamine = 4
-            elif action_idx in (0, 2):  # LEFT / RIGHT — escape
                 dopamine = 2
+            elif action_idx in (0, 2):  # LEFT / RIGHT — escape
+                dopamine = 3
             else:                       # FORWARD — into the wall
                 dopamine = -3
             comps["proximity"] = dopamine

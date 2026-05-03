@@ -97,16 +97,16 @@ grab_node:
   ros__parameters:
     center_threshold: 0.15
     item_distance_threshold: 0.3    # m
-    dropoff_distance_threshold: 0.3 # m
+    dropoff_distance_threshold: 0.4 # m
     approach_speed: 0.05            # m/s
     approach_distance_item: 0.25     # m
     approach_distance_dropoff: 0.25  # m
     backup_speed: 0.05              # m/s
-    backup_distance: 0.2            # m
-    failed_grab_backup_distance: 0.05
+    backup_distance: 0.1            # m
+    failed_grab_backup_distance: 0.06
     motion_publish_rate_hz: 15.0
     item_final_distance: -1.0       # -1 = disabled
-    dropoff_final_distance: 0.02    # m
+    dropoff_final_distance: 0.1    # m
     min_forward_distance: 0.2       # m
     max_forward_distance: 0.45      # m
     creep_speed: 0.05                # m/s

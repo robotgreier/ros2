@@ -316,7 +316,8 @@ class SNNLayer:
         if self.mode == 'stdp':
             return
 
-        delta_w = (self.eligibility_snapshot[winner_idx] * dopamine) >> self.lr_shift
+        lr = 1 << self.lr_shift
+        delta_w = np.round(self.eligibility_snapshot[winner_idx] * dopamine / lr).astype(np.int32)
         self.last_delta_w[winner_idx] = delta_w
         new_row = self.weights[winner_idx] + delta_w
         np.clip(new_row, self.w_min, self.w_max, out=self.weights[winner_idx])

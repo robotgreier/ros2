@@ -111,7 +111,13 @@ class RSTDPSynapse:
                 self.eligibility += self.dw_pos
             self.post_timer = 0
 
-        self.eligibility -= self.eligibility >> self.tau_e_shift
+        # Arithmetic right-shift floors toward -inf, so negatives always decay
+        # by >=1 toward 0. For positives in [1, 2^tau_e_shift-1] the shift gives 0,
+        # which would leave the trace stuck — force decay-by-1 in that range.
+        decay_amt = self.eligibility >> self.tau_e_shift
+        if self.eligibility > 0 and decay_amt == 0:
+            decay_amt = 1
+        self.eligibility -= decay_amt
         self.eligibility = max(-256, min(256, self.eligibility))
 
         # In stdp mode, apply weight update immediately (dopamine=1 → ×1 multiplier)
@@ -288,8 +294,12 @@ class SNNLayer:
                where=post_fired & (self.pre_timer >= 0))
         self.post_timer[post_fired] = 0
 
-        # Decay and clamp
-        self.eligibility -= self.eligibility >> self.tau_e_shift
+        # Decay and clamp. Arithmetic right-shift floors toward -inf, so negatives
+        # converge to 0; positives in [1, 2^tau_e_shift-1] would shift to 0 and get
+        # stuck — force decay-by-1 in that dead-zone.
+        decay_amt = self.eligibility >> self.tau_e_shift
+        decay_amt[(self.eligibility > 0) & (decay_amt == 0)] = 1
+        self.eligibility -= decay_amt
         np.clip(self.eligibility, -256, 256, out=self.eligibility)
 
     def winner_takes_all(self, output_spikes):

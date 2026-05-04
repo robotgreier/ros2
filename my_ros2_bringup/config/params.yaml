@@ -106,7 +106,7 @@ grab_node:
     failed_grab_backup_distance: 0.06
     motion_publish_rate_hz: 15.0
     item_final_distance: -1.0       # -1 = disabled
-    dropoff_final_distance: 0.2    # m
+    dropoff_final_distance: 0.15    # m
     min_forward_distance: 0.05       # m
     max_forward_distance: 0.45      # m
     creep_speed: 0.05                # m/s

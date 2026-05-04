@@ -89,7 +89,7 @@ motor_control_node:
     max_lin_vel: 0.02        # m/s
     max_ang_vel: 0.01        # rad/s
     max_pwm: 50              # pwm cap motor speed
-    min_pwm: 5              # pwm dead zone compensation
+    min_pwm: 10              # pwm dead zone compensation
     cmd_vel_timeout: 0.5     # s, stop if no command received
 
 # ── Grab node ──────────────────────────────────────────────────────────────────

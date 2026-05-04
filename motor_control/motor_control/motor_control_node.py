@@ -16,10 +16,10 @@ class MotorControlNode(Node):
 
         # --- ROS-parameteroppsett ---
         self.declare_parameter('wheel_base', 0.15)      # meter
-        self.declare_parameter('max_lin_vel', 0.03)     # m/s
-        self.declare_parameter('max_ang_vel', 0.05)      # rad/s
+        self.declare_parameter('max_lin_vel', 0.02)     # m/s
+        self.declare_parameter('max_ang_vel', 0.01)      # rad/s
         self.declare_parameter('max_pwm', 100)          # pwm upper limit
-        self.declare_parameter('min_pwm', 30)           # pwm lower limit (smooth start)
+        self.declare_parameter('min_pwm', 5)           # pwm lower limit (smooth start)
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
 
         self.declare_parameter('vel_smooth_alpha', 0.20) # pwm smoothing

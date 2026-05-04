@@ -16,8 +16,8 @@ class MotorControlNode(Node):
 
         # --- ROS-parameteroppsett ---
         self.declare_parameter('wheel_base', 0.15)      # meter
-        self.declare_parameter('max_lin_vel', 0.02)     # m/s
-        self.declare_parameter('max_ang_vel', 0.01)      # rad/s
+        self.declare_parameter('max_lin_vel', 0.05)     # cmd_vel.linear.x (m/s) that maps to max_pwm
+        self.declare_parameter('max_ang_vel', 0.05)     # cmd_vel.angular.z (rad/s) that maps to max_pwm
         self.declare_parameter('max_pwm', 100)          # pwm upper limit
         self.declare_parameter('min_pwm', 10)           # pwm lower limit (smooth start)
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
@@ -79,11 +79,8 @@ class MotorControlNode(Node):
         v = msg.linear.x        # m/s, cmd_vel message: 0.1
         w = msg.angular.z       # rad/s, cmd_vel message: 0.1
 
-        # Limit velocities to max values
-        v = max(-self.max_lin_vel, min(self.max_lin_vel, v))
-        w = max(-self.max_ang_vel, min(self.max_ang_vel, w))
-
-        # Normalize velocities to [-1, 1]
+        # Normalize: max_lin_vel / max_ang_vel define the cmd_vel that maps to max_pwm.
+        # Saturation is handled by the post-mix scale below.
         v_norm = v / self.max_lin_vel if self.max_lin_vel > 0 else 0.0
         w_norm = w / self.max_ang_vel if self.max_ang_vel > 0 else 0.0
 
@@ -91,7 +88,7 @@ class MotorControlNode(Node):
         pwm_l_norm = v_norm - w_norm
         pwm_r_norm = v_norm + w_norm
 
-        # Scale PWM values to fit within [-255, 255] while preserving the ratio
+        # Scale to fit within ±max_pwm while preserving the v:w ratio (also handles saturation)
         scale = max(1.0, abs(pwm_l_norm), abs(pwm_r_norm))
         pwm_l_target = self.max_pwm * pwm_l_norm / scale
         pwm_r_target = self.max_pwm * pwm_r_norm / scale

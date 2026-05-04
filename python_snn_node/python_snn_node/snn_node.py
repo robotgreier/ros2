@@ -266,10 +266,10 @@ class SNNNode(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
         )
-        self.pub_mem = self.create_publisher(Int32Array, '/snn/mem', qos_monitor)
-        self.pub_weights = self.create_publisher(Int32Array, '/snn/weights', qos_monitor)
-        self.pub_eligibility = self.create_publisher(Int32Array, '/snn/eligibility', qos_monitor)
-        self.pub_delta_w = self.create_publisher(Int32Array, '/snn/delta_w', qos_monitor)
+        self.pub_mem = self.create_publisher(Int32MultiArray, '/snn/mem', qos_monitor)
+        self.pub_weights = self.create_publisher(Int32MultiArray, '/snn/weights', qos_monitor)
+        self.pub_eligibility = self.create_publisher(Int32MultiArray, '/snn/eligibility', qos_monitor)
+        self.pub_delta_w = self.create_publisher(Int32MultiArray, '/snn/delta_w', qos_monitor)
         
         self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn')
         cmd_topic = self.get_parameter('cmd_vel_topic').value
@@ -386,7 +386,7 @@ class SNNNode(Node):
         # Forward pass
         output_spikes = self.network.forward(input_spikes=self.last_vector)
 
-        self.pub_mem.publish(Int32Array(data=self.network.pre_reset_mem.tolist()))
+        self.pub_mem.publish(Int32MultiArray(data=self.network.pre_reset_mem.tolist())) ###
 
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
@@ -420,9 +420,9 @@ class SNNNode(Node):
             self.network.apply_reward(dopamine=dopamine, winner_idx=self.previous_winner_idx)
         self.previous_winner_idx = int(winner_idx)
 
-        self.pub_weights.publish(Int32Array(data=self.network.weights.flatten().tolist()))
-        self.pub_eligibility.publish(Int32Array(data=self.network.eligibility.flatten().tolist()))
-        self.pub_delta_w.publish(Int32Array(data=self.network.last_delta_w.flatten().tolist()))
+        self.pub_weights.publish(Int32MultiArray(data=self.network.weights.flatten().tolist()))  ###
+        self.pub_eligibility.publish(Int32MultiArray(data=self.network.eligibility.flatten().tolist()))  ###
+        self.pub_delta_w.publish(Int32MultiArray(data=self.network.last_delta_w.flatten().tolist())) ###
 
         ## Logging ##
 

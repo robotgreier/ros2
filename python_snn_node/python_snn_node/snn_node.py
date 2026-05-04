@@ -23,7 +23,7 @@ import os
 from datetime import datetime
 
 from taskbot_interfaces.srv import SaveWeights
-from taskbot_interfaces.msg import Int32Array
+#from taskbot_interfaces.msg import Int32Array
 from pathlib import Path
 
 EVENT_IDLE = 0

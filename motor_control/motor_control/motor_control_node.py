@@ -22,12 +22,21 @@ class MotorControlNode(Node):
         self.declare_parameter('min_pwm', 30)           # pwm lower limit (smooth start)
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
 
+        self.declare_parameter('vel_smooth_alpha', 0.9)
+        self.declare_parameter('idle_decay', 0.95)
+
         self.wheel_base = float(self.get_parameter('wheel_base').value)
         self.max_lin_vel = float(self.get_parameter('max_lin_vel').value)
         self.max_ang_vel = float(self.get_parameter('max_ang_vel').value)
         self.max_pwm = int(self.get_parameter('max_pwm').value)
         self.min_pwm = int(self.get_parameter('min_pwm').value)
         self.timeout = float(self.get_parameter('cmd_vel_timeout').value)
+        
+        self.alpha = float(self.get_parameter('vel_smooth_alpha').value)
+        self.idle_decay = float(self.get_parameter('idle_decay').value
+        
+        self.pwm_l_prev = 0.0
+        self.pwm_r_prev = 0.0
 
         # Emakefun Motorhat (I2C-address 0x60 - DRI0054-documentation)
         self.get_logger().info("Initialiserer Emakefun_MotorHAT på I2C 0x60...")
@@ -86,6 +95,24 @@ class MotorControlNode(Node):
         scale = max(1.0, abs(pwm_l_norm), abs(pwm_r_norm))
         pwm_l = int(self.max_pwm * pwm_l_norm / scale)
         pwm_r = int(self.max_pwm * pwm_r_norm / scale)
+
+        
+
+        idle = abs(pwm_l_new) < 1e-3 and abs(pwm_r_new) < 1e-3
+
+        if idle:
+            pwm_l = self.pwm_l_prev * self.idle_decay
+            pwm_r = self.pwm_r_prev * self.idle_decay
+        else:
+            pwm_l = self.alpha * self.pwm_l_prev + (1.0 - self.alpha) * pwm_l_new
+            pwm_r = self.alpha * self.pwm_r_prev + (1.0 - self.alpha) * pwm_r_new
+
+        self.pwm_l_prev = pwm_l
+        self.pwm_r_prev = pwm_r
+
+        self.apply_pwm(self.m_left,  self.left_dir  * int(pwm_l))
+        self.apply_pwm(self.m_right, self.right_dir * int(pwm_r))
+
 
         # Apply PWM to motors
         self.apply_pwm(self.m_left,  self.left_dir  * pwm_l)

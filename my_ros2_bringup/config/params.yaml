@@ -76,7 +76,7 @@ python_snn_node:
     seed: 42
 
     # CSV logging
-    log_enable: true
+    log_enable: false
     log_mode: "A"            # A = log on new input, B = every tick, C = state changes
 
     # Per-episode weight snapshot directory
@@ -100,7 +100,7 @@ grab_node:
     dropoff_distance_threshold: 0.3 # m
     approach_speed: 0.05            # m/s
     approach_distance_item: 0.25     # m
-    approach_distance_dropoff: 0.3  # m
+    approach_distance_dropoff: 0.2  # m
     backup_speed: 0.05              # m/s
     backup_distance: 0.1            # m
     failed_grab_backup_distance: 0.06

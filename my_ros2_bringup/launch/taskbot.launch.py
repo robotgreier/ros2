@@ -205,13 +205,6 @@ def generate_launch_description():
             name='dopamine_reward_node',
             output='screen'
         ),
-
-        Node(
-            package='uart',
-            executable='uart_node',
-            name='uart_node',
-            output='screen'
-        ),
     
 
     ])

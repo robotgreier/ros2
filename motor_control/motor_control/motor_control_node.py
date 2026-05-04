@@ -22,7 +22,7 @@ class MotorControlNode(Node):
         self.declare_parameter('min_pwm', 30)           # pwm lower limit (smooth start)
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
 
-        self.declare_parameter('vel_smooth_alpha', 0.9) # pwm smoothing
+        self.declare_parameter('vel_smooth_alpha', 0.80) # pwm smoothing
         self.declare_parameter('idle_decay', 0.95)      # pwm smoothing
 
         self.wheel_base = float(self.get_parameter('wheel_base').value)
@@ -93,30 +93,30 @@ class MotorControlNode(Node):
 
         # Scale PWM values to fit within [-255, 255] while preserving the ratio
         scale = max(1.0, abs(pwm_l_norm), abs(pwm_r_norm))
-        pwm_l = int(self.max_pwm * pwm_l_norm / scale)
-        pwm_r = int(self.max_pwm * pwm_r_norm / scale)
+        pwm_l_target = self.max_pwm * pwm_l_norm / scale
+        pwm_r_target = self.max_pwm * pwm_r_norm / scale
 
         
         # # pwm smoothing
-        idle = abs(pwm_l_new) < 1e-3 and abs(pwm_r_new) < 1e-3
+        idle = pwm_l_target == 0 and pwm_r_target == 0.0)
 
         if idle:
             pwm_l = self.pwm_l_prev * self.idle_decay
             pwm_r = self.pwm_r_prev * self.idle_decay
         else:
-            pwm_l = self.alpha * self.pwm_l_prev + (1.0 - self.alpha) * pwm_l_new
-            pwm_r = self.alpha * self.pwm_r_prev + (1.0 - self.alpha) * pwm_r_new
+            pwm_l = self.alpha * self.pwm_l_prev + (1.0 - self.alpha) * pwm_l_target
+            pwm_r = self.alpha * self.pwm_r_prev + (1.0 - self.alpha) * pwm_r_target
 
         self.pwm_l_prev = pwm_l
         self.pwm_r_prev = pwm_r
 
-        self.apply_pwm(self.m_left,  self.left_dir  * int(pwm_l))
-        self.apply_pwm(self.m_right, self.right_dir * int(pwm_r))
+        pwm_l_i = int(pwm_l)
+        pwm_r_i = int(pwm_r)
 
 
         # Apply PWM to motors
-        self.apply_pwm(self.m_left,  self.left_dir  * pwm_l)
-        self.apply_pwm(self.m_right, self.right_dir * pwm_r)
+        self.apply_pwm(self.m_left,  self.left_dir  * pwm_l_i)
+        self.apply_pwm(self.m_right, self.right_dir * pwm_r_i)
 
     # -----------------------
     # Failsafe timeout

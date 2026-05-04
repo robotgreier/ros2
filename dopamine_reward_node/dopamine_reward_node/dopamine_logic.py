@@ -67,21 +67,21 @@ class DopamineComputer:
         elif seen:
             if pos == 0:
                 if action_idx == 1:     # centered → drive forward
-                    dopamine = 6
+                    dopamine = 4
                 elif action_idx == 3:   # centered → backing away
-                    dopamine = -3
+                    dopamine = 0
                 else:                   # turning in place when centered
                     dopamine = 0
             elif pos is not None and pos < 0:   # target is left
                 if action_idx == 0:     # correct: turn left
-                    dopamine = 3
+                    dopamine = 2
                 elif action_idx == 2:   # wrong: turn right
-                    dopamine = -2
+                    dopamine = -1
             elif pos is not None and pos > 0:   # target is right
                 if action_idx == 2:     # correct: turn right
-                    dopamine = 3
+                    dopamine = 2
                 elif action_idx == 0:   # wrong: turn left
-                    dopamine = -2
+                    dopamine = -1
             comps["align"] = dopamine
 
         # Priority 3: searching — no ArUco
@@ -93,7 +93,7 @@ class DopamineComputer:
             elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
                 dopamine = 2
             else:                       # BACKWARD — retreating during search
-                dopamine = -2
+                dopamine = 0
             comps[f"search_{self.search_phase}"] = dopamine
 
         return dopamine, comps

@@ -91,7 +91,7 @@ def expected_packet_length(length_field: int) -> int:
     return length_field + 5
 
 
-def validate_packet(packet: bytes) -> bool:
+def validate_packet(packet: bytes) -> Tuple[int, int, int, int]:
     """
     Validate a complete packet.
 
@@ -99,25 +99,25 @@ def validate_packet(packet: bytes) -> bool:
         packet: Full packet bytes.
 
     Returns:
-        True if packet structure and checksum are valid, else False.
+        Tuple of (FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2) if packet is valid, else (0, 0, 0, 0).
     """
     if len(packet) < 5:
-        return False
+        return 0, 0, 0, 0  # Minimum packet size is 5 bytes (SOF, CMD, LEN, CHECKSUM_1, CHECKSUM_2)
 
     if packet[0] != SOF:
-        return False
+        return 0, 0, 0, 0
 
     payload_length = packet[2]
     if len(packet) != expected_packet_length(payload_length):
-        return False
+        return 0, 0, 0, 0
 
     data_without_checksum = list(packet[:-2])
-    rx_sum_1 = packet[-2]
-    rx_sum_2 = packet[-1]
+    FPGA_sum_1 = packet[-2]
+    FPGA_sum_2 = packet[-1]
 
-    calc_sum_1, calc_sum_2 = fletcher_checksum(data_without_checksum)
+    PI_sum_1, PI_sum_2 = fletcher_checksum(data_without_checksum)
 
-    return (rx_sum_1 == calc_sum_1) and (rx_sum_2 == calc_sum_2)
+    return FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2
 
 
 def parse_packet(packet: bytes) -> Optional[Tuple[int, List[int]]]:

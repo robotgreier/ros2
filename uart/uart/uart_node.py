@@ -183,11 +183,13 @@ class UartBridgeNode(Node):
             pkt = bytes(self.rx_buffer[:total_len])
             del self.rx_buffer[:total_len]
             
-            if validate_packet(pkt):
+
+            FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2 = validate_packet(pkt)
+            if FPGA_sum_1 == PI_sum_1 and FPGA_sum_2 == PI_sum_2:
                 cmd, payload = parse_packet(pkt)
                 self.dispatch_command(cmd, payload)
             else:
-                self.publish_error("Checksum failed")
+                self.publish_error(f"Checksum failed\nPI sums: ({PI_sum_1}, {PI_sum_2}) -- FPGA sums: ({FPGA_sum_1}, {FPGA_sum_2})")
 
     def dispatch_command(self, cmd, payload):
         if cmd == CMD_OUT:

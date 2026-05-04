@@ -41,11 +41,11 @@ def fletcher_checksum(data: List[int]) -> Tuple[int, int]:
     sum_1 = 0
     sum_2 = 0
     for value in data:
-        # Match Verilog: temp_sum_1 = (sum_1 + data >= 255) ? ...
+
+        value &= 0xFF  # Masking to 8 bits
+
         sum_1 = (sum_1 + value)
         if sum_1 >= 255: sum_1 -= 255
-        
-        # Match Verilog: temp_sum_2 = (temp_sum_1 + sum_2 >= 255) ? ...[cite: 1]
         sum_2 = (sum_2 + sum_1)
         if sum_2 >= 255: sum_2 -= 255
     return sum_1, sum_2

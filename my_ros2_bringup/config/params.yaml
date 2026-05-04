@@ -86,8 +86,17 @@ python_snn_node:
 motor_control_node:
   ros__parameters:
     wheel_base: 0.15         # m, distance between wheels
-    max_lin_vel: 0.05        # m/s mapped to max_pwm
-    max_ang_vel: 0.05        # rad/s mapped to max_pwm
+    # Velocity gains: cmd_vel is multiplied by gain to produce a normalized
+    # value where 1.0 = max_pwm. Higher gain → more PWM per unit cmd_vel
+    # (faster), capped at max_pwm. Saturation point = 1 / gain:
+    #   lin_gain = 10  → saturates at  0.10 m/s
+    #   lin_gain = 20  → saturates at  0.05 m/s   ← default
+    #   lin_gain = 40  → saturates at  0.025 m/s
+    #   ang_gain = 10  → saturates at  0.10 rad/s
+    #   ang_gain = 20  → saturates at  0.05 rad/s ← default
+    #   ang_gain = 40  → saturates at  0.025 rad/s
+    lin_gain: 20.0
+    ang_gain: 20.0
     max_pwm: 50              # PWM ceiling (0-255); top-speed cap
     min_pwm: 10              # PWM floor (scaled with output)
     cmd_vel_timeout: 0.5     # s, stop if no command received

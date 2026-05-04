@@ -74,12 +74,12 @@ class DopamineComputer:
                     dopamine = 0
             elif pos is not None and pos < 0:   # target is left
                 if action_idx == 0:     # correct: turn left
-                    dopamine = 2
+                    dopamine = 3
                 elif action_idx == 2:   # wrong: turn right
                     dopamine = -1
             elif pos is not None and pos > 0:   # target is right
                 if action_idx == 2:     # correct: turn right
-                    dopamine = 2
+                    dopamine = 3
                 elif action_idx == 0:   # wrong: turn left
                     dopamine = -1
             comps["align"] = dopamine

@@ -136,9 +136,9 @@ class MotorControlNode(Node):
             return
 
         speed = abs(pwm_value)
-
-        if speed < self.min_pwm:
-            speed = self.min_pwm
+        
+        if speed > 0:
+            speed = max(speed, int(self.min_pwm * min(1.0, speed / self.max_pwm)))
 
         if speed > self.max_pwm:
             speed = self.max_pwm

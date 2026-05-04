@@ -44,10 +44,8 @@ def fletcher_checksum(data: List[int]) -> Tuple[int, int]:
 
         value &= 0xFF  # Masking to 8 bits
 
-        sum_1 = (sum_1 + value)
-        if sum_1 >= 255: sum_1 -= 255
-        sum_2 = (sum_2 + sum_1)
-        if sum_2 >= 255: sum_2 -= 255
+        sum_1 = (sum_1 + value) % 255
+        sum_2 = (sum_2 + sum_1) % 255
     return sum_1, sum_2
 
 

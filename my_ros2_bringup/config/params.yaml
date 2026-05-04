@@ -61,7 +61,7 @@ python_snn_node:
     refractory: 1            # refractory period in timesteps after a spike (0 = disabled)
 
     # Synapse / learning parameters
-    lr_shift: 4             # learning rate = 1 / (2^lr_shift)
+    lr_shift: 3             # learning rate = 1 / (2^lr_shift)
     t_pre: 1                # time steps for pre-synaptic trace
     t_post: 2               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
@@ -85,11 +85,11 @@ python_snn_node:
 # ── Motor control node ─────────────────────────────────────────────────────────
 motor_control_node:
   ros__parameters:
-    wheel_base: 0.13         # m, distance between wheels
-    max_lin_vel: 0.10        # m/s
-    max_ang_vel: 0.10        # rad/s
-    max_pwm: 80              # pwm cap motor speed
-    min_pwm: 10              # pwm dead zone compensation
+    wheel_base: 0.15         # m, distance between wheels
+    max_lin_vel: 0.02        # m/s
+    max_ang_vel: 0.01        # rad/s
+    max_pwm: 50              # pwm cap motor speed
+    min_pwm: 5              # pwm dead zone compensation
     cmd_vel_timeout: 0.5     # s, stop if no command received
 
 # ── Grab node ──────────────────────────────────────────────────────────────────

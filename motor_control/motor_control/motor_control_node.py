@@ -23,7 +23,7 @@ class MotorControlNode(Node):
         self.declare_parameter('cmd_vel_timeout', 0.5)  # seconds
 
         self.declare_parameter('vel_smooth_alpha', 0.80) # pwm smoothing
-        self.declare_parameter('idle_decay', 0.95)      # pwm smoothing
+        self.declare_parameter('idle_decay', 0.85)      # pwm smoothing
 
         self.wheel_base = float(self.get_parameter('wheel_base').value)
         self.max_lin_vel = float(self.get_parameter('max_lin_vel').value)

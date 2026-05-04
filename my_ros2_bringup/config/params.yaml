@@ -66,7 +66,7 @@ python_snn_node:
     t_post: 2               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
     dw_pos: 10              # weight change for causal spike pair (pre before post)
-    dw_neg: 4              # weight change for acausal spike pair (post before pre)
+    dw_neg: 4               # weight change for acausal spike pair (post before pre)
     min_weight: 30          # minimum synaptic weight (absolute value)
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value

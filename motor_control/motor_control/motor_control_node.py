@@ -98,7 +98,7 @@ class MotorControlNode(Node):
 
         
         # # pwm smoothing
-        idle = pwm_l_target == 0 and pwm_r_target == 0.0)
+        idle = (pwm_l_target == 0 and pwm_r_target == 0.0)
 
         if idle:
             pwm_l = self.pwm_l_prev * self.idle_decay

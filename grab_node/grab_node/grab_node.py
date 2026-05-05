@@ -233,7 +233,7 @@ class GrabNode(Node):
             return
 
         if self.gripper_state == self.expected_gripper_state:
-            #self.get_logger().info(
+            self.get_logger().info(
                 f"Expected gripper state {self.expected_gripper_state} confirmed."
             )
 

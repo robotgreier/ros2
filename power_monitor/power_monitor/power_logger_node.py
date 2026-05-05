@@ -342,14 +342,14 @@ class PowerLogger(Node):
         percent = self.voltage_to_percentage(V)
         runtime_min = self.estimate_runtime_minutes(V, I)
 
-        self.get_logger().info(
-            f"[battery] V={V:.2f}V  I={I:.2f}A  "
-            f"P={P:.1f}W  {percent:.0f}%  "
-            f"E_episode={self.episode_energy_total:.3f}Wh  "
-            f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active} "
-            f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
-            f"runtime={runtime_min:.0f} min"
-        )
+        # self.get_logger().info(
+        #     f"[battery] V={V:.2f}V  I={I:.2f}A  "
+        #     f"P={P:.1f}W  {percent:.0f}%  "
+        #     f"E_episode={self.episode_energy_total:.3f}Wh  "
+        #     f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active} "
+        #     f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
+        #     f"runtime={runtime_min:.0f} min"
+        # )
 
         # Publish battery status
         out = Vector3()

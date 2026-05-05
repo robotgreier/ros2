@@ -78,7 +78,7 @@ class PowerLogger(Node):
 
         self.episode_id = 0
 
-        self.get_logger().info(f"Logging to CSV: {self.filename}")
+        #self.get_logger().info(f"Logging to CSV: {self.filename}")
 
         # latest filtered inputs
         self.system = None
@@ -195,11 +195,11 @@ class PowerLogger(Node):
         self.writer.writerow(row)
         self.file.flush()
 
-        self.get_logger().info(
-            f"[EPISODE {self.episode_id}] "
-            f"E_total={self.episode_energy_total:.3f}Wh, "
-            f"time={total_time:.2f}s"
-        )
+        #self.get_logger().info(
+        #    f"[EPISODE {self.episode_id}] "
+        #    f"E_total={self.episode_energy_total:.3f}Wh, "
+        #    f"time={total_time:.2f}s"
+        #)
     # ---------------- Battery calculations ----------------
 
     def voltage_to_percentage(self, voltage):

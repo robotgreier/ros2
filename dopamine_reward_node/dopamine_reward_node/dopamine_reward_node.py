@@ -98,7 +98,7 @@ class DopamineRewardNode(Node):
 
         self.aruco_dir = data
 
-    def winner_cb(self, msg: Int32) -> None:
+    def winner_cb(self, msg: UInt8) -> None:
         action_idx = int(msg.data)
 
         if action_idx not in (0, 1, 2, 3):

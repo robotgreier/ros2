@@ -234,7 +234,7 @@ class SNNNode(Node):
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
         weight_path = str(self.weights_current_file)
-        
+
         if os.path.exists(weight_path):
             try:
                 self.network.load_weights(weight_file=weight_path)
@@ -245,8 +245,6 @@ class SNNNode(Node):
             self.get_logger().warn(
                 f"No weights file found at {weight_path}, using initial weights"
             )
-
-        self.weights_current_file = Path(weight_path)
 
         self.weights_log_dir = self.weights_current_file.parent / "episode_logs"
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)

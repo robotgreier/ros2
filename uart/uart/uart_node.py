@@ -123,10 +123,16 @@ class UartBridgeNode(Node):
         if self.state != STATE_READY:
             return
 
-        payload = pack_input_spikes(list(msg.data))
+        raw_spikes = list(msg.data)
+        payload = pack_input_spikes(raw_spikes)
+
+        self.publish_status(f"Raw /snn/input length: {len(raw_spikes)}")
+        self.publish_status(f"Raw /snn/input data: {raw_spikes}")
+        self.publish_status(f"Packed SPIKE payload length: {len(payload)}")
+        self.publish_status(f"Packed SPIKE payload: {payload}")
+
         self.send_packet(CMD_SPIKE, payload)
         self.state = STATE_WAIT_OUT
-        self.publish_status(f"Raw spikes len={len(msg.data)}, packed payload={payload}")
 
     def dopamine_callback(self, msg: Int16):
         if self.state != STATE_WAIT_DOPAMINE or not self.waiting_for_dopamine:
@@ -150,18 +156,21 @@ class UartBridgeNode(Node):
         if not self.ser or not self.ser.is_open:
             self.publish_error("Serial unavailable")
             return
-        
+
         try:
             packet = build_packet(cmd, payload)
-            self.publish_status(f"TX CMD={cmd}, payload={payload}")
+
+            self.publish_status(f"TX CMD={cmd}, payload_len={len(payload)}, payload={payload}")
             self.publish_status(f"TX bytes: {list(packet)}")
+
             self.last_packet_sent = packet
             self.wait_start_time = self.get_clock().now()
             self.retry_count = 0
 
             self.ser.write(packet)
-            self.ser.flush() # Forces immediate physical transmission
+            self.ser.flush()
             self.publish_status(f"Sent CMD={cmd}")
+
         except Exception as e:
             self.publish_error(f"Send error: {e}")
 

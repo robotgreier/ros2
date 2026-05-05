@@ -40,6 +40,7 @@ class UartBridgeNode(Node):
         self.declare_parameter("response_timeout_sec", 1.0)
         self.declare_parameter("max_retry_count", 2)
         self.declare_parameter("poll_period_sec", 0.01)
+        self.declare_parameter("dopamine_timeout_sec", 1.0)
 
         self.port_name = self.get_parameter("port").value
         self.baudrate = self.get_parameter("baudrate").value
@@ -47,6 +48,7 @@ class UartBridgeNode(Node):
         self.response_timeout_sec = self.get_parameter("response_timeout_sec").value
         self.max_retry_count = self.get_parameter("max_retry_count").value
         self.poll_period_sec = self.get_parameter("poll_period_sec").value
+        self.dopamine_timeout_sec = self.get_parameter("dopamine_timeout_sec").value
 
         # -----------------------------
         # ROS interfaces
@@ -261,9 +263,20 @@ class UartBridgeNode(Node):
 
         self.waiting_for_dopamine = True
         self.state = STATE_WAIT_DOPAMINE
-        self.wait_start_time = None
+        self.wait_start_time = self.get_clock().now()
 
     def check_for_timeouts(self):
+        if self.state == STATE_WAIT_DOPAMINE and self.wait_start_time is not None:
+            elapsed = (self.get_clock().now() - self.wait_start_time).nanoseconds / 1e9
+
+            if elapsed > self.dopamine_timeout_sec:
+                self.publish_error("Timed out waiting for dopamine reward")
+                self.waiting_for_dopamine = False
+                self.state = STATE_READY
+                self.wait_start_time = None
+
+            return
+
         if self.wait_start_time is None:
             return
 

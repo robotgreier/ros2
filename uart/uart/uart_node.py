@@ -57,9 +57,11 @@ class UartBridgeNode(Node):
         self.status_pub = self.create_publisher(String, "/uart/status", 10)
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
         self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)
+        self.episode_reset_pub = self.create_publisher(Empty, "/episode_reset", 10)
 
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
         self.create_subscription(Int16, "/reward/dopamine", self.dopamine_callback, 10)
+        self.create_subscription(Empty, "/episode_complete", self.episode_complete_callback, 10)
         self.create_subscription(Empty, "/episode_reset", self.episode_reset_callback, 10)
 
         # -----------------------------
@@ -74,6 +76,12 @@ class UartBridgeNode(Node):
         self.rx_buffer = bytearray()
         self.state = STATE_READY
         self.waiting_for_dopamine = False
+
+        self.episode_counter = 1
+
+        self.weights_path = Path(self.weights_file)
+        self.episode_log_dir = self.weights_path.parent / "episode_logs"
+        self.episode_log_dir.mkdir(parents=True, exist_ok=True)
 
         # -----------------------------
         # Startup
@@ -237,11 +245,30 @@ class UartBridgeNode(Node):
     def save_weights(self):
         if not self.weights_file:
             return
+
         try:
-            with open(self.weights_file, "w") as f:
+            current_path = Path(self.weights_file)
+            current_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # 1. Update current weights
+            tmp_file = current_path.with_suffix(current_path.suffix + ".tmp")
+            with open(tmp_file, "w") as f:
                 for w in self.weights:
-                    f.write(f"{w:02X}\n")
-            self.publish_status("Saved updated weights")
+                    f.write(f"{w & 0xFF:02X}\n")
+            tmp_file.replace(current_path)
+
+            # 2. Save episode archive
+            episode_file = self.episode_log_dir / f"weights_ep_{self.episode_counter:04d}.mem"
+            with open(episode_file, "w") as f:
+                for w in self.weights:
+                    f.write(f"{w & 0xFF:02X}\n")
+
+            self.publish_status(
+                f"Saved updated weights to {current_path} and episode log {episode_file}"
+            )
+
+            self.episode_counter += 1
+
         except Exception as e:
             self.publish_error(f"Failed to save weights: {e}")
 
@@ -253,6 +280,9 @@ class UartBridgeNode(Node):
 
         self.wait_start_time = None
         self.state = STATE_READY
+
+        self.episode_reset_pub.publish(Empty())
+        self.publish_status("Published /episode_reset")
 
         self.publish_status("Weight update complete, node returned to READY")
 
@@ -385,6 +415,21 @@ class UartBridgeNode(Node):
             return
 
         self.publish_status("Episode ended: sending CMD_STOP to request weights")
+        self.send_packet(CMD_STOP, [])
+        self.state = STATE_WAIT_WEIGHT
+
+    def episode_complete_callback(self, msg: Empty):
+        self.publish_status(f"Received /episode_complete while state={self.state}")
+
+        if not self.initialized:
+            self.publish_error("Ignoring episode complete: UART node not initialized")
+            return
+
+        if self.state != STATE_READY:
+            self.publish_error(f"Ignoring episode complete: node is busy in state {self.state}")
+            return
+
+        self.publish_status("Episode complete: sending CMD_STOP to request weights")
         self.send_packet(CMD_STOP, [])
         self.state = STATE_WAIT_WEIGHT
 

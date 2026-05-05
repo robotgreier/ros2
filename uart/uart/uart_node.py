@@ -125,6 +125,7 @@ class UartBridgeNode(Node):
         payload = pack_input_spikes(list(msg.data))
         self.send_packet(CMD_SPIKE, payload)
         self.state = STATE_WAIT_OUT
+        self.publish_status(f"Raw spikes len={len(msg.data)}, packed payload={payload}")
 
     def dopamine_callback(self, msg: Int16):
         if self.state != STATE_WAIT_DOPAMINE or not self.waiting_for_dopamine:
@@ -151,6 +152,8 @@ class UartBridgeNode(Node):
         
         try:
             packet = build_packet(cmd, payload)
+            self.publish_status(f"TX CMD={cmd}, payload={payload}")
+            self.publish_status(f"TX bytes: {list(packet)}")
             self.last_packet_sent = packet
             self.wait_start_time = self.get_clock().now()
             self.retry_count = 0
@@ -168,6 +171,9 @@ class UartBridgeNode(Node):
         # Check if hardware has bytes waiting in the FIFO
         if self.ser.in_waiting > 0:
             data = self.ser.read(self.ser.in_waiting)
+
+            self.publish_status(f"RX raw bytes: {list(data)}")
+
             self.rx_buffer.extend(data)
             self.process_buffer()
 
@@ -190,6 +196,7 @@ class UartBridgeNode(Node):
             pkt = bytes(self.rx_buffer[:total_len])
             del self.rx_buffer[:total_len]
             
+            self.publish_status(f"RX packet candidate: {list(pkt)}")
 
             FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2 = validate_packet(pkt)
             if FPGA_sum_1 == PI_sum_1 and FPGA_sum_2 == PI_sum_2:
@@ -199,6 +206,8 @@ class UartBridgeNode(Node):
                 self.publish_error(f"Checksum failed\nPI sums: ({PI_sum_1}, {PI_sum_2}) -- FPGA sums: ({FPGA_sum_1}, {FPGA_sum_2})")
 
     def dispatch_command(self, cmd, payload):
+        self.publish_status(f"Parsed CMD={cmd}, payload={payload}")
+
         if cmd == CMD_OUT:
             self.handle_out(payload)
         elif cmd == CMD_WEIGHT:
@@ -272,6 +281,10 @@ class UartBridgeNode(Node):
 
         self.ser.write(packet)
         self.ser.flush()
+
+        time.sleep(1.0)
+
+        self.initialized = True
 
         self.initialized = True
         self.publish_status(

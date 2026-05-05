@@ -271,6 +271,12 @@ class UartBridgeNode(Node):
 
         self.publish_status(f"Published action spikes: {action_spikes}")
 
+        if not any(action_spikes):
+            self.publish_status("No FPGA output spikes — sending neutral dopamine 0")
+            self.send_packet(CMD_DOPAMINE, [0])
+            self.state = STATE_READY
+            return
+
         self.waiting_for_dopamine = True
         self.state = STATE_WAIT_DOPAMINE
         self.wait_start_time = self.get_clock().now()

@@ -13,11 +13,11 @@ class WeightsLogger(Node):
         self.episode_counter = 1
         self.busy = False
 
-        self.save_weights_client = self.create_client(SaveWeights, 'save_weights')
+        self.save_weights_client = self.create_client(SaveWeights, '/save_weights')
 
         self.episode_sub = self.create_subscription(
             Empty,
-            'episode_complete',
+            '/episode_complete',
             self.episode_complete_callback,
             10
         )

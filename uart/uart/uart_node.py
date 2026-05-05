@@ -4,6 +4,7 @@ from std_msgs.msg import UInt8MultiArray, String, Int16
 from pathlib import Path
 from typing import List, Optional
 import serial  # Replacing pigpio with pyserial
+import time
 
 from .protocol import (
     SOF,

@@ -118,7 +118,7 @@ class SNNNode(Node):
 
         self.save_weights_srv = self.create_service(
             SaveWeights,
-            'save_weights',
+            '/save_weights',
             self.handle_save_weights
         )
 

@@ -111,7 +111,7 @@ class SNNNode(Node):
         # ---- For episode weight logging ----
         self.declare_parameter(
             'weights_log_dir',
-            "/opt/robot_ws/src/ros2/weights_logs"
+            "/opt/robot_ws/src/ros2/weights_logs/"
         )
         self.weights_log_dir = Path(self.get_parameter('weights_log_dir').value).expanduser()
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)

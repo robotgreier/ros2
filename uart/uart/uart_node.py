@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt8MultiArray, String, Int16
+from std_msgs.msg import UInt8MultiArray, String, Int16, Empty
 from pathlib import Path
 from typing import List, Optional
 import serial  # Replacing pigpio with pyserial
@@ -26,6 +26,7 @@ from .spike_codec import pack_input_spikes, unpack_output_spikes
 STATE_READY = "READY"
 STATE_WAIT_OUT = "WAIT_OUT"
 STATE_WAIT_DOPAMINE = "WAIT_DOPAMINE"
+STATE_WAIT_WEIGHT = "WAIT_WEIGHT"
 
 class UartBridgeNode(Node):
     def __init__(self):
@@ -56,8 +57,10 @@ class UartBridgeNode(Node):
         self.status_pub = self.create_publisher(String, "/uart/status", 10)
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
         self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)
+
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
         self.create_subscription(Int16, "/reward/dopamine", self.dopamine_callback, 10)
+        self.create_subscription(Empty, "/episode_reset", self.episode_reset_callback, 10)
 
         # -----------------------------
         # Internal state
@@ -243,9 +246,15 @@ class UartBridgeNode(Node):
             self.publish_error(f"Failed to save weights: {e}")
 
     def handle_update(self, payload):
+        self.publish_status(f"Received {len(payload)} weights from FPGA")
+
         self.weights = list(payload)
         self.save_weights()
+
         self.wait_start_time = None
+        self.state = STATE_READY
+
+        self.publish_status("Weight update complete, node returned to READY")
 
     def handle_out(self, payload):
         if not payload:
@@ -357,6 +366,21 @@ class UartBridgeNode(Node):
         except Exception as e:
             self.weights = []
             self.publish_error(f"Failed to load weights from {path}: {e}")
+
+    def episode_reset_callback(self, msg: Empty):
+        self.publish_status(f"Received /episode_reset while state={self.state}")
+
+        if not self.initialized:
+            self.publish_error("Ignoring episode reset: UART node not initialized")
+            return
+
+        if self.state != STATE_READY:
+            self.publish_error(f"Ignoring episode reset: node is busy in state {self.state}")
+            return
+
+        self.publish_status("Episode ended: sending CMD_STOP to request weights")
+        self.send_packet(CMD_STOP, [])
+        self.state = STATE_WAIT_WEIGHT
 
 def main():
     rclpy.init()

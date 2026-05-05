@@ -217,11 +217,24 @@ class SNNNode(Node):
             feedback=self.feedback
         )
 
-        # Shared weights location (used by both Python SNN and FPGA system)
-        weight_path = os.path.expanduser(
-            "~/ros2_ws/src/ros2/weights_logs/weights_current.mem"
+        # ---- Shared weights location (used by both Python SNN and FPGA system) ----
+        self.declare_parameter(
+            'weights_base_dir',
+            '/opt/robot_ws/src/ros2/weights_logs'
         )
 
+        weights_base_dir = Path(
+            self.get_parameter('weights_base_dir').value
+        ).expanduser()
+
+        weights_base_dir.mkdir(parents=True, exist_ok=True)
+
+        self.weights_current_file = weights_base_dir / "weights_current.mem"
+        self.weights_log_dir = weights_base_dir / "episode_logs"
+        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
+
+        weight_path = str(self.weights_current_file)
+        
         if os.path.exists(weight_path):
             try:
                 self.network.load_weights(weight_file=weight_path)

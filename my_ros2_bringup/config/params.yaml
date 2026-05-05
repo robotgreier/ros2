@@ -87,13 +87,15 @@ motor_control_node:
   ros__parameters:
     wheel_base: 0.15         # m, distance between wheels
     # Velocity gains: cmd_vel is multiplied by gain to produce a normalized
-    # value where 1.0 = max_pwm. Higher gain → more PWM per unit cmd_vel
-    # (faster), capped at max_pwm. Saturation point = 1 / gain:
-    #   lin_gain = 10  → saturates at  0.10 m/s
-    #   lin_gain = 20  → saturates at  0.05 m/s   ← default
+    # value where 1.0 = max_pwm. Higher gain → more PWM per unit cmd_vel,
+    # but max_pwm is reached at a lower speed. Saturation point = 1 / gain:
+    #   lin_gain = 10  → saturates at  0.10  m/s
+    #   lin_gain = 15  → saturates at  0.067 m/s  ← default
+    #   lin_gain = 20  → saturates at  0.05  m/s
     #   lin_gain = 40  → saturates at  0.025 m/s
-    #   ang_gain = 10  → saturates at  0.10 rad/s
-    #   ang_gain = 20  → saturates at  0.05 rad/s ← default
+    #   ang_gain = 10  → saturates at  0.10  rad/s
+    #   ang_gain = 15  → saturates at  0.067 rad/s ← default
+    #   ang_gain = 20  → saturates at  0.05  rad/s
     #   ang_gain = 40  → saturates at  0.025 rad/s
     lin_gain: 15.0
     ang_gain: 15.0

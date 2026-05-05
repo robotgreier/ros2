@@ -35,7 +35,7 @@ class UartBridgeNode(Node):
         # -----------------------------
         self.declare_parameter("port", "/dev/ttyAMA3")
         self.declare_parameter("baudrate", 250000)
-        self.declare_parameter("weights_file",str(Path.home() / "file:///opt/robot_ws/src/ros2/weights_logs/weights_current.mem"))
+        self.declare_parameter("weights_file",str(Path.home() / "/opt/robot_ws/src/ros2/weights_logs/weights_current.mem"))
         self.declare_parameter("response_timeout_sec", 1.0)
         self.declare_parameter("max_retry_count", 2)
         self.declare_parameter("poll_period_sec", 0.01)

@@ -25,7 +25,7 @@ class DopamineRewardNode(Node):
         self.create_subscription(UInt8, "/task/state", self.task_state_cb, 10)
         self.create_subscription(Bool, "/proximity_stop", self.proximity_stop_cb, 10)
         self.create_subscription(UInt8MultiArray, "/snn/aruco_dir", self.aruco_dir_cb, 10)
-        self.create_subscription(Int32, "/snn/winner", self.winner_cb, 10)
+        self.create_subscription(UInt8, "/snn/winner", self.winner_cb, 10)
         self.create_subscription(Vector3, "/battery/status", self.battery_cb, 10)
         self.create_subscription(Empty, "/episode_complete", self.episode_cb, 10)
 

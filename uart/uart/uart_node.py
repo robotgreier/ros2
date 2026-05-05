@@ -100,9 +100,16 @@ class UartBridgeNode(Node):
             self.ser = serial.Serial(
                 port=self.port_name,
                 baudrate=self.baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
                 timeout=0,
                 write_timeout=None
             )
+
+            self.ser.setDTR(False)
+            self.ser.setRTS(False)
+
             self.publish_status(f"Opened Hardware UART: {self.port_name} @ {self.baudrate}")
         except Exception as e:
             self.publish_error(f"Serial open failed: {e}")

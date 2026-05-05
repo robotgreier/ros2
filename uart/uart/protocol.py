@@ -42,7 +42,7 @@ def fletcher_checksum(data: List[int]) -> Tuple[int, int]:
     sum_2 = 0
     for value in data:
 
-        value &= 0xFF  # Masking to 8 bits
+        # value &= 0xFF  # Masking to 8 bits
 
         sum_1 = (sum_1 + value) % 255
         sum_2 = (sum_2 + sum_1) % 255

@@ -158,7 +158,7 @@ class GrabNode(Node):
         self.motion_timer = None
         self.service_future = None
 
-        self.get_logger().info("Grab node initialized.")
+        #self.get_logger().info("Grab node initialized.")
 
         # To avoid state clash
         self.sequence_active = False
@@ -193,7 +193,7 @@ class GrabNode(Node):
             if self.state == GrabState.IDLE:
                 self.reset_creep_state()
                 self.state = GrabState.WAITING_ALIGNMENT
-                self.get_logger().info("Entering WAITING_ALIGNMENT")
+                #self.get_logger().info("Entering WAITING_ALIGNMENT")
             return
 
         if self.state == GrabState.WAITING_ALIGNMENT:
@@ -220,20 +220,20 @@ class GrabNode(Node):
 
     def gripper_state_callback(self, msg):
         self.gripper_state = int(msg.data)
-        self.get_logger().info(f"Received gripper state: {self.gripper_state}")
+        #self.get_logger().info(f"Received gripper state: {self.gripper_state}")
 
         if not self.waiting_for_gripper:
             return
 
         if self.gripper_state == GRIPPER_STATE_ERROR:
-            self.get_logger().error("Gripper reported ERROR state.")
+            #self.get_logger().error("Gripper reported ERROR state.")
             self.waiting_for_gripper = False
             self.sequence_active = False
             self.state = GrabState.IDLE
             return
 
         if self.gripper_state == self.expected_gripper_state:
-            self.get_logger().info(
+            #self.get_logger().info(
                 f"Expected gripper state {self.expected_gripper_state} confirmed."
             )
 
@@ -270,7 +270,7 @@ class GrabNode(Node):
 
         # Reject invalid or zero distance
         if self.distance <= 0.0:
-            self.get_logger().warn(f"Ignoring invalid distance: {self.distance:.3f}")
+            #self.get_logger().warn(f"Ignoring invalid distance: {self.distance:.3f}")
             return
 
         centered = abs(self.x_norm) < self.center_threshold
@@ -287,7 +287,7 @@ class GrabNode(Node):
 
         # Only start approach if EVERYTHING is valid
         if centered and close_enough and distance_valid:
-            self.get_logger().info("Alignment and distance OK. Starting approach.")
+            #self.get_logger().info("Alignment and distance OK. Starting approach.")
             self.start_forward_motion()
 
     def start_forward_motion(self):

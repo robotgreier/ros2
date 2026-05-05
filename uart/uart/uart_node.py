@@ -227,6 +227,7 @@ class UartBridgeNode(Node):
         elif cmd == CMD_ERR:
             self.publish_error(f"FPGA Error Code: {payload}")
             self.wait_start_time = None
+            self.state = STATE_READY
         else:
             self.publish_error(f"Unknown FPGA command: {cmd}")
 

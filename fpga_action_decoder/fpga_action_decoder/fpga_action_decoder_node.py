@@ -24,7 +24,7 @@ class FpgaActionDecoderNode(Node):
         self.decoder = ActionDecoder()
 
         # Publishers
-        self.winner_pub = self.create_publisher(Int32, "/snn/winner", 10)
+        self.winner_pub = self.create_publisher(UInt8, "/snn/winner", 10)
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel/snn", 10)
 
         # Subscriber (FPGA output)

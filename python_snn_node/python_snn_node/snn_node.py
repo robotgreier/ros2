@@ -406,7 +406,7 @@ class SNNNode(Node):
         decision = self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
 
         # Debug publish winners and spikes
-        self.pub_winner.publish(Int32(data=int(winner_idx)))
+        self.pub_winner.publish(UInt8(data=int(winner_idx)))
 
         spk_msg = Int32MultiArray()
         spk_msg.data = [int(x) for x in output_spikes]

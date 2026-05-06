@@ -62,6 +62,8 @@ class DopamineRewardNode(Node):
         state = int(msg.data)
         self.task_state = state
 
+        self.get_logger().info(f"[TaskState] received state={state}")
+
         result = self.energy_tracker.on_task_state(state)
 
         if result is not None:

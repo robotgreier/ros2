@@ -123,6 +123,14 @@ class EnergyTracker:
 
         result = None
 
+        print(
+            f"[EnergyTracker] state={task_state}, "
+            f"active={self.phase_active}, "
+            f"pickup={self.current_pickup_idx}, "
+            f"phase={self.current_phase_idx}, "
+            f"expected_end={self.PHASE_END_STATES[self.current_phase_idx] if self.current_phase_idx is not None else None}"
+        )
+
         # If a phase is active, see if it has reached its first valid end state
         if self.phase_active and self.current_phase_idx is not None:
             end_state = self.PHASE_END_STATES[self.current_phase_idx]

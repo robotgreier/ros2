@@ -32,7 +32,7 @@ class DistanceSensorNode(Node):
         self.filtered_value = None
 
         self.publisher = self.create_publisher(Range, "/ultrasonic/front/raw_range", 10)
-        self.timer = self.create_timer(0.08, self.measure)   # 15 Hz
+        self.timer = self.create_timer(0.0666, self.measure)   # 15 Hz
 
         self.get_logger().info("HC-SR04 libgpiod-node startet.")
 

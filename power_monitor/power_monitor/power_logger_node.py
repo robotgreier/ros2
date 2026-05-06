@@ -89,6 +89,8 @@ class PowerLogger(Node):
         self.current_state = None
         #self.episode_id = None
         self.last_time = None
+        self.power_samples = []
+        self.power_sample_keep_s = 1800.0  # keep last 30 minutes
 
         # battery status publisher
         self.battery_pub = self.create_publisher(
@@ -293,21 +295,64 @@ class PowerLogger(Node):
             self.get_logger().warn(f"Invalid phase_result indices: p={p}, ph={ph}")
             return
 
-        # Convert Wh back to match CSV format (you already use Wh internally)
-        energy_wh = float(msg.energy_wh)
+        t_start = float(msg.start_time_s)
+        t_end = float(msg.end_time_s)
+
+        if t_end <= t_start:
+            self.get_logger().warn(f"Invalid phase times: start={t_start}, end={t_end}")
+            return
+
+        E_total = 0.0
+        E_system = 0.0
+        E_fpga = 0.0
+
+        prev_sample = None
+
+        for sample in self.power_samples:
+            t, P_system, P_fpga, P_total = sample
+
+            if prev_sample is None:
+                prev_sample = sample
+                continue
+
+            t_prev, P_sys_prev, P_fpga_prev, P_tot_prev = prev_sample
+
+            # Check if this interval overlaps with phase window
+            if t <= t_start:
+                prev_sample = sample
+                continue
+
+            if t_prev >= t_end:
+                break
+
+            # Clip interval to phase window
+            t0 = max(t_prev, t_start)
+            t1 = min(t, t_end)
+
+            dt = t1 - t0
+            if dt <= 0:
+                prev_sample = sample
+                continue
+
+            # Use previous power sample (zero-order hold)
+            E_system += (P_sys_prev * dt) / 3600.0
+            E_fpga += (P_fpga_prev * dt) / 3600.0
+            E_total += (P_tot_prev * dt) / 3600.0
+
+            prev_sample = sample
 
         # Store results
-        self.energy_total_phase[p][ph] = energy_wh
+        self.energy_total_phase[p][ph] = E_total
+        self.energy_system_phase[p][ph] = E_system
+        self.energy_fpga_phase[p][ph] = E_fpga
         self.time_phase[p][ph] = float(msg.duration_s)
-
-        # Optional: split system vs fpga (not available anymore)
-        # For now, put everything in total and leave others as 0
-        self.energy_system_phase[p][ph] = 0.0
-        self.energy_fpga_phase[p][ph] = 0.0
 
         self.get_logger().info(
             f"[PhaseResult] p={p}, ph={ph}, "
-            f"E={energy_wh:.4f}Wh, t={msg.duration_s:.2f}s"
+            f"E_total={E_total:.4f}Wh, "
+            f"E_sys={E_system:.4f}Wh, "
+            f"E_fpga={E_fpga:.4f}Wh, "
+            f"t={msg.duration_s:.2f}s"
         )
 
     # ---------------- Battery aggregation ----------------
@@ -335,6 +380,8 @@ class PowerLogger(Node):
                 P_system = self.system.z
                 P_fpga = self.fpga.z
 
+                self.power_samples.append((now, P_system, P_fpga, P_total))
+
                 # --- Energy increments (Wh) ---
                 E_total = (P_total * dt) / 3600.0
                 E_system = (P_system * dt) / 3600.0
@@ -345,23 +392,23 @@ class PowerLogger(Node):
                 self.episode_energy_system += E_system
                 self.episode_energy_fpga += E_fpga
 
-                # --- Phase-based logging ---
-                if (
-                    self.phase_active and
-                    self.current_pickup is not None and
-                    self.current_phase is not None and
-                    0 <= self.current_pickup < 3 and
-                    0 <= self.current_phase < 4
-                ):
-                    p = self.current_pickup
-                    ph = self.current_phase
+                # # --- Phase-based logging ---
+                # if (
+                #     self.phase_active and
+                #     self.current_pickup is not None and
+                #     self.current_phase is not None and
+                #     0 <= self.current_pickup < 3 and
+                #     0 <= self.current_phase < 4
+                # ):
+                #     p = self.current_pickup
+                #     ph = self.current_phase
 
-                    self.energy_total_phase[p][ph] += E_total
-                    self.energy_system_phase[p][ph] += E_system
-                    self.energy_fpga_phase[p][ph] += E_fpga
+                #     self.energy_total_phase[p][ph] += E_total
+                #     self.energy_system_phase[p][ph] += E_system
+                #     self.energy_fpga_phase[p][ph] += E_fpga
 
-                    # time in seconds
-                    self.time_phase[p][ph] += dt
+                #     # time in seconds
+                #     self.time_phase[p][ph] += dt
 
         self.last_time = now
 

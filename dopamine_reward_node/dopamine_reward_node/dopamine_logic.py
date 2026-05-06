@@ -69,7 +69,7 @@ class DopamineComputer:
                 if action_idx == 1:     # centered → drive forward
                     dopamine = 2
                 elif action_idx == 3:   # centered → backing away
-                    dopamine = -1
+                    dopamine = -2
                 else:                   # turning in place when centered
                     dopamine = -1
             elif pos is not None and pos < 0:   # target is left
@@ -93,7 +93,7 @@ class DopamineComputer:
             elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
                 dopamine = 2
             else:                       # BACKWARD — retreating during search
-                dopamine = -1
+                dopamine = -2
             comps[f"search_{self.search_phase}"] = dopamine
 
         return dopamine, comps

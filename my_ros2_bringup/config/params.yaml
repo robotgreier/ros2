@@ -97,8 +97,8 @@ motor_control_node:
     #   ang_gain = 15  → saturates at  0.067 rad/s ← default
     #   ang_gain = 20  → saturates at  0.05  rad/s
     #   ang_gain = 40  → saturates at  0.025 rad/s
-    lin_gain: 0.5
-    ang_gain: 0.4
+    lin_gain: 1
+    ang_gain: 1
     max_pwm: 50              # PWM ceiling (0-255); top-speed cap
     min_pwm: 10              # PWM floor (scaled with output)
     cmd_vel_timeout: 0.5     # s, stop if no command received
@@ -109,10 +109,10 @@ grab_node:
     center_threshold: 0.2
     item_distance_threshold: 0.3    # m
     dropoff_distance_threshold: 0.3 # m
-    approach_speed: 0.1            # m/s
+    approach_speed: 0.05            # m/s
     approach_distance_item: 0.25     # m
     approach_distance_dropoff: 0.2  # m
-    backup_speed: 0.1              # m/s
+    backup_speed: 0.05              # m/s
     backup_distance: 0.1            # m
     failed_grab_backup_distance: 0.06
     motion_publish_rate_hz: 15.0
@@ -120,7 +120,7 @@ grab_node:
     dropoff_final_distance: 0.15    # m
     min_forward_distance: 0.1       # m
     max_forward_distance: 0.45      # m
-    creep_speed: 0.1                # m/s
+    creep_speed: 0.05                # m/s
     use_sim_gripper: false
 
 # ── Command arbiter ────────────────────────────────────────────────────────────

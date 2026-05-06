@@ -23,6 +23,7 @@ import os
 from datetime import datetime
 
 from taskbot_interfaces.srv import SaveWeights
+#from taskbot_interfaces.msg import Int32Array
 from pathlib import Path
 
 EVENT_IDLE = 0
@@ -51,45 +52,46 @@ class SNNNode(Node):
         self.declare_parameter('pack_order', ['keypoints_grid','proximity', 'object_rec'])
 
         # Channel sizes (matches YAML)
-        self.declare_parameter('kp_rows', 3)
-        self.declare_parameter('kp_cols', 8)
+        self.declare_parameter('kp_rows', 4)
+        self.declare_parameter('kp_cols', 6)
         self.declare_parameter('proximity_size', 4)
         self.declare_parameter('object_rec_size', 3)
 
         # Action parameters
-        self.declare_parameter('num_actions', 3)
+        self.declare_parameter('num_actions', 4)
 
         # Driving parameters
-        self.declare_parameter('timer_hz', 30.0)
+        self.declare_parameter('timer_hz', 15.0)
         self.declare_parameter('idle_timeout_sec', 1.0)
         self.declare_parameter('use_proximity_for_stop', True)
         self.declare_parameter('proximity_stop_active_high', True)
 
         # Robot speed parameters
-        self.declare_parameter('forward_speed', 0.05)
-        self.declare_parameter('turn_speed', 0.1)
+        self.declare_parameter('forward_speed', 0.125)
+        self.declare_parameter('turn_speed', 0.3)
 
         # Neuron parameters (integer-scaled)
-        self.declare_parameter('decay', 128)
-        self.declare_parameter('threshold', 1024)
+        self.declare_parameter('decay', 256)
+        self.declare_parameter('threshold', 2048)
         self.declare_parameter('reset', 0)
+        self.declare_parameter('refractory', 0)
 
         # Synapse & Learning parameters
-        self.declare_parameter('lr_shift', 3)
-        self.declare_parameter('initial_weight', 64)
+        self.declare_parameter('lr_shift', 7)
+        self.declare_parameter('initial_weight', -1)
         self.declare_parameter('t_pre', 3)
-        self.declare_parameter('t_post', 2)
+        self.declare_parameter('t_post', 3)
         self.declare_parameter('tau_e_shift', 3)
         self.declare_parameter('dw_pos', 32)
-        self.declare_parameter('dw_neg', 32)
-        self.declare_parameter('min_weight', 8)
-        self.declare_parameter('max_weight', 127)
-        self.declare_parameter('learning_mode', 'none')
+        self.declare_parameter('dw_neg', 16)
+        self.declare_parameter('min_weight', 16)
+        self.declare_parameter('max_weight', 254)
+        self.declare_parameter('learning_mode', 'rstdp')
         self.declare_parameter('feedback', True)
         self.declare_parameter('seed', 42)
 
         # ---- CSV logging ----
-        self.declare_parameter('log_enable', False)
+        self.declare_parameter('log_enable', True)
         self.declare_parameter('log_mode', 'A')  # 'A', 'B', or 'C'
         self.declare_parameter('log_dir', '')    # default resolved to ~/.ros/snn_logs
         self.declare_parameter('log_queue_size', 5000)
@@ -109,14 +111,14 @@ class SNNNode(Node):
         # ---- For episode weight logging ----
         self.declare_parameter(
             'weights_log_dir',
-            str(Path.home() / "ros2_ws" / "src" / "ros2" / "weights_logs")
+            "/opt/robot_ws/src/ros2/weights_logs/"
         )
         self.weights_log_dir = Path(self.get_parameter('weights_log_dir').value).expanduser()
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
         self.save_weights_srv = self.create_service(
             SaveWeights,
-            'save_weights',
+            '/save_weights',
             self.handle_save_weights
         )
 
@@ -172,6 +174,7 @@ class SNNNode(Node):
         self.decay = int(self.get_parameter('decay').value)
         self.threshold = int(self.get_parameter('threshold').value)
         self.reset = int(self.get_parameter('reset').value)
+        self.refractory = int(self.get_parameter('refractory').value)
 
         # Synapse params
         self.lr_shift = int(self.get_parameter('lr_shift').value)
@@ -197,7 +200,7 @@ class SNNNode(Node):
 
 
         #### Initialize SNN Layer ####
-        neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset}
+        neuron_params = {"decay": self.decay, "threshold": self.threshold, "reset": self.reset, "refractory": self.refractory}
         synapse_params = {
             "lr_shift": self.lr_shift, "w_init": self.initial_weight,
             "t_pre": self.t_pre, "t_post": self.t_post, "tau_e_shift": self.tau_e_shift,
@@ -214,12 +217,37 @@ class SNNNode(Node):
             feedback=self.feedback
         )
 
-        share_dir = get_package_share_directory('python_snn_node')
-        weight_path = os.path.join(share_dir, 'config', 'weights.mem')
+        # ---- Shared weights location (used by both Python SNN and FPGA system) ----
+        self.declare_parameter(
+            'weights_base_dir',
+            '/opt/robot_ws/src/ros2/weights_logs'
+        )
 
-        """# Load weights if file exists
+        weights_base_dir = Path(
+            self.get_parameter('weights_base_dir').value
+        ).expanduser()
+
+        weights_base_dir.mkdir(parents=True, exist_ok=True)
+
+        self.weights_current_file = weights_base_dir / "weights_current.mem"
+        self.weights_log_dir = weights_base_dir / "episode_logs"
+        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
+
+        weight_path = str(self.weights_current_file)
+
         if os.path.exists(weight_path):
-            self.network.load_weights(weight_file=weight_path)"""
+            try:
+                self.network.load_weights(weight_file=weight_path)
+                self.get_logger().info(f"Loaded weights from {weight_path}")
+            except Exception as e:
+                self.get_logger().error(f"Failed to load weights: {e}")
+        else:
+            self.get_logger().warn(
+                f"No weights file found at {weight_path}, using initial weights"
+            )
+
+        self.weights_log_dir = self.weights_current_file.parent / "episode_logs"
+        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
         ###########################################
 
@@ -228,6 +256,7 @@ class SNNNode(Node):
         self.last_vector = np.zeros(self.input_size, dtype=np.int32)
         self.correct_output = -1
         self.latest_dopamine = 0
+        self.previous_winner_idx = -1
 
         qos_sensor = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -242,6 +271,16 @@ class SNNNode(Node):
         self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10)
         self.pub_spikes = self.create_publisher(Int32MultiArray, '/snn/spikes', 10)
         self.pub_decision = self.create_publisher(String, '/snn/decision', 10)
+
+        qos_monitor = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+        self.pub_mem = self.create_publisher(Int32MultiArray, '/snn/mem', qos_monitor)
+        self.pub_weights = self.create_publisher(Int32MultiArray, '/snn/weights', qos_monitor)
+        self.pub_eligibility = self.create_publisher(Int32MultiArray, '/snn/eligibility', qos_monitor)
+        self.pub_delta_w = self.create_publisher(Int32MultiArray, '/snn/delta_w', qos_monitor)
         
         self.declare_parameter('cmd_vel_topic', '/cmd_vel/snn')
         cmd_topic = self.get_parameter('cmd_vel_topic').value
@@ -358,6 +397,8 @@ class SNNNode(Node):
         # Forward pass
         output_spikes = self.network.forward(input_spikes=self.last_vector)
 
+        self.pub_mem.publish(Int32MultiArray(data=self.network.pre_reset_mem.tolist())) ###
+
         # Find idx of winning neuron
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
         
@@ -384,8 +425,15 @@ class SNNNode(Node):
         dop_prox_stop = 0.0
         dop_prox_approach = 0.0
 
-        if self.learning_mode == 'rstdp':
-            self.network.apply_reward(dopamine=dopamine, winner_idx=int(winner_idx))
+        # Apply reward to the PREVIOUS winner using the eligibility snapshot captured
+        # at the end of that tick — before this tick's post-spike LTD accumulates.
+        if self.learning_mode == 'rstdp' and self.previous_winner_idx >= 0:
+            self.network.apply_reward(dopamine=dopamine, winner_idx=self.previous_winner_idx)
+        self.previous_winner_idx = int(winner_idx)
+
+        self.pub_weights.publish(Int32MultiArray(data=self.network.weights.flatten().tolist()))  ###
+        self.pub_eligibility.publish(Int32MultiArray(data=self.network.eligibility.flatten().tolist()))  ###
+        self.pub_delta_w.publish(Int32MultiArray(data=self.network.last_delta_w.flatten().tolist())) ###
 
         ## Logging ##
 
@@ -506,6 +554,8 @@ class SNNNode(Node):
 
         if force_stop:
             decision = "STOP_PROXIMITY"
+        elif winner_idx < 0:
+            decision = "IDLE"
         else:
             if winner_idx == 0:      # LEFT
                 cmd.linear.x = 0.0
@@ -537,16 +587,24 @@ class SNNNode(Node):
         self.cmd_vel_pub.publish(Twist())
         self.pub_decision.publish(String(data="IDLE"))
 
-    def save_weights(self, weight_file="weights.mem"):
+    def save_weights(self, weight_file):
         """
-        Save weights to a hex .mem file, one 32-bit value per line.
+        Save weights to a hex .mem file, one 8-bit value per line.
+        Atomic save: write temp file first, then replace final file.
         """
+        weight_file = Path(weight_file).expanduser()
+        weight_file.parent.mkdir(parents=True, exist_ok=True)
+
         weights = self.network.get_weights()
         flat_weights = weights.flatten()
 
-        with open(weight_file, "w") as f:
+        tmp_file = weight_file.with_suffix(weight_file.suffix + ".tmp")
+
+        with open(tmp_file, "w") as f:
             for value in flat_weights:
                 f.write(f"{int(value) & 0xFF:02X}\n")
+
+        tmp_file.replace(weight_file)
 
     def handle_save_weights(self, request, response):
         try:
@@ -557,7 +615,10 @@ class SNNNode(Node):
                 response.message = "Filename was empty"
                 return response
 
-            full_path = self.weights_log_dir / filename
+            if filename == "weights_current.mem":
+                full_path = self.weights_current_file
+            else:
+                full_path = self.weights_log_dir / filename
 
             self.save_weights(str(full_path))
 

@@ -66,3 +66,6 @@ Makefile
 # -----------------------------------------------------------------------------
 *.DS_Store
 Thumbs.db
+
+# Weights logs
+python_snn_node/config/weights_logs/*.mem

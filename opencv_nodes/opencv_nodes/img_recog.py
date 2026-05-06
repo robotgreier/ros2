@@ -56,7 +56,7 @@ class ImgRecog(Node):
 
         self.declare_parameter("aruco_dictionary", "DICT_4X4_50")
         self.declare_parameter("item_ids", [1, 2, 3])      # change via params/launch
-        self.declare_parameter("dropoff_ids", [4])   # change via params/launch
+        self.declare_parameter("dropoff_ids", [0, 4])   # change via params/launch
 
         # Pose estimation needs marker_length (meters)
         self.declare_parameter("marker_length_m", 0.04)  # 4cm default; adjust to your printed marker size
@@ -68,7 +68,7 @@ class ImgRecog(Node):
         self.declare_parameter("lost_frames", 12)    # how many consecutive missing frames to switch APPROACH->SEARCH
         self.declare_parameter("enable_state_auto", True)
         self.declare_parameter("grab_event_topic", "/grab_node/event")
-        self.declare_parameter("episode_reset_delay_sec", 5.0)
+        self.declare_parameter("episode_reset_delay_sec", 30.0)
 
         # Parameters for limited pose calculations
         self.declare_parameter("enable_pose_gating", True)
@@ -618,6 +618,8 @@ class ImgRecog(Node):
         self.episode_complete_pub.publish(Empty())
         self.episode_end_sent = True
         self.get_logger().info("Published /episode_complete")
+
+        self._start_episode_reset_timer()
 
 def main(args=None):
     rclpy.init(args=args)

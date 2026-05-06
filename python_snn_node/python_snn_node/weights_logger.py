@@ -13,11 +13,11 @@ class WeightsLogger(Node):
         self.episode_counter = 1
         self.busy = False
 
-        self.save_weights_client = self.create_client(SaveWeights, 'save_weights')
+        self.save_weights_client = self.create_client(SaveWeights, '/save_weights')
 
         self.episode_sub = self.create_subscription(
             Empty,
-            'episode_complete',
+            '/episode_complete',
             self.episode_complete_callback,
             10
         )
@@ -50,12 +50,13 @@ class WeightsLogger(Node):
 
         self.busy = True
 
+        # 1. Save episode archive
         filename = f"weights_ep_{self.episode_counter:04d}.mem"
 
         req = SaveWeights.Request()
         req.filename = filename
 
-        self.get_logger().info(f"Requesting weight save to {filename}")
+        self.get_logger().info(f"Saving episode weights: {filename}")
         future = self.save_weights_client.call_async(req)
         future.add_done_callback(self.on_save_weights_done)
 
@@ -64,22 +65,15 @@ class WeightsLogger(Node):
             response = future.result()
 
             if response.success:
-                self.get_logger().info(f"Weight save successful: {response.message}")
+                self.get_logger().info(f"Episode weight save successful: {response.message}")
 
-                # Now request state change to SEARCH_ITEM (0)
-                if not self.set_state_client.wait_for_service(timeout_sec=2.0):
-                    self.get_logger().error("set_state service not available after waiting")
-                    self.episode_counter += 1
-                    self.busy = False
-                    return
+                # ---- NEW: update current weights file ----
+                req_current = SaveWeights.Request()
+                req_current.filename = "weights_current.mem"
 
-                req = SetTaskState.Request()
-                req.new_state = 0  # SEARCH_ITEM
-                req.requester = "weights_logger"
-
-                self.get_logger().info("Requesting state change to SEARCH_ITEM")
-                future_state = self.set_state_client.call_async(req)
-                future_state.add_done_callback(self.on_set_state_done)
+                self.get_logger().info("Updating weights_current.mem")
+                future_current = self.save_weights_client.call_async(req_current)
+                future_current.add_done_callback(self.on_update_current_done)
 
             else:
                 self.get_logger().error(f"Weight save failed: {response.message}")
@@ -87,6 +81,35 @@ class WeightsLogger(Node):
 
         except Exception as e:
             self.get_logger().error(f"Service call failed: {e}")
+            self.busy = False
+
+    def on_update_current_done(self, future):
+        try:
+            response = future.result()
+
+            if response.success:
+                self.get_logger().info("weights_current.mem updated")
+
+                # Continue with state reset
+                if not self.set_state_client.wait_for_service(timeout_sec=2.0):
+                    self.get_logger().error("set_state service not available")
+                    self.busy = False
+                    return
+
+                req = SetTaskState.Request()
+                req.new_state = 0
+                req.requester = "weights_logger"
+
+                self.get_logger().info("Requesting state change to SEARCH_ITEM")
+                future_state = self.set_state_client.call_async(req)
+                future_state.add_done_callback(self.on_set_state_done)
+
+            else:
+                self.get_logger().error(f"Failed to update current weights: {response.message}")
+                self.busy = False
+
+        except Exception as e:
+            self.get_logger().error(f"Error updating current weights: {e}")
             self.busy = False
 
     def on_set_state_done(self, future):

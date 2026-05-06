@@ -3,13 +3,10 @@ from typing import Dict, List, Optional, Tuple
 
 class DopamineComputer:
     """
-    Computes a signed dopamine reward from:
-    - ArUco direction bits
-    - selected action
-    - proximity stop flag
-
-    Adds a small search reward when no ArUco is visible:
-    turn left for a while, then move forward briefly, then repeat.
+    Computes a signed dopamine reward using a strict priority system:
+      1. proximity_stop  — wall avoidance dominates all other signals
+      2. ArUco visible   — alignment rewards, uncontaminated
+      3. searching       — weak shaping to avoid silent zeros during exploration
     """
 
     def __init__(self) -> None:
@@ -54,59 +51,49 @@ class DopamineComputer:
 
         seen, pos = self.decode_object_bits(obj_bits)
         comps: Dict[str, int] = {}
+        dopamine = 0
 
-        # If we see an ArUco, stop/reset search pattern
-        if seen:
-            self.search_counter = 0
-            self.search_phase = "turn"
-
-        # Existing reward: correct action when ArUco is visible
-        if seen and pos is not None and (
-            (pos == 0 and action_idx == 1) or
-            (pos < 0 and action_idx == 0) or
-            (pos > 0 and action_idx == 2)
-        ):
-            dopamine = 3
-
-        # New reward: structured search when no ArUco is visible
-        elif not seen:
-            self.search_counter += 1
-
-            # Tune these numbers depending on your control loop speed
-            turn_steps = 30       # reward LEFT for this many steps
-            forward_steps = 10    # then reward FORWARD for this many steps
-
-            cycle_length = turn_steps + forward_steps
-            phase_step = self.search_counter % cycle_length
-
-            if phase_step < turn_steps:
-                self.search_phase = "turn"
-                dopamine = 1 if action_idx == 0 else 0
-            else:
-                self.search_phase = "forward"
-                dopamine = 1 if action_idx == 1 else 0
-
-        # Existing penalty: backing away while ArUco is visible
-        elif seen and action_idx == 3:
-            dopamine = -1
-
-        # Existing default: no reward / no penalty
-        else:
-            dopamine = 0
-
-        # Label reward component for debugging
-        if not seen and dopamine > 0:
-            comps[f"search_{self.search_phase}"] = dopamine
-        else:
-            comps["align_action"] = dopamine
-
-        # Existing proximity override
+        # Priority 1: wall avoidance
         if proximity_stop:
-            if action_idx == 3:
+            if action_idx == 3:         # BACKWARD — escape
                 dopamine = 3
-                comps["proximity_stop"] = dopamine
-            else:
+            elif action_idx in (0, 2):  # LEFT / RIGHT — escape
+                dopamine = 3
+            else:                       # FORWARD — into the wall
                 dopamine = -2
-                comps["proximity_stop"] = dopamine
+            comps["proximity"] = dopamine
+
+        # Priority 2: ArUco visible — alignment rewards.
+        elif seen:
+            if pos == 0:
+                if action_idx == 1:     # centered → drive forward
+                    dopamine = 3
+                elif action_idx == 3:   # centered → backing away
+                    dopamine = -2
+                else:                   # turning in place when centered
+                    dopamine = -2
+            elif pos is not None and pos < 0:   # target is left
+                if action_idx == 0:     # correct: turn left
+                    dopamine = 3
+                elif action_idx == 2:   # wrong: turn right
+                    dopamine = -2
+            elif pos is not None and pos > 0:   # target is right
+                if action_idx == 2:     # correct: turn right
+                    dopamine = 3
+                elif action_idx == 0:   # wrong: turn left
+                    dopamine = -2
+            comps["align"] = dopamine
+
+        # Priority 3: searching — no ArUco
+        # Weak shaping so the SNN has a gradient during search instead of
+        # silent zeros that produce no learning signal at all.
+        else:
+            if action_idx == 1:         # FORWARD — explore open space
+                dopamine = 2
+            elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
+                dopamine = 2
+            else:                       # BACKWARD — retreating during search
+                dopamine = -2
+            comps[f"search_{self.search_phase}"] = dopamine
 
         return dopamine, comps

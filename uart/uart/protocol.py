@@ -17,21 +17,20 @@ from typing import List, Tuple, Optional
 # Protocol constants
 # -----------------------------
 
-SOF = 0xFF  # 170 decimal
+SOF = 0xFF  # 255 decimal
 
-# Pi -> FPGA commands
+# Pi -> FPGA commands (must match master.sv localparam values)
 CMD_INIT = 0
 CMD_SPIKE = 1
-CMD_STOP = 2
-CMD_RESET = 3
-CMD_RESEND = 4
+CMD_DOPAMINE = 2
+CMD_STOP = 3
+CMD_RESET = 4
+CMD_ERR = 5
 
 # FPGA -> Pi commands
-CMD_AFFIRM = 0
-CMD_OUT = 1
+CMD_OUT = 0
+CMD_WEIGHT = 1
 CMD_ERR = 2
-CMD_UPDATE = 3
-CMD_RESEND_REPLY = 4  # Same numeric value as CMD_RESEND, named for clarity
 
 
 # -----------------------------
@@ -39,22 +38,14 @@ CMD_RESEND_REPLY = 4  # Same numeric value as CMD_RESEND, named for clarity
 # -----------------------------
 
 def fletcher_checksum(data: List[int]) -> Tuple[int, int]:
-    """
-    Compute Fletcher checksum over a list of byte values.
-
-    Args:
-        data: List of integers in range 0-255.
-
-    Returns:
-        (sum_1, sum_2) as a tuple of ints.
-    """
     sum_1 = 0
     sum_2 = 0
-
     for value in data:
+
+        # value &= 0xFF  # Masking to 8 bits
+
         sum_1 = (sum_1 + value) % 255
         sum_2 = (sum_2 + sum_1) % 255
-
     return sum_1, sum_2
 
 
@@ -79,18 +70,9 @@ def build_packet(cmd: int, payload: List[int]) -> bytes:
     Raises:
         ValueError: If payload is too large or contains invalid byte values.
     """
-    if len(payload) > 255:
-        raise ValueError("Payload too large. LEN field is one byte, max 255.")
-
-    for value in payload:
-        if not 0 <= value <= 255:
-            raise ValueError(f"Invalid payload byte: {value}")
-
     header_and_data = [SOF, cmd, len(payload)] + payload
     sum_1, sum_2 = fletcher_checksum(header_and_data)
-
-    full_packet = header_and_data + [sum_1, sum_2]
-    return bytes(full_packet)
+    return bytes(header_and_data + [sum_1, sum_2])
 
 
 # -----------------------------
@@ -107,7 +89,7 @@ def expected_packet_length(length_field: int) -> int:
     return length_field + 5
 
 
-def validate_packet(packet: bytes) -> bool:
+def validate_packet(packet: bytes) -> Tuple[int, int, int, int]:
     """
     Validate a complete packet.
 
@@ -115,25 +97,25 @@ def validate_packet(packet: bytes) -> bool:
         packet: Full packet bytes.
 
     Returns:
-        True if packet structure and checksum are valid, else False.
+        Tuple of (FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2) if packet is valid, else (0, 0, 0, 0).
     """
     if len(packet) < 5:
-        return False
+        return 0, 0, 0, 0  # Minimum packet size is 5 bytes (SOF, CMD, LEN, CHECKSUM_1, CHECKSUM_2)
 
     if packet[0] != SOF:
-        return False
+        return 0, 0, 0, 0
 
     payload_length = packet[2]
     if len(packet) != expected_packet_length(payload_length):
-        return False
+        return 0, 0, 0, 0
 
     data_without_checksum = list(packet[:-2])
-    rx_sum_1 = packet[-2]
-    rx_sum_2 = packet[-1]
+    FPGA_sum_1 = packet[-2]
+    FPGA_sum_2 = packet[-1]
 
-    calc_sum_1, calc_sum_2 = fletcher_checksum(data_without_checksum)
+    PI_sum_1, PI_sum_2 = fletcher_checksum(data_without_checksum)
 
-    return (rx_sum_1 == calc_sum_1) and (rx_sum_2 == calc_sum_2)
+    return FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2
 
 
 def parse_packet(packet: bytes) -> Optional[Tuple[int, List[int]]]:

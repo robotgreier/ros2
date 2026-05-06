@@ -19,7 +19,7 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='python_snn_node',
-            executable='python_snn_node',
+            executable='snn_node',
             name='python_snn_node',
             output='screen',
             parameters=[p('python_snn_node')],

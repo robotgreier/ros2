@@ -3,7 +3,7 @@ from typing import List
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import UInt8MultiArray, UInt8
+from std_msgs.msg import UInt8MultiArray, UInt8, Int32
 from geometry_msgs.msg import Twist
 
 from .action_decoder import ActionDecoder
@@ -24,7 +24,7 @@ class FpgaActionDecoderNode(Node):
         self.decoder = ActionDecoder()
 
         # Publishers
-        self.winner_pub = self.create_publisher(UInt8, "/snn/winner", 10)
+        self.winner_pub = self.create_publisher(Int32, "/snn/winner", 10)
         self.cmd_pub = self.create_publisher(Twist, "/cmd_vel/snn", 10)
 
         # Subscriber (FPGA output)
@@ -47,7 +47,7 @@ class FpgaActionDecoderNode(Node):
             return
 
         # Publish winner
-        winner_msg = UInt8()
+        winner_msg = Int32()
         winner_msg.data = action
         self.winner_pub.publish(winner_msg)
 

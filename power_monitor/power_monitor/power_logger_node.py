@@ -78,7 +78,7 @@ class PowerLogger(Node):
 
         self.episode_id = 0
 
-        self.get_logger().info(f"Logging to CSV: {self.filename}")
+        #self.get_logger().info(f"Logging to CSV: {self.filename}")
 
         # latest filtered inputs
         self.system = None
@@ -195,12 +195,12 @@ class PowerLogger(Node):
         self.writer.writerow(row)
         self.file.flush()
 
-        self.get_logger().info(
-            f"[EPISODE {self.episode_id}] "
-            f"E_total={self.episode_energy_total:.3f}Wh, "
-            f"time={total_time:.2f}s"
-        )
-    # ---------------- Battery math ----------------
+        #self.get_logger().info(
+        #    f"[EPISODE {self.episode_id}] "
+        #    f"E_total={self.episode_energy_total:.3f}Wh, "
+        #    f"time={total_time:.2f}s"
+        #)
+    # ---------------- Battery calculations ----------------
 
     def voltage_to_percentage(self, voltage):
         """
@@ -212,11 +212,11 @@ class PowerLogger(Node):
 
         table = [
             (4.35, 100),
-            (4.00, 80),
-            (3.87, 60),
-            (3.77, 40),
-            (3.65, 20),
-            (3.40, 0),
+            (4.20, 80),
+            (4.10, 60),
+            (3.90, 40),
+            (3.70, 20),
+            (3.50, 0),
         ]
 
         if cell_v >= table[0][0]:
@@ -342,14 +342,14 @@ class PowerLogger(Node):
         percent = self.voltage_to_percentage(V)
         runtime_min = self.estimate_runtime_minutes(V, I)
 
-        self.get_logger().info(
-            f"[battery] V={V:.2f}V  I={I:.2f}A  "
-            f"P={P:.1f}W  {percent:.0f}%  "
-            f"E_episode={self.episode_energy_total:.3f}Wh  "
-            f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active} "
-            f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
-            f"runtime={runtime_min:.0f} min"
-        )
+        # self.get_logger().info(
+        #     f"[battery] V={V:.2f}V  I={I:.2f}A  "
+        #     f"P={P:.1f}W  {percent:.0f}%  "
+        #     f"E_episode={self.episode_energy_total:.3f}Wh  "
+        #     f"pickup={self.current_pickup}, phase={self.current_phase}, active={self.phase_active} "
+        #     f"state={STATE_NAMES.get(self.current_state, 'UNKNOWN')}  "
+        #     f"runtime={runtime_min:.0f} min"
+        # )
 
         # Publish battery status
         out = Vector3()

@@ -5,7 +5,7 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Range
-from std_msgs.msg import UInt8MultiArray, Int32MultiArray, Float32MultiArray, UInt8
+from std_msgs.msg import UInt8MultiArray, Int32MultiArray, Float32MultiArray, UInt8, Empty
 
 from .proximity_bracket_encoder import ProximityBracketEncoder
 from .keypoints_grid_encoder import KeypointsGridEncoder
@@ -35,6 +35,8 @@ class EncodingNode(Node):
         self.declare_parameter("keypoints_n_threshold_levels", 3)
         self.declare_parameter("keypoints_threshold_max", 20)
 
+        self.declare_parameter("episode_pause_sec", 30.0)
+
         # ---- Read parameters ----
         output_topic = self.get_parameter("output_topic").value
         self.pack_order = list(self.get_parameter("pack_order").value)
@@ -46,6 +48,8 @@ class EncodingNode(Node):
         keypoints_topic = self.get_parameter("keypoints_topic").value
         keypoints_n_threshold_levels = int(self.get_parameter("keypoints_n_threshold_levels").value)
         keypoints_threshold_max = int(self.get_parameter("keypoints_threshold_max").value)
+
+        self.episode_pause_sec = float(self.get_parameter("episode_pause_sec").value)
 
         # ---- Encoders ----
         self.prox_encoder = ProximityBracketEncoder(
@@ -100,9 +104,14 @@ class EncodingNode(Node):
         # Add channel
         self.channels["aruco_dir"] = [0] * aruco_n_bins
 
+        # Set up pause timer for episode transition
+        self.input_paused = False
+        self.pause_timer = None
+
         # Subscribe to task state and aruco target
         self.create_subscription(UInt8, task_state_topic, self.on_task_state, 10)
         self.create_subscription(Float32MultiArray, aruco_topic, self.on_aruco_target, 10)
+        self.create_subscription(Empty, "/episode_complete", self.on_episode_complete, 10)
 
     def pack_vector(self) -> List[int]:
         """
@@ -115,6 +124,9 @@ class EncodingNode(Node):
         return out
 
     def publish_vector(self) -> None:
+        if self.input_paused:
+            return
+
         msg = UInt8MultiArray()
         msg.data = self.pack_vector()
         self.pub.publish(msg)
@@ -161,6 +173,35 @@ class EncodingNode(Node):
             self.channels["aruco_dir"] = [0] * self.aruco_encoder.n_aruco_bins
             self.publish_vector()
 
+    def on_episode_complete(self, msg: Empty) -> None:
+        if self.input_paused:
+            return
+
+        self.input_paused = True
+
+        self.get_logger().info(
+            f"Episode complete received. Pausing /snn/input for {self.episode_pause_sec:.1f} seconds."
+        )
+
+        if self.pause_timer is not None:
+            self.pause_timer.cancel()
+            self.destroy_timer(self.pause_timer)
+            self.pause_timer = None
+
+        self.pause_timer = self.create_timer(
+            self.episode_pause_sec,
+            self.finish_episode_pause
+        )
+
+    def finish_episode_pause(self) -> None:
+        if self.pause_timer is not None:
+            self.pause_timer.cancel()
+            self.destroy_timer(self.pause_timer)
+            self.pause_timer = None
+
+        self.input_paused = False
+
+        self.get_logger().info("Episode pause finished. Resuming /snn/input publishing.")
 
     def on_aruco_target(self, msg: Float32MultiArray) -> None:
         # Expected layout from img_recog:

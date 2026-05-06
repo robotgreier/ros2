@@ -26,7 +26,7 @@ img_kp_grid:
   ros__parameters:
     rows: *kp_rows
     cols: *kp_cols
-    response_threshold: 0.0
+    response_threshold: 0.02
     use_clahe: false
 
 # ── SNN node ───────────────────────────────────────────────────────────────────
@@ -51,31 +51,32 @@ python_snn_node:
     idle_timeout_sec: 1.0
 
     # Robot speeds
-    forward_speed: 0.125     # m/s
-    turn_speed: 0.3          # rad/s
+    forward_speed: 0.05     # m/s
+    turn_speed: 0.05        # rad/s
 
-    # Neuron parameters 
-    decay: 512              # membrane potential decay per timestep (0-255, higher is faster decay)
-    threshold: 4096         # firing threshold higher means higher synaptic input needed to fire
-    reset: 0 
+    # Neuron parameters
+    decay: 150               # membrane potential decay per timestep (higher is faster decay)
+    threshold: 1000          # firing threshold; higher means more synaptic input needed to fire
+    reset: 0
+    refractory: 1            # refractory period in timesteps after a spike (0 = disabled)
 
     # Synapse / learning parameters
-    lr_shift: 7             # learning rate = 1 / (2^lr_shift)
-    t_pre: 2                # time steps for pre-synaptic trace
-    t_post: 2               # time steps for post-synaptic trace
+    lr_shift: 5             # learning rate = 1 / (2^lr_shift)
+    t_pre: 3                # time steps for pre-synaptic trace
+    t_post: 3               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
-    dw_pos: 32              # weight change for causal spike pair (pre before post)
-    dw_neg: -16              # weight change for acausal spike pair (post before pre)
+    dw_pos: 10              # weight change for causal spike pair (pre before post)
+    dw_neg: 10               # weight change for acausal spike pair (post before pre)
     min_weight: 40          # minimum synaptic weight (absolute value)
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
-    feedback: true  
+    feedback: true    
     learning_mode: "rstdp"   # none | stdp | rstdp
 
     seed: 42
 
     # CSV logging
-    log_enable: true
+    log_enable: false
     log_mode: "A"            # A = log on new input, B = every tick, C = state changes
 
     # Per-episode weight snapshot directory
@@ -84,27 +85,42 @@ python_snn_node:
 # ── Motor control node ─────────────────────────────────────────────────────────
 motor_control_node:
   ros__parameters:
-    wheel_base: 0.13         # m, distance between wheels
-    max_lin_vel: 0.7         # m/s
-    max_ang_vel: 2.0         # rad/s
+    wheel_base: 0.15         # m, distance between wheels
+    # Velocity gains: cmd_vel is multiplied by gain to produce a normalized
+    # value where 1.0 = max_pwm. Higher gain → more PWM per unit cmd_vel,
+    # but max_pwm is reached at a lower speed. Saturation point = 1 / gain:
+    #   lin_gain = 10  → saturates at  0.10  m/s
+    #   lin_gain = 15  → saturates at  0.067 m/s  ← default
+    #   lin_gain = 20  → saturates at  0.05  m/s
+    #   lin_gain = 40  → saturates at  0.025 m/s
+    #   ang_gain = 10  → saturates at  0.10  rad/s
+    #   ang_gain = 15  → saturates at  0.067 rad/s ← default
+    #   ang_gain = 20  → saturates at  0.05  rad/s
+    #   ang_gain = 40  → saturates at  0.025 rad/s
+    lin_gain: 15.0
+    ang_gain: 15.0
+    max_pwm: 50              # PWM ceiling (0-255); top-speed cap
+    min_pwm: 10              # PWM floor (scaled with output)
     cmd_vel_timeout: 0.5     # s, stop if no command received
 
 # ── Grab node ──────────────────────────────────────────────────────────────────
 grab_node:
   ros__parameters:
-    center_threshold: 0.15
+    center_threshold: 0.2
     item_distance_threshold: 0.3    # m
     dropoff_distance_threshold: 0.3 # m
-    approach_speed: 0.1             # m/s
-    approach_distance_item: 0.4     # m
-    approach_distance_dropoff: 0.3  # m
-    backup_speed: 0.1               # m/s
-    backup_distance: 0.3            # m
-    motion_publish_rate_hz: 20.0
+    approach_speed: 0.05            # m/s
+    approach_distance_item: 0.25     # m
+    approach_distance_dropoff: 0.2  # m
+    backup_speed: 0.05              # m/s
+    backup_distance: 0.1            # m
+    failed_grab_backup_distance: 0.06
+    motion_publish_rate_hz: 15.0
     item_final_distance: -1.0       # -1 = disabled
-    dropoff_final_distance: 0.02    # m
-    min_forward_distance: 0.2       # m
+    dropoff_final_distance: 0.15    # m
+    min_forward_distance: 0.1       # m
     max_forward_distance: 0.45      # m
+    creep_speed: 0.05                # m/s
     use_sim_gripper: false
 
 # ── Command arbiter ────────────────────────────────────────────────────────────
@@ -126,7 +142,7 @@ proximity_stop:
     scan_topic: "/ultrasonic/front/scan"
     state_topic: "/task/state"
     stop_topic: "/proximity_stop"
-    distance_threshold: 0.20         # m
+    distance_threshold: 0.25         # m
     disabled_states: [1, 3]          # 1=APPROACH_ITEM, 3=APPROACH_DROPOFF
 
 # ── ArUco / image recognition node ────────────────────────────────────────────
@@ -138,7 +154,7 @@ img_recog:
     out_topic: "/vision/aruco/target"
     aruco_dictionary: "DICT_4X4_50"
     item_ids: [1, 2, 3]
-    dropoff_ids: [4]
+    dropoff_ids: [0, 4]
     marker_length_m: 0.04            # m, adjust to your printed marker size
     target_policy: "largest"         # largest | closest_to_center
     found_frames: 2

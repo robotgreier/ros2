@@ -63,7 +63,7 @@ class DistanceSensorNode(Node):
         # Beregn avstand (mm)
         duration_ns = echo_end - echo_start  # ns
         duration_s = duration_ns / 1e9 # s
-        distance_mm = (duration_s * 343000) / 2
+        distance_mm = (duration_s * 343000) / 2 # 343m/s: speed of sound in dry air at 20 degrees Celsius, divided by 2 for back/forth
         distance_m = distance_mm / 1000.0 
 
         # Validation
@@ -75,7 +75,7 @@ class DistanceSensorNode(Node):
         median_val = statistics.median(self.median_window)
 
         # Exponential smooth (IIR filter)
-        alpha = 0.4
+        alpha = 0.6
         if self.filtered_value is None:
             self.filtered_value = median_val
         else: 

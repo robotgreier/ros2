@@ -58,12 +58,12 @@ class GrabNode(Node):
         self.declare_parameter("item_distance_threshold", 0.3)
         self.declare_parameter("dropoff_distance_threshold", 0.3)
 
-        self.declare_parameter("approach_speed", 0.125)
+        self.declare_parameter("approach_speed", 0.1)
         self.declare_parameter("approach_distance_item", 0.4)
         self.declare_parameter("approach_distance_dropoff", 0.3)
 
-        self.declare_parameter("backup_speed", 0.125)
-        self.declare_parameter("backup_distance", 0.6)
+        self.declare_parameter("backup_speed", 0.01)
+        self.declare_parameter("backup_distance", 0.2)
 
         self.declare_parameter("motion_publish_rate_hz", 15.0)
 
@@ -73,9 +73,9 @@ class GrabNode(Node):
         self.declare_parameter("min_forward_distance", 0.2)
         self.declare_parameter("max_forward_distance", 0.45)
 
-        self.declare_parameter("creep_speed", 0.125)
+        self.declare_parameter("creep_speed", 0.01)
         self.declare_parameter("grip_timeout_sec", 4.0)
-        self.declare_parameter("failed_grab_backup_distance", 0.3)
+        self.declare_parameter("failed_grab_backup_distance", 0.05)
 
         # For simulation
         self.declare_parameter("use_sim_gripper", False)
@@ -158,7 +158,7 @@ class GrabNode(Node):
         self.motion_timer = None
         self.service_future = None
 
-        self.get_logger().info("Grab node initialized.")
+        #self.get_logger().info("Grab node initialized.")
 
         # To avoid state clash
         self.sequence_active = False
@@ -193,7 +193,7 @@ class GrabNode(Node):
             if self.state == GrabState.IDLE:
                 self.reset_creep_state()
                 self.state = GrabState.WAITING_ALIGNMENT
-                self.get_logger().info("Entering WAITING_ALIGNMENT")
+                #self.get_logger().info("Entering WAITING_ALIGNMENT")
             return
 
         if self.state == GrabState.WAITING_ALIGNMENT:
@@ -220,13 +220,13 @@ class GrabNode(Node):
 
     def gripper_state_callback(self, msg):
         self.gripper_state = int(msg.data)
-        self.get_logger().info(f"Received gripper state: {self.gripper_state}")
+        #self.get_logger().info(f"Received gripper state: {self.gripper_state}")
 
         if not self.waiting_for_gripper:
             return
 
         if self.gripper_state == GRIPPER_STATE_ERROR:
-            self.get_logger().error("Gripper reported ERROR state.")
+            #self.get_logger().error("Gripper reported ERROR state.")
             self.waiting_for_gripper = False
             self.sequence_active = False
             self.state = GrabState.IDLE
@@ -270,7 +270,7 @@ class GrabNode(Node):
 
         # Reject invalid or zero distance
         if self.distance <= 0.0:
-            self.get_logger().warn(f"Ignoring invalid distance: {self.distance:.3f}")
+            #self.get_logger().warn(f"Ignoring invalid distance: {self.distance:.3f}")
             return
 
         centered = abs(self.x_norm) < self.center_threshold
@@ -287,7 +287,7 @@ class GrabNode(Node):
 
         # Only start approach if EVERYTHING is valid
         if centered and close_enough and distance_valid:
-            self.get_logger().info("Alignment and distance OK. Starting approach.")
+            #self.get_logger().info("Alignment and distance OK. Starting approach.")
             self.start_forward_motion()
 
     def start_forward_motion(self):

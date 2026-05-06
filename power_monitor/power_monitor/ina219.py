@@ -12,15 +12,19 @@ class INA219:
         self.bus = smbus.SMBus(bus)
         self.addr = address
 
-        # Calibration INA219, 6A max, 0.1 ohm shunt
-        calibration_value = 2238
-        self.bus.write_word_data(self.addr, self.REG_CALIB, calibration_value)
-
+        # Calibration SEN0219 / INA219, 3.2A max, 0.1 ohm shunt
+        
+        calibration_value = 4096  # 0x1000
+        self.bus.write_i2c_block_data(
+            self.addr,
+            self.REG_CALIB,
+            [(calibration_value >> 8) & 0xFF, calibration_value & 0xFF]
+        )
         time.sleep(0.01)
 
         # Conversion factors
-        self.current_lsb = 0.000183      # 0.183 mA per bit
-        self.power_lsb   = self.current_lsb * 20
+        self.current_lsb = 0.001                   # 0.1 mA per bit
+        self.power_lsb   = self.current_lsb * 20    # 20 mW per bit
 
     def read_voltage(self):
         raw = self.bus.read_word_data(self.addr, self.REG_BUSV)
@@ -30,9 +34,13 @@ class INA219:
     def read_current(self):
         raw = self.bus.read_word_data(self.addr, self.REG_CURRENT)
         raw = ((raw & 0xFF) << 8) | (raw >> 8)
+        if raw & 0x8000:    # negative value
+            raw -= 65536    # convert to signed
         return raw * self.current_lsb
 
     def read_power(self):
         raw = self.bus.read_word_data(self.addr, self.REG_POWER)
         raw = ((raw & 0xFF) << 8) | (raw >> 8)
+        if raw & 0x8000:    # negative value
+            raw -= 65536    # convert to signed
         return raw * self.power_lsb

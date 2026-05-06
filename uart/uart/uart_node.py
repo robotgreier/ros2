@@ -1,27 +1,10 @@
-"""
-ROS 2 UART bridge node.
-
-This node is responsible for:
-- subscribing to /snn/input
-- sending UART packets to the FPGA
-- receiving UART packets from the FPGA
-- publishing status/debug information
-- publishing output spikes
-"""
-
-# uart_node.py
-
-import json
-from pathlib import Path
-from typing import List, Optional, Tuple
-
 import rclpy
 from rclpy.node import Node
-
-from std_msgs.msg import UInt8MultiArray, String
-from geometry_msgs.msg import Twist
-
-import serial
+from std_msgs.msg import UInt8MultiArray, String, Int16, Empty
+from pathlib import Path
+from typing import List, Optional
+import serial  # Replacing pigpio with pyserial
+import time
 
 from .protocol import (
     SOF,
@@ -31,17 +14,19 @@ from .protocol import (
     validate_packet,
     CMD_INIT,
     CMD_SPIKE,
+    CMD_DOPAMINE,
     CMD_STOP,
-    CMD_RESET,
-    CMD_RESEND,
-    CMD_AFFIRM,
     CMD_OUT,
+    CMD_WEIGHT,
     CMD_ERR,
-    CMD_UPDATE,
-    CMD_RESEND_REPLY,
 )
 
 from .spike_codec import pack_input_spikes, unpack_output_spikes
+
+STATE_READY = "READY"
+STATE_WAIT_OUT = "WAIT_OUT"
+STATE_WAIT_DOPAMINE = "WAIT_DOPAMINE"
+STATE_WAIT_WEIGHT = "WAIT_WEIGHT"
 
 class UartBridgeNode(Node):
     def __init__(self):
@@ -50,21 +35,21 @@ class UartBridgeNode(Node):
         # -----------------------------
         # Parameters
         # -----------------------------
-        self.declare_parameter("serial_port", "/dev/ttyUSB1")
+        self.declare_parameter("port", "/dev/ttyAMA3")
         self.declare_parameter("baudrate", 250000)
-        self.declare_parameter("timeout", 1.0)
-        self.declare_parameter("weights_file", "weights.json")
+        self.declare_parameter("weights_file",str(Path.home() / "/opt/robot_ws/src/ros2/weights_logs/weights_current.mem"))
         self.declare_parameter("response_timeout_sec", 1.0)
         self.declare_parameter("max_retry_count", 2)
         self.declare_parameter("poll_period_sec", 0.01)
+        self.declare_parameter("dopamine_timeout_sec", 1.0)
 
-        self.serial_port_name = self.get_parameter("serial_port").value
+        self.port_name = self.get_parameter("port").value
         self.baudrate = self.get_parameter("baudrate").value
-        self.timeout = self.get_parameter("timeout").value
         self.weights_file = self.get_parameter("weights_file").value
         self.response_timeout_sec = self.get_parameter("response_timeout_sec").value
         self.max_retry_count = self.get_parameter("max_retry_count").value
         self.poll_period_sec = self.get_parameter("poll_period_sec").value
+        self.dopamine_timeout_sec = self.get_parameter("dopamine_timeout_sec").value
 
         # -----------------------------
         # ROS interfaces
@@ -72,27 +57,31 @@ class UartBridgeNode(Node):
         self.status_pub = self.create_publisher(String, "/uart/status", 10)
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
         self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)
+        self.episode_reset_pub = self.create_publisher(Empty, "/episode_reset", 10)
 
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
+        self.create_subscription(Int16, "/reward/dopamine", self.dopamine_callback, 10)
+        self.create_subscription(Empty, "/episode_complete", self.episode_complete_callback, 10)
+        self.create_subscription(Empty, "/episode_reset", self.episode_reset_callback, 10)
 
         # -----------------------------
         # Internal state
         # -----------------------------
-        self.ser = None
+        self.ser: Optional[serial.Serial] = None
         self.weights: List[int] = []
-
         self.last_packet_sent: bytes = b""
-        self.last_command_sent: Optional[int] = None
-
-        self.waiting_for_affirm = False
-        self.waiting_for_out = False
-        self.waiting_for_update = False
-
         self.wait_start_time = None
         self.retry_count = 0
-
         self.initialized = False
         self.rx_buffer = bytearray()
+        self.state = STATE_READY
+        self.waiting_for_dopamine = False
+
+        self.episode_counter = 1
+
+        self.weights_path = Path(self.weights_file)
+        self.episode_log_dir = self.weights_path.parent / "episode_logs"
+        self.episode_log_dir.mkdir(parents=True, exist_ok=True)
 
         # -----------------------------
         # Startup
@@ -101,17 +90,11 @@ class UartBridgeNode(Node):
         self.load_weights()
         self.try_send_init()
 
-        def send_spike(self, payload: List[int]):
-            self.send_packet(CMD_SPIKE, payload)
-
+        # Timers
         self.create_timer(self.poll_period_sec, self.poll_serial)
         self.create_timer(0.05, self.check_for_timeouts)
 
-        self.publish_status("UART node started.")
-
-    # =================================================
-    # Logging helpers
-    # =================================================
+        self.publish_status("UART Hardware Node started.")
 
     def publish_status(self, text: str):
         msg = String()
@@ -125,254 +108,330 @@ class UartBridgeNode(Node):
         self.error_pub.publish(msg)
         self.get_logger().error(text)
 
-    # =================================================
-    # Serial setup
-    # =================================================
-
     def open_serial_port(self):
         try:
+            # timeout=0 makes read() non-blocking
             self.ser = serial.Serial(
-                port=self.serial_port_name,
+                port=self.port_name,
                 baudrate=self.baudrate,
-                timeout=self.timeout
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=0,
+                write_timeout=None
             )
-            self.publish_status(f"Opened serial port {self.serial_port_name}")
+
+            self.ser.setDTR(False)
+            self.ser.setRTS(False)
+
+            self.publish_status(f"Opened Hardware UART: {self.port_name} @ {self.baudrate}")
         except Exception as e:
             self.publish_error(f"Serial open failed: {e}")
             self.ser = None
 
-    # =================================================
-    # Weights handling
-    # =================================================
-
-    def load_weights(self):
-        try:
-            path = Path(self.weights_file)
-            if path.exists():
-                self.weights = json.load(open(path))
-                self.publish_status(f"Loaded {len(self.weights)} weights")
-            else:
-                self.publish_error("Weights file not found")
-        except Exception as e:
-            self.publish_error(f"Weight load error: {e}")
-            self.weights = []
-
-    def save_weights(self):
-        try:
-            with open(self.weights_file, "w") as f:
-                json.dump(self.weights, f)
-            self.publish_status("Saved updated weights")
-        except Exception as e:
-            self.publish_error(f"Failed to save weights: {e}")
-
-    # =================================================
-    # ROS callback
-    # =================================================
-
     def snn_input_callback(self, msg: UInt8MultiArray):
         if not self.initialized:
-            self.publish_status("Ignoring input: not initialized")
             return
 
-        if self.waiting_for_affirm or self.waiting_for_out:
-            self.publish_status("Busy, ignoring input")
+        if self.state != STATE_READY:
             return
 
         raw_spikes = list(msg.data)
         payload = pack_input_spikes(raw_spikes)
-        self.send_spike(payload)
 
-    # =================================================
-    # Sending
-    # =================================================
+        self.publish_status(f"Raw /snn/input length: {len(raw_spikes)}")
+        self.publish_status(f"Raw /snn/input data: {raw_spikes}")
+        self.publish_status(f"Packed SPIKE payload length: {len(payload)}")
+        self.publish_status(f"Packed SPIKE payload: {payload}")
+
+        self.send_packet(CMD_SPIKE, payload)
+        self.state = STATE_WAIT_OUT
+
+    def dopamine_callback(self, msg: Int16):
+        if self.state != STATE_WAIT_DOPAMINE or not self.waiting_for_dopamine:
+            return
+
+        dopamine_value = int(msg.data)
+
+        if dopamine_value < -128 or dopamine_value > 127:
+            self.publish_error(f"Dopamine value out of Int8 range: {dopamine_value}")
+            return
+
+        dopamine_byte = dopamine_value & 0xFF
+
+        self.send_packet(CMD_DOPAMINE, [dopamine_byte])
+        self.publish_status(f"Sent dopamine reward: {dopamine_value}")
+
+        self.waiting_for_dopamine = False
+        self.state = STATE_READY
 
     def send_packet(self, cmd: int, payload: List[int]):
+        if not self.ser or not self.ser.is_open:
+            self.publish_error("Serial unavailable")
+            return
+
         try:
             packet = build_packet(cmd, payload)
 
+            self.publish_status(f"TX CMD={cmd}, payload_len={len(payload)}, payload={payload}")
+            self.publish_status(f"TX bytes: {list(packet)}")
+
             self.last_packet_sent = packet
-            self.last_command_sent = cmd
+            self.wait_start_time = self.get_clock().now()
             self.retry_count = 0
 
-            self.waiting_for_affirm = True
-            self.waiting_for_out = False
-            self.waiting_for_update = False
-            self.wait_start_time = self.get_clock().now()
-
-            self.publish_status(f"Sending CMD={cmd}, LEN={len(payload)}")
-
-            if self.ser:
-                self.ser.write(packet)
-            else:
-                self.publish_status("Serial unavailable, packet not sent")
+            self.ser.write(packet)
+            self.ser.flush()
+            self.publish_status(f"Sent CMD={cmd}")
 
         except Exception as e:
             self.publish_error(f"Send error: {e}")
 
-    def try_send_init(self):
-        if not self.weights:
-            self.publish_error("INIT skipped, no weights")
-            return
-        self.publish_status("Sending INIT")
-        self.send_packet(CMD_INIT, self.weights)
-
-    # =================================================
-    # RX processing
-    # =================================================
-
     def poll_serial(self):
-        if not self.ser:
+        if not self.ser or not self.ser.is_open:
             return
 
-        if self.ser.in_waiting:
+        # Check if hardware has bytes waiting in the FIFO
+        if self.ser.in_waiting > 0:
             data = self.ser.read(self.ser.in_waiting)
+
+            self.publish_status(f"RX raw bytes: {list(data)}")
+
             self.rx_buffer.extend(data)
             self.process_buffer()
 
     def process_buffer(self):
         while True:
-            packet = self.extract_packet()
-            if packet is None:
-                return
-            self.handle_packet(packet)
+            # 1. Sync: Find the Start of Frame (SOF)
+            while self.rx_buffer and self.rx_buffer[0] != SOF:
+                self.rx_buffer.pop(0)
 
-    def extract_packet(self) -> Optional[bytes]:
-        while self.rx_buffer and self.rx_buffer[0] != SOF:
-            discarded = self.rx_buffer.pop(0)
-            self.publish_error(f"Discarded byte: {discarded}")
+            # 2. Check if we have enough for header (SOF, CMD, LEN)
+            if len(self.rx_buffer) < 3:
+                break
 
-        if len(self.rx_buffer) < 3:
-            return None
+            # 3. Check if full packet is present
+            total_len = expected_packet_length(self.rx_buffer[2])
+            if len(self.rx_buffer) < total_len:
+                break
 
-        length = self.rx_buffer[2]
-        total = expected_packet_length(length)
+            # 4. Extract and handle
+            pkt = bytes(self.rx_buffer[:total_len])
+            del self.rx_buffer[:total_len]
+            
+            self.publish_status(f"RX packet candidate: {list(pkt)}")
 
-        if len(self.rx_buffer) < total:
-            return None
-
-        pkt = bytes(self.rx_buffer[:total])
-        del self.rx_buffer[:total]
-        return pkt
-
-    def handle_packet(self, pkt: bytes):
-        self.publish_status(f"RX: {list(pkt)}")
-
-        if not validate_packet(pkt):
-            self.publish_error("Invalid checksum")
-            return
-
-        cmd, payload = parse_packet(pkt)
-        self.dispatch_command(cmd, payload)
-
-    # =================================================
-    # Command dispatch
-    # =================================================
+            FPGA_sum_1, PI_sum_1, FPGA_sum_2, PI_sum_2 = validate_packet(pkt)
+            if FPGA_sum_1 == PI_sum_1 and FPGA_sum_2 == PI_sum_2:
+                cmd, payload = parse_packet(pkt)
+                self.dispatch_command(cmd, payload)
+            else:
+                self.publish_error(f"Checksum failed\nPI sums: ({PI_sum_1}, {PI_sum_2}) -- FPGA sums: ({FPGA_sum_1}, {FPGA_sum_2})")
 
     def dispatch_command(self, cmd, payload):
-        if cmd == CMD_AFFIRM:
-            self.handle_affirm()
-        elif cmd == CMD_OUT:
+        self.publish_status(f"Parsed CMD={cmd}, payload={payload}")
+
+        if cmd == CMD_OUT:
             self.handle_out(payload)
-        elif cmd == CMD_ERR:
-            self.publish_error(f"FPGA ERR: {payload}")
-        elif cmd == CMD_UPDATE:
+        elif cmd == CMD_WEIGHT:
             self.handle_update(payload)
-        elif cmd == CMD_RESEND_REPLY:
-            self.handle_resend_request()
+        elif cmd == CMD_ERR:
+            self.publish_error(f"FPGA Error Code: {payload}")
+            self.wait_start_time = None
+            self.state = STATE_READY
         else:
-            self.publish_error(f"Unknown CMD {cmd}")
+            self.publish_error(f"Unknown FPGA command: {cmd}")
 
-    # =================================================
-    # Command handlers
-    # =================================================
-
-    def handle_affirm(self):
-        if not self.waiting_for_affirm:
-            self.publish_status("Unexpected AFFIRM")
+    def save_weights(self):
+        if not self.weights_file:
             return
 
-        self.waiting_for_affirm = False
+        try:
+            current_path = Path(self.weights_file)
+            current_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # 1. Update current weights
+            tmp_file = current_path.with_suffix(current_path.suffix + ".tmp")
+            with open(tmp_file, "w") as f:
+                for w in self.weights:
+                    f.write(f"{w & 0xFF:02X}\n")
+            tmp_file.replace(current_path)
+
+            # 2. Save episode archive
+            episode_file = self.episode_log_dir / f"weights_ep_{self.episode_counter:04d}.mem"
+            with open(episode_file, "w") as f:
+                for w in self.weights:
+                    f.write(f"{w & 0xFF:02X}\n")
+
+            self.publish_status(
+                f"Saved updated weights to {current_path} and episode log {episode_file}"
+            )
+
+            self.episode_counter += 1
+
+        except Exception as e:
+            self.publish_error(f"Failed to save weights: {e}")
+
+    def handle_update(self, payload):
+        self.publish_status(f"Received {len(payload)} weights from FPGA")
+
+        self.weights = list(payload)
+        self.save_weights()
+
         self.wait_start_time = None
+        self.state = STATE_READY
 
-        self.publish_status(f"AFFIRM for CMD {self.last_command_sent}")
+        self.episode_reset_pub.publish(Empty())
+        self.publish_status("Published /episode_reset")
 
-        if self.last_command_sent == CMD_INIT:
-            self.initialized = True
-
-        elif self.last_command_sent == CMD_SPIKE:
-            self.waiting_for_out = True
-            self.wait_start_time = self.get_clock().now()
-
-        elif self.last_command_sent == CMD_STOP:
-            self.waiting_for_update = True
-            self.wait_start_time = self.get_clock().now()
+        self.publish_status("Weight update complete, node returned to READY")
 
     def handle_out(self, payload):
-        if len(payload) != 1:
-            self.publish_error("Invalid OUT payload")
+        if not payload:
+            self.publish_error("OUT packet had empty payload")
+            self.state = STATE_READY
+            self.wait_start_time = None
             return
 
-        out_byte = int(payload[0])
-        action_spikes = unpack_output_spikes(out_byte, expected_len=4)
+        action_spikes = unpack_output_spikes(payload[0], expected_len=4)
 
         msg = UInt8MultiArray()
         msg.data = action_spikes
         self.fpga_action_pub.publish(msg)
 
-        self.publish_status(
-            f"OUT byte={out_byte}, action_spikes={action_spikes}"
-        )
+        self.publish_status(f"Published action spikes: {action_spikes}")
 
-        self.clear_wait_state()
+        if not any(action_spikes):
+            self.publish_status("No FPGA output spikes — sending neutral dopamine 0")
+            self.send_packet(CMD_DOPAMINE, [0])
+            self.state = STATE_READY
+            return
 
-    def handle_update(self, payload):
-        self.weights = payload
-        self.save_weights()
-        self.clear_wait_state()
-
-    def handle_resend_request(self):
-        self.publish_status("FPGA requested RESEND")
-        self.resend_last_packet()
-
-    # =================================================
-    # Timeout + retry
-    # =================================================
+        self.waiting_for_dopamine = True
+        self.state = STATE_WAIT_DOPAMINE
+        self.wait_start_time = self.get_clock().now()
 
     def check_for_timeouts(self):
-        if not self.wait_start_time:
+        if self.state == STATE_WAIT_DOPAMINE and self.wait_start_time is not None:
+            elapsed = (self.get_clock().now() - self.wait_start_time).nanoseconds / 1e9
+
+            if elapsed > self.dopamine_timeout_sec:
+                self.publish_error("Timed out waiting for dopamine reward")
+                self.waiting_for_dopamine = False
+                self.state = STATE_READY
+                self.wait_start_time = None
+
+            return
+
+        if self.wait_start_time is None:
             return
 
         elapsed = (self.get_clock().now() - self.wait_start_time).nanoseconds / 1e9
+        if elapsed > self.response_timeout_sec:
+            if self.retry_count < self.max_retry_count:
+                self.retry_count += 1
+                self.ser.write(self.last_packet_sent)
+                self.wait_start_time = self.get_clock().now()
+                self.publish_status(f"Retry {self.retry_count} sent")
+            else:
+                self.publish_error("Max retries reached - clearing wait state")
+                self.wait_start_time = None
 
-        if elapsed < self.response_timeout_sec:
+    def try_send_init(self):
+        if not self.ser or not self.ser.is_open:
+            self.publish_error("INIT not sent: serial port is not open")
             return
 
-        if self.retry_count < self.max_retry_count:
-            self.retry_count += 1
-            self.publish_error(f"Timeout → retry {self.retry_count}")
+        if not self.weights:
+            self.publish_error("INIT not sent: no weights loaded")
+            return
 
-            self.resend_last_packet()
-            self.wait_start_time = self.get_clock().now()
-        else:
-            self.publish_error("Max retries reached")
-            self.clear_wait_state()
+        packet = build_packet(CMD_INIT, self.weights)
 
-    def resend_last_packet(self):
-        if self.ser and self.last_packet_sent:
-            self.ser.write(self.last_packet_sent)
-            self.publish_status("Resent last packet")
+        self.ser.write(packet)
+        self.ser.flush()
 
-    # =================================================
-    # State helpers
-    # =================================================
+        time.sleep(1.0)
 
-    def clear_wait_state(self):
-        self.waiting_for_affirm = False
-        self.waiting_for_out = False
-        self.waiting_for_update = False
-        self.wait_start_time = None
-        self.retry_count = 0
+        self.initialized = True
 
+        self.initialized = True
+        self.publish_status(
+            f"Sent CMD_INIT with {len(self.weights)} weights from {self.weights_file}"
+        )
+
+    def load_weights(self):
+        if not self.weights_file:
+            self.publish_error("No weights_file parameter set")
+            self.weights = []
+            return
+
+        path = Path(self.weights_file)
+
+        if not path.is_file():
+            self.publish_error(f"Weights file not found: {path}")
+            self.weights = []
+            return
+
+        try:
+            weights = []
+
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    if line.startswith("#") or line.startswith("//"):
+                        continue
+
+                    line = line.split("#")[0]
+                    line = line.split("//")[0]
+                    line = line.strip()
+
+                    if not line:
+                        continue
+
+                    for token in line.split():
+                        weights.append(int(token, 16) & 0xFF)
+
+            self.weights = weights
+            self.publish_status(f"Loaded {len(self.weights)} weights from {path}")
+
+        except Exception as e:
+            self.weights = []
+            self.publish_error(f"Failed to load weights from {path}: {e}")
+
+    def episode_reset_callback(self, msg: Empty):
+        self.publish_status(f"Received /episode_reset while state={self.state}")
+
+        if not self.initialized:
+            self.publish_error("Ignoring episode reset: UART node not initialized")
+            return
+
+        if self.state != STATE_READY:
+            self.publish_error(f"Ignoring episode reset: node is busy in state {self.state}")
+            return
+
+        self.publish_status("Episode ended: sending CMD_STOP to request weights")
+        self.send_packet(CMD_STOP, [])
+        self.state = STATE_WAIT_WEIGHT
+
+    def episode_complete_callback(self, msg: Empty):
+        self.publish_status(f"Received /episode_complete while state={self.state}")
+
+        if not self.initialized:
+            self.publish_error("Ignoring episode complete: UART node not initialized")
+            return
+
+        if self.state != STATE_READY:
+            self.publish_error(f"Ignoring episode complete: node is busy in state {self.state}")
+            return
+
+        self.publish_status("Episode complete: sending CMD_STOP to request weights")
+        self.send_packet(CMD_STOP, [])
+        self.state = STATE_WAIT_WEIGHT
 
 def main():
     rclpy.init()

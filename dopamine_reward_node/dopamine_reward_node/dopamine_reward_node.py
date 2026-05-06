@@ -13,6 +13,7 @@ from .dopamine_logic import DopamineComputer
 
 from dopamine_interfaces.msg import PhaseEnergyResult
 
+EVENT_DROPPED = 2
 
 class DopamineRewardNode(Node):
     def __init__(self) -> None:
@@ -31,6 +32,7 @@ class DopamineRewardNode(Node):
         self.create_subscription(Int32, "/snn/winner", self.winner_cb, 10)
         self.create_subscription(Vector3, "/battery/status", self.battery_cb, 10)
         self.create_subscription(Empty, "/episode_complete", self.episode_cb, 10)
+        self.create_subscription(UInt8, "/grab_node/event", self.grab_event_cb, 10)
 
         # Latest inputs
         self.task_state: Optional[int] = None
@@ -61,6 +63,8 @@ class DopamineRewardNode(Node):
     def task_state_cb(self, msg: UInt8) -> None:
         state = int(msg.data)
         self.task_state = state
+
+        self.get_logger().info(f"[TaskState] received state={state}")
 
         result = self.energy_tracker.on_task_state(state)
 
@@ -163,6 +167,30 @@ class DopamineRewardNode(Node):
     def episode_cb(self, msg: Empty) -> None:
         self.get_logger().info("Episode complete → resetting energy tracker")
         self.energy_tracker.reset_episode()
+
+    def grab_event_cb(self, msg: UInt8) -> None:
+        event = int(msg.data)
+
+        if event != EVENT_DROPPED:
+            return
+
+        result = self.energy_tracker.force_complete_phase(
+            expected_phase_idx=3
+        )
+
+        if result is None:
+            return
+
+        self.get_logger().info(
+            f"[Energy] drop event completed phase: "
+            f"pickup={result.pickup_idx}, "
+            f"phase={result.phase_idx}, "
+            f"E={result.energy_joules:.2f}J, "
+            f"duration={result.duration_s:.2f}s"
+        )
+
+        self.publish_phase_result(result)
+        self.publish_phase()
 
     def publish_phase(self) -> None:
         msg = UInt8MultiArray()

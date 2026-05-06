@@ -123,11 +123,19 @@ class EnergyTracker:
 
         result = None
 
-        # If a phase is active, see if it has reached its first valid end state
+        print(
+            f"[EnergyTracker] state={task_state}, "
+            f"active={self.phase_active}, "
+            f"pickup={self.current_pickup_idx}, "
+            f"phase={self.current_phase_idx}, "
+            f"expected_end={self.PHASE_END_STATES[self.current_phase_idx] if self.current_phase_idx is not None else None}"
+        )
+
         if self.phase_active and self.current_phase_idx is not None:
-            end_state = self.PHASE_END_STATES[self.current_phase_idx]
-            if task_state == end_state:
-                result = self._complete_current_phase()
+            if self.current_phase_idx != 3:
+                end_state = self.PHASE_END_STATES[self.current_phase_idx]
+                if task_state == end_state:
+                    result = self._complete_current_phase()
 
         self.prev_task_state = task_state
         return result
@@ -139,6 +147,15 @@ class EnergyTracker:
         if 0 <= self.current_pickup_idx <= 2 and 0 <= self.next_phase_idx <= 3:
             return self.next_phase_idx
         return None
+    
+    def force_complete_phase(self, expected_phase_idx: Optional[int] = None) -> Optional[EnergyPhaseResult]:
+        if not self.phase_active or self.current_phase_idx is None:
+            return None
+
+        if expected_phase_idx is not None and self.current_phase_idx != expected_phase_idx:
+            return None
+
+        return self._complete_current_phase()
 
     def _complete_current_phase(self) -> EnergyPhaseResult:
         """

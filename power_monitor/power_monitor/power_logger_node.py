@@ -382,6 +382,10 @@ class PowerLogger(Node):
 
                 self.power_samples.append((now, P_system, P_fpga, P_total))
 
+                cutoff = now - self.power_sample_keep_s
+                while self.power_samples and self.power_samples[0][0] < cutoff:
+                    self.power_samples.pop(0)
+
                 # --- Energy increments (Wh) ---
                 E_total = (P_total * dt) / 3600.0
                 E_system = (P_system * dt) / 3600.0
@@ -448,6 +452,9 @@ class PowerLogger(Node):
         self.episode_energy_fpga = 0.0
         self.episode_energy_system = 0.0
         self.episode_start_time = self.now_ros_seconds()
+
+        self.power_samples = []
+        self.last_time = None
 
     # Cleanup on shutdown
     def destroy_node(self):

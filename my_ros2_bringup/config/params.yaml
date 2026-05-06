@@ -55,13 +55,13 @@ python_snn_node:
     turn_speed: 0.05        # rad/s
 
     # Neuron parameters
-    decay: 650               # membrane potential decay per timestep (higher is faster decay)
+    decay: 1000               # membrane potential decay per timestep (higher is faster decay)
     threshold: 1500          # firing threshold; higher means more synaptic input needed to fire
     reset: 0
     refractory: 0            # refractory period in timesteps after a spike (0 = disabled)
 
     # Synapse / learning parameters
-    lr_shift: 5             # learning rate = 1 / (2^lr_shift)
+    lr_shift: 6             # learning rate = 1 / (2^lr_shift)
     t_pre: 3                # time steps for pre-synaptic trace
     t_post: 3               # time steps for post-synaptic trace
     tau_e_shift: 4          # eligibility trace decay = 1 / (2^tau_e_shift)

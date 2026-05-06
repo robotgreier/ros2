@@ -10,6 +10,8 @@ class EnergyPhaseResult:
     duration_s: float
     average_joules: Optional[float]
     delta_joules: Optional[float]
+    start_time_s: float = 0.0
+    end_time_s: float = 0.0
 
 
 class EnergyTracker:

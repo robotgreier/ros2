@@ -185,8 +185,10 @@ class DopamineRewardNode(Node):
         msg.pickup_idx = int(result.pickup_idx)
         msg.phase_idx = int(result.phase_idx)
 
-        msg.energy_joules = float(result.energy_joules)
-        msg.energy_wh = float(result.energy_joules) / 3600.0
+        msg.reward_energy_joules = float(result.energy_joules)
+        msg.reward_energy_wh = float(result.energy_joules) / 3600.0
+        msg.start_time_s = float(result.start_time_s)
+        msg.end_time_s = float(result.end_time_s)
         msg.duration_s = float(result.duration_s)
 
         msg.average_joules = (

@@ -26,7 +26,7 @@ img_kp_grid:
   ros__parameters:
     rows: *kp_rows
     cols: *kp_cols
-    response_threshold: 0.01
+    response_threshold: 0.02
     use_clahe: false
 
 # ── SNN node ───────────────────────────────────────────────────────────────────
@@ -56,18 +56,18 @@ python_snn_node:
 
     # Neuron parameters
     decay: 150               # membrane potential decay per timestep (higher is faster decay)
-    threshold: 800          # firing threshold; higher means more synaptic input needed to fire
+    threshold: 1000          # firing threshold; higher means more synaptic input needed to fire
     reset: 0
     refractory: 1            # refractory period in timesteps after a spike (0 = disabled)
 
     # Synapse / learning parameters
-    lr_shift: 3             # learning rate = 1 / (2^lr_shift)
-    t_pre: 1                # time steps for pre-synaptic trace
-    t_post: 2               # time steps for post-synaptic trace
+    lr_shift: 5             # learning rate = 1 / (2^lr_shift)
+    t_pre: 3                # time steps for pre-synaptic trace
+    t_post: 3               # time steps for post-synaptic trace
     tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
     dw_pos: 10              # weight change for causal spike pair (pre before post)
-    dw_neg: 4               # weight change for acausal spike pair (post before pre)
-    min_weight: 30          # minimum synaptic weight (absolute value)
+    dw_neg: 10               # weight change for acausal spike pair (post before pre)
+    min_weight: 40          # minimum synaptic weight (absolute value)
     max_weight: 254         # maximum synaptic weight (absolute value)
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
     feedback: true    

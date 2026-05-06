@@ -162,8 +162,11 @@ class EnergyTracker:
         end_time_s = self.last_power_time_s
 
         if self.phase_start_time_s is not None and end_time_s is not None:
-            duration_s = max(0.0, end_time_s - self.phase_start_time_s)
+            start_time_s = self.phase_start_time_s
+            duration_s = max(0.0, end_time_s - start_time_s)
         else:
+            start_time_s = 0.0
+            end_time_s = 0.0
             duration_s = 0.0
 
         result = EnergyPhaseResult(
@@ -173,6 +176,8 @@ class EnergyTracker:
             duration_s=duration_s,
             average_joules=prev_avg,
             delta_joules=delta,
+            start_time_s=start_time_s,
+            end_time_s=end_time_s,
         )
 
         # Advance to next phase / pickup

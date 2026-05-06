@@ -268,7 +268,7 @@ class SNNNode(Node):
         self.create_subscription(Range, '/ultrasonic/front/scan', self._on_scan, qos_sensor) # Endre Range til LaserScan ved Gazebo
         self.create_subscription(Int32, '/snn/correct_output', self.cb_correct, 10)
 
-        self.pub_winner = self.create_publisher(UInt8, '/snn/winner', 10)
+        self.pub_winner = self.create_publisher(Int32, '/snn/winner', 10)
         self.pub_spikes = self.create_publisher(Int32MultiArray, '/snn/spikes', 10)
         self.pub_decision = self.create_publisher(String, '/snn/decision', 10)
 
@@ -406,7 +406,7 @@ class SNNNode(Node):
         decision = self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
 
         # Debug publish winners and spikes
-        self.pub_winner.publish(UInt8(data=int(winner_idx)))
+        self.pub_winner.publish(Int32(data=int(winner_idx)))
 
         spk_msg = Int32MultiArray()
         spk_msg.data = [int(x) for x in output_spikes]

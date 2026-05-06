@@ -11,6 +11,8 @@ from .energy_tracker import EnergyTracker
 
 from .dopamine_logic import DopamineComputer
 
+from dopamine_interfaces.msg import PhaseEnergyResult
+
 
 class DopamineRewardNode(Node):
     def __init__(self) -> None:
@@ -20,6 +22,7 @@ class DopamineRewardNode(Node):
         self.reward_pub = self.create_publisher(Int16, "/reward/dopamine", 10)
         self.debug_pub = self.create_publisher(String, "/reward/debug", 10)
         self.phase_pub = self.create_publisher(UInt8MultiArray, "/task/phase", 10)
+        self.phase_result_pub = self.create_publisher(PhaseEnergyResult, "/task/phase_result", 10)
 
         # Subscribers
         self.create_subscription(UInt8, "/task/state", self.task_state_cb, 10)
@@ -68,6 +71,8 @@ class DopamineRewardNode(Node):
                 f"E={result.energy_joules:.2f}J, "
                 f"avg={result.average_joules}"
             )
+
+            self.publish_phase_result(result)
 
             self.pending_energy_reward = 0
             self.pending_energy_debug = ""
@@ -173,6 +178,30 @@ class DopamineRewardNode(Node):
 
         msg.data = [pickup_idx, phase_idx, phase_active]
         self.phase_pub.publish(msg)
+    
+    def publish_phase_result(self, result) -> None:
+        msg = PhaseEnergyResult()
+
+        msg.pickup_idx = int(result.pickup_idx)
+        msg.phase_idx = int(result.phase_idx)
+
+        msg.energy_joules = float(result.energy_joules)
+        msg.energy_wh = float(result.energy_joules) / 3600.0
+        msg.duration_s = float(result.duration_s)
+
+        msg.average_joules = (
+            float(result.average_joules)
+            if result.average_joules is not None
+            else -1.0
+        )
+
+        msg.delta_joules = (
+            float(result.delta_joules)
+            if result.delta_joules is not None
+            else -1.0
+        )
+
+        self.phase_result_pub.publish(msg)
 
 
 def main(args=None) -> None:

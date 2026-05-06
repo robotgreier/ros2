@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 import math
 import uuid
+from dopamine_interfaces.msg import PhaseEnergyResult
 
 BATTERY_WH = 49.02  # LiHV 3S: 11.4 V * 4.3 Ah = 49.02 Wh
 
@@ -112,7 +113,11 @@ class PowerLogger(Node):
 
         self.create_subscription(
             Empty, "/episode_complete", self.episode_cb, 10
-            )
+        )
+        
+        self.create_subscription(
+            PhaseEnergyResult, "/task/phase_result", self.cb_phase_result, 10
+        )
 
     # ---------------- Utility function to get ROS time in seconds ----------------
     def now_ros_seconds(self) -> float:
@@ -279,6 +284,31 @@ class PowerLogger(Node):
         self.write_episode_row()
         self.episode_id += 1
         self.reset_episode_data()
+
+    def cb_phase_result(self, msg: PhaseEnergyResult):
+        p = int(msg.pickup_idx)
+        ph = int(msg.phase_idx)
+
+        if not (0 <= p < 3 and 0 <= ph < 4):
+            self.get_logger().warn(f"Invalid phase_result indices: p={p}, ph={ph}")
+            return
+
+        # Convert Wh back to match CSV format (you already use Wh internally)
+        energy_wh = float(msg.energy_wh)
+
+        # Store results
+        self.energy_total_phase[p][ph] = energy_wh
+        self.time_phase[p][ph] = float(msg.duration_s)
+
+        # Optional: split system vs fpga (not available anymore)
+        # For now, put everything in total and leave others as 0
+        self.energy_system_phase[p][ph] = 0.0
+        self.energy_fpga_phase[p][ph] = 0.0
+
+        self.get_logger().info(
+            f"[PhaseResult] p={p}, ph={ph}, "
+            f"E={energy_wh:.4f}Wh, t={msg.duration_s:.2f}s"
+        )
 
     # ---------------- Battery aggregation ----------------
 

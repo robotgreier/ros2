@@ -7,6 +7,7 @@ class EnergyPhaseResult:
     pickup_idx: int
     phase_idx: int
     energy_joules: float
+    duration_s: float
     average_joules: Optional[float]
     delta_joules: Optional[float]
 
@@ -50,6 +51,8 @@ class EnergyTracker:
             [0, 0, 0, 0],
         ]
 
+        self.phase_start_time_s: Optional[float] = None
+
         # Episode/phase state
         self.current_pickup_idx: int = 0
         self.current_phase_idx: Optional[int] = None
@@ -78,6 +81,7 @@ class EnergyTracker:
         self.last_power_time_s = None
         self.prev_task_state = None
         self.next_phase_idx = 0
+        self.phase_start_time_s = None
 
     def update_power(self, power_w: float, now_s: float) -> None:
         """
@@ -113,6 +117,7 @@ class EnergyTracker:
                     self.current_phase_idx = phase_to_start
                     self.phase_active = True
                     self.phase_energy_joules = 0.0
+                    self.phase_start_time_s = self.last_power_time_s
 
         result = None
 
@@ -154,10 +159,18 @@ class EnergyTracker:
         self.running_avg[pickup][phase] = new_avg
         self.sample_count[pickup][phase] = prev_count + 1
 
+        end_time_s = self.last_power_time_s
+
+        if self.phase_start_time_s is not None and end_time_s is not None:
+            duration_s = max(0.0, end_time_s - self.phase_start_time_s)
+        else:
+            duration_s = 0.0
+
         result = EnergyPhaseResult(
             pickup_idx=pickup,
             phase_idx=phase,
             energy_joules=energy,
+            duration_s=duration_s,
             average_joules=prev_avg,
             delta_joules=delta,
         )
@@ -174,5 +187,6 @@ class EnergyTracker:
         self.phase_active = False
         self.current_phase_idx = None
         self.phase_energy_joules = 0.0
+        self.phase_start_time_s = None
 
         return result

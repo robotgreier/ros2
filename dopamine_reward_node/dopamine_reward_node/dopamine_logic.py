@@ -60,7 +60,7 @@ class DopamineComputer:
             elif action_idx in (0, 2):  # LEFT / RIGHT — escape
                 dopamine = 2
             else:                       # FORWARD — into the wall
-                dopamine = -10
+                dopamine = -2
             comps["proximity"] = dopamine
 
         # Priority 2: ArUco visible — alignment rewards.
@@ -74,14 +74,14 @@ class DopamineComputer:
                     dopamine = -10
             elif pos is not None and pos < 0:   # target is left
                 if action_idx == 0:     # correct: turn left
-                    dopamine = 10
+                    dopamine = 2
                 elif action_idx == 2:   # wrong: turn right
-                    dopamine = -10
+                    dopamine = -2
             elif pos is not None and pos > 0:   # target is right
                 if action_idx == 2:     # correct: turn right
-                    dopamine = 10
+                    dopamine = 2
                 elif action_idx == 0:   # wrong: turn left
-                    dopamine = -10
+                    dopamine = -2
             comps["align"] = dopamine
 
         # Priority 3: searching — no ArUco
@@ -91,7 +91,7 @@ class DopamineComputer:
             if action_idx == 1:         # FORWARD — explore open space
                 dopamine = 10
             elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
-                dopamine = 5
+                dopamine = 2
             else:                       # BACKWARD — retreating during search
                 dopamine = -10
             comps[f"search_{self.search_phase}"] = dopamine

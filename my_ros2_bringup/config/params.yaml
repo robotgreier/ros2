@@ -44,7 +44,7 @@ python_snn_node:
     object_rec_size: *aruco_n_bins
 
     # Output actions
-    num_actions: 4           # LEFT, FORWARD, RIGHT, BACKWARD
+    num_actions: 3           # LEFT, FORWARD, RIGHT, BACKWARD
 
     # Timer and idle behaviour
     timer_hz: 15.0

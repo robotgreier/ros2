@@ -56,7 +56,7 @@ python_snn_node:
 
     # Neuron parameters
     decay: 500               # membrane potential decay per timestep (higher is faster decay)
-    threshold: 1250          # firing threshold; higher means more synaptic input needed to fire
+    threshold: 500          # firing threshold; higher means more synaptic input needed to fire
     reset: 0
     refractory: 1            # refractory period in timesteps after a spike (0 = disabled)
 

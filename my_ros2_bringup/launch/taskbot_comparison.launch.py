@@ -33,7 +33,7 @@ When weights are saved (both sides, per episode):
 
 Per-tick decision logging:
   snn_comparator writes a single CSV (one row per Python /snn/winner event)
-  to ~/.ros/snn_comparison_logs/snn_comparison_<timestamp>.csv — see
+  to <repo>/logs/snn_comparison/snn_comparison_<timestamp>.csv — see
   snn_comparator.py for the schema.
 
 Caveat:
@@ -66,7 +66,8 @@ from launch_ros.substitutions import FindPackageShare
 DEFAULT_INITIAL_WEIGHTS = '/opt/robot_ws/src/ros2/weights_logs/weights_current.mem'
 PYTHON_WEIGHTS_DIR = '/opt/robot_ws/src/ros2/weights_logs/python_snn'
 FPGA_WEIGHTS_FILE = '/opt/robot_ws/src/ros2/weights_logs/fpga_snn/weights_current.mem'
-POWER_LOG_DIR = '/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Comparison'
+POWER_LOG_DIR = '/opt/robot_ws/src/ros2/logs/power/Comparison'
+SNN_COMPARISON_LOG_DIR = '/opt/robot_ws/src/ros2/logs/snn_comparison'
 
 
 def _check_seed(context, *_args, **_kwargs):
@@ -115,7 +116,7 @@ def generate_launch_description():
         OpaqueFunction(function=_check_seed),
         LogInfo(msg=f'[comparison] Python SNN saves under: {PYTHON_WEIGHTS_DIR}'),
         LogInfo(msg=f'[comparison] FPGA   SNN saves under: {os.path.dirname(FPGA_WEIGHTS_FILE)}'),
-        LogInfo(msg='[comparison] Per-tick decisions CSV: ~/.ros/snn_comparison_logs/'),
+        LogInfo(msg=f'[comparison] Per-tick decisions CSV: {SNN_COMPARISON_LOG_DIR}'),
         LogInfo(msg=f'[comparison] Per-episode power CSV: {POWER_LOG_DIR}'),
 
         # ── Camera + TF ───────────────────────────────────────────────────────

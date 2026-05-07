@@ -307,7 +307,7 @@ class SNNNode(Node):
         self.log_mode = str(self.get_parameter('log_mode').value).upper().strip()
         log_dir = str(self.get_parameter('log_dir').value).strip()
         if log_dir == '':
-            log_dir = os.path.expanduser('~/.ros/snn_logs')
+            log_dir = '/opt/robot_ws/src/ros2/logs/snn'
 
         self.logger_csv = None
         self.pending_input = None  # (t_input_ns, input_vector_list)

@@ -3,12 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import ttest_ind, mannwhitneyu
 
-# Configuration of directories for CSV logs inputs and figure outputs
-
+# Configuration of directories for CSV logs inputs and figure outputs.
+# Power CSVs live under <repo>/logs/power/{Python,FPGA,Comparison}/. Resolve
+# the repo root from this script's location: analysis/ → power_monitor/ →
+# repo root.
 BASE_DIR = Path(__file__).parent
+REPO_ROOT = BASE_DIR.parents[1]
+LOGS_ROOT = REPO_ROOT / "logs" / "power"
 DATASETS = {
-    "FPGA": BASE_DIR / "csv_logs/FPGA",
-    "Python": BASE_DIR / "csv_logs/Python"
+    "FPGA": LOGS_ROOT / "FPGA",
+    "Python": LOGS_ROOT / "Python",
 }
 
 FIG_DIR = BASE_DIR / "figures"

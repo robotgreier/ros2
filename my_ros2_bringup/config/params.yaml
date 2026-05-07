@@ -26,7 +26,7 @@ img_kp_grid:
   ros__parameters:
     rows: *kp_rows
     cols: *kp_cols
-    response_threshold: 0.02
+    response_threshold: 0.00
     use_clahe: false
 
 # ── SNN node ───────────────────────────────────────────────────────────────────
@@ -55,8 +55,8 @@ python_snn_node:
     turn_speed: 0.05        # rad/s
 
     # Neuron parameters
-    decay: 250               # membrane potential decay per timestep (higher is faster decay)
-    threshold: 500          # firing threshold; higher means more synaptic input needed to fire
+    decay: 500               # membrane potential decay per timestep (higher is faster decay)
+    threshold: 750          # firing threshold; higher means more synaptic input needed to fire
     reset: 0
     refractory: 1            # refractory period in timesteps after a spike (0 = disabled)
 
@@ -65,7 +65,7 @@ python_snn_node:
     t_pre: 3                # time steps for pre-synaptic trace
     t_post: 3               # time steps for post-synaptic trace
     tau_e_shift: 4          # eligibility trace decay = 1 / (2^tau_e_shift) - higher is slower decay
-    dw_pos: 4               # weight change for causal spike pair (pre before post)
+    dw_pos: 5               # weight change for causal spike pair (pre before post)
     dw_neg: 5               # weight change for acausal spike pair (post before pre)
     min_weight: 16          # minimum synaptic weight
     max_weight: 254         # maximum synaptic weight
@@ -99,7 +99,7 @@ motor_control_node:
     #   ang_gain = 40  → saturates at  0.025 rad/s
     lin_gain: 15.0
     ang_gain: 15.0
-    max_pwm: 50              # PWM ceiling (0-255); top-speed cap
+    max_pwm: 40              # PWM ceiling (0-255); top-speed cap
     min_pwm: 10              # PWM floor (scaled with output)
     cmd_vel_timeout: 0.5     # s, stop if no command received
 

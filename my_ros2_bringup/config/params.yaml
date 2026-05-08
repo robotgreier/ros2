@@ -8,7 +8,7 @@
 _globals:
   ros__parameters:
     aruco_n_bins:     &aruco_n_bins     3    # encoding_node/aruco_n_bins         → python_snn_node/object_rec_size
-    proximity_n_bits: &proximity_n_bits 4    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
+    proximity_n_bits: &proximity_n_bits 5    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
     kp_rows:          &kp_rows          3    # img_kp_grid/rows → python_snn_node/kp_rows
     kp_cols:          &kp_cols          4    # img_kp_grid/cols → python_snn_node/kp_cols
 
@@ -35,7 +35,7 @@ python_snn_node:
     # Input from encoding_node
     input_mode: "packed"
     input_topic: "/snn/input"
-    pack_order: ["keypoints_grid", "proximity", "object_rec"]
+    pack_order: ["keypoints_grid", "proximity", "object_rec", "object_rec", "object_rec"]
 
     # Channel sizes — kept in sync with encoding/vision nodes via anchors above
     kp_rows: *kp_rows
@@ -142,7 +142,7 @@ proximity_stop:
     scan_topic: "/ultrasonic/front/scan"
     state_topic: "/task/state"
     stop_topic: "/proximity_stop"
-    distance_threshold: 0.25         # m
+    distance_threshold: 0.20         # m
     disabled_states: [1, 3]          # 1=APPROACH_ITEM, 3=APPROACH_DROPOFF
 
 # ── ArUco / image recognition node ────────────────────────────────────────────

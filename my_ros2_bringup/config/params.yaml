@@ -15,6 +15,7 @@ _globals:
 # ── Encoding node ──────────────────────────────────────────────────────────────
 encoding_node:
   ros__parameters:
+    pack_order: ["keypoints_grid", "proximity", "aruco_dir", "aruco_dir", "aruco_dir"]
     output_topic: "/snn/input"
     proximity_topic: "/ultrasonic/front/scan"
     proximity_n_dist_bits: *proximity_n_bits

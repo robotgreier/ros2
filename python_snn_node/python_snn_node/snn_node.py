@@ -556,6 +556,8 @@ class SNNNode(Node):
             decision = "STOP_PROXIMITY"
         elif winner_idx < 0:
             decision = "IDLE"
+            cmd.linear.x = self.forward_speed
+            cmd.angular.z = 0.0
         else:
             if winner_idx == 0:      # LEFT
                 cmd.linear.x = 0.0

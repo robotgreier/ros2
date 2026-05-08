@@ -17,8 +17,8 @@ class FpgaActionDecoderNode(Node):
         super().__init__("fpga_action_decoder_node")
 
         # Robot speed parameters
-        self.declare_parameter("forward_speed", 0.125)
-        self.declare_parameter("turn_speed", 0.3)
+        self.declare_parameter("forward_speed", 0.05)
+        self.declare_parameter("turn_speed", 0.05)
 
         # Topic parameters
         self.declare_parameter("cmd_vel_topic", "/cmd_vel/snn")

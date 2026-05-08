@@ -575,6 +575,8 @@ class SNNNode(Node):
                 decision = ACTION_NAMES[3]
             else:
                 decision = "UNKNOWN"
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
 
         self.cmd_vel_pub.publish(cmd)
         self.pub_decision.publish(String(data=decision))

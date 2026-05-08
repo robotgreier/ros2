@@ -86,10 +86,10 @@ class GripperNode(Node):
     def __init__(self):
         super().__init__('gripper_node')
 
-        # ---- Parameters you can tune later ----
-        self.servo_channel = 2
-        self.open_angle = 60.0
-        self.closed_angle = 120.0
+        # ---- Parameters ----
+        self.servo_channel = 2          # MotorHAT servo channel
+        self.open_angle = 75.0
+        self.closed_angle = 110.0
 
         self.step_size_deg = 2.0          # degrees per step
         self.step_period_sec = 0.05       # time between steps

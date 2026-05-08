@@ -17,8 +17,8 @@ class FpgaActionDecoderNode(Node):
         super().__init__("fpga_action_decoder_node")
 
         # Robot speed parameters
-        self.declare_parameter("forward_speed", 0.125)
-        self.declare_parameter("turn_speed", 0.3)
+        self.declare_parameter("forward_speed", 0.05)
+        self.declare_parameter("turn_speed", 0.05)
 
         # Topic parameters
         self.declare_parameter("cmd_vel_topic", "/cmd_vel/snn")
@@ -102,7 +102,12 @@ class FpgaActionDecoderNode(Node):
 
             elif winner_idx < 0:
                 decision = "IDLE"
-                cmd.linear.x = -self.forward_speed
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
+
+            elif winner_idx == None:
+                decision = "IDLE"
+                cmd.linear.x = self.forward_speed
                 cmd.angular.z = 0.0
 
             else:
@@ -133,6 +138,11 @@ class FpgaActionDecoderNode(Node):
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[3]
+
+            elif winner_idx == None:
+                decision = "IDLE"
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
 
             else:
                 decision = "UNKNOWN"

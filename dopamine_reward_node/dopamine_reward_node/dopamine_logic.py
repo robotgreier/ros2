@@ -19,7 +19,9 @@ class DopamineComputer:
     @staticmethod
     def decode_object_bits(obj_bits: List[int]) -> Tuple[bool, Optional[int]]:
         """
-        Decode one-hot lateral position.
+        Decode one-hot lateral position into three zones: left (-1),
+        center (0), right (+1). Works for any n_aruco_bins by splitting
+        the bin range into equal thirds.
 
         [1,0,0] -> left   (-1)
         [0,1,0] -> center ( 0)
@@ -30,9 +32,13 @@ class DopamineComputer:
 
         for i, bit in enumerate(obj_bits):
             if bit == 1:
-                return True, i - (n // 2)
-
-        return False, None
+                third = n / 3.0
+                if i < third:
+                    return True, -1
+                elif i < 2.0 * third:
+                    return True, 0
+                else:
+                    return True, 1
 
     def step(
         self,

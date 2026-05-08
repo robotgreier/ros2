@@ -26,7 +26,7 @@ img_kp_grid:
   ros__parameters:
     rows: *kp_rows
     cols: *kp_cols
-    response_threshold: 0.02
+    response_threshold: 0.00
     use_clahe: false
 
 # ── SNN node ───────────────────────────────────────────────────────────────────

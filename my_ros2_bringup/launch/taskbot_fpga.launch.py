@@ -179,8 +179,8 @@ def generate_launch_description():
             name='fpga_action_decoder_node',
             output='screen',
             parameters=[{
-                'linear_speed': 0.05,
-                'angular_speed': 0.05,
+                'forward_speed': 0.05,
+                'turn_speed': 0.05,
             }],
         ),
 

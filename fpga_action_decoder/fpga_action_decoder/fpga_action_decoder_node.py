@@ -61,11 +61,15 @@ class FpgaActionDecoderNode(Node):
     def spikes_cb(self, msg: UInt8MultiArray) -> None:
         spikes: List[int] = list(msg.data)
 
-        action = self.decoder.decode_one_hot(spikes)
-
-        if action is None:
-            self.get_logger().warn(f"Invalid spike vector: {spikes}")
-            return
+        if len(spikes) == 4 and sum(spikes) == 0:
+            # No neuron spiked this tick — mirror Python SNN winner_takes_all,
+            # which returns -1 and lets publish_cmd_from_winner emit IDLE creep.
+            action = -1
+        else:
+            action = self.decoder.decode_one_hot(spikes)
+            if action is None:
+                self.get_logger().warn(f"Invalid spike vector: {spikes}")
+                return
 
         # Publish winner
         winner_msg = Int32()

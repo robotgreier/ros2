@@ -40,6 +40,8 @@ class DopamineComputer:
                 else:
                     return True, 1
 
+        return False, None
+
     def step(
         self,
         obj_bits: List[int],

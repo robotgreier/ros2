@@ -177,7 +177,11 @@ def generate_launch_description():
             package='fpga_action_decoder',
             executable='fpga_action_decoder_node',
             name='fpga_action_decoder_node',
-            output='screen'
+            output='screen',
+            parameters=[{
+                'forward_speed': 0.05,
+                'turn_speed': 0.05,
+            }],
         ),
 
         # Task manager node to coordinate

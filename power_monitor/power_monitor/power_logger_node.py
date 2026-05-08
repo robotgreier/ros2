@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 import math
 import uuid
+from dopamine_interfaces.msg import PhaseEnergyResult
 
 BATTERY_WH = 49.02  # LiHV 3S: 11.4 V * 4.3 Ah = 49.02 Wh
 
@@ -30,8 +31,8 @@ class PowerLogger(Node):
         self.run_id = str(uuid.uuid4())
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
-        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
+        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
+        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
         os.makedirs(log_dir, exist_ok=True)
         self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 
@@ -41,6 +42,7 @@ class PowerLogger(Node):
         # CSV setup
         self.file = open(self.filename, 'w', newline='')
         self.writer = csv.writer(self.file)
+        self.episode_has_data = False
 
         header = [
             "run_id",
@@ -88,6 +90,8 @@ class PowerLogger(Node):
         self.current_state = None
         #self.episode_id = None
         self.last_time = None
+        self.power_samples = []
+        self.power_sample_keep_s = 1800.0  # keep last 30 minutes
 
         # battery status publisher
         self.battery_pub = self.create_publisher(
@@ -112,7 +116,11 @@ class PowerLogger(Node):
 
         self.create_subscription(
             Empty, "/episode_complete", self.episode_cb, 10
-            )
+        )
+        
+        self.create_subscription(
+            PhaseEnergyResult, "/task/phase_result", self.cb_phase_result, 10
+        )
 
     # ---------------- Utility function to get ROS time in seconds ----------------
     def now_ros_seconds(self) -> float:
@@ -195,6 +203,11 @@ class PowerLogger(Node):
         self.writer.writerow(row)
         self.file.flush()
 
+        self.get_logger().info(
+            f"[CSV] Wrote episode {self.episode_id}: "
+            f"E_total={self.episode_energy_total:.4f}Wh"
+        )
+
         #self.get_logger().info(
         #    f"[EPISODE {self.episode_id}] "
         #    f"E_total={self.episode_energy_total:.3f}Wh, "
@@ -276,9 +289,78 @@ class PowerLogger(Node):
         self.phase_active = bool(active)
 
     def episode_cb(self, msg: Empty):
-        self.write_episode_row()
+        if self.episode_has_data:
+            self.write_episode_row()
         self.episode_id += 1
         self.reset_episode_data()
+
+    def cb_phase_result(self, msg: PhaseEnergyResult):
+        p = int(msg.pickup_idx)
+        ph = int(msg.phase_idx)
+
+        if not (0 <= p < 3 and 0 <= ph < 4):
+            self.get_logger().warn(f"Invalid phase_result indices: p={p}, ph={ph}")
+            return
+
+        t_start = float(msg.start_time_s)
+        t_end = float(msg.end_time_s)
+
+        if t_end <= t_start:
+            self.get_logger().warn(f"Invalid phase times: start={t_start}, end={t_end}")
+            return
+
+        E_total = 0.0
+        E_system = 0.0
+        E_fpga = 0.0
+
+        prev_sample = None
+
+        for sample in self.power_samples:
+            t, P_system, P_fpga, P_total = sample
+
+            if prev_sample is None:
+                prev_sample = sample
+                continue
+
+            t_prev, P_sys_prev, P_fpga_prev, P_tot_prev = prev_sample
+
+            # Check if this interval overlaps with phase window
+            if t <= t_start:
+                prev_sample = sample
+                continue
+
+            if t_prev >= t_end:
+                break
+
+            # Clip interval to phase window
+            t0 = max(t_prev, t_start)
+            t1 = min(t, t_end)
+
+            dt = t1 - t0
+            if dt <= 0:
+                prev_sample = sample
+                continue
+
+            # Use previous power sample (zero-order hold)
+            E_system += (P_sys_prev * dt) / 3600.0
+            E_fpga += (P_fpga_prev * dt) / 3600.0
+            E_total += (P_tot_prev * dt) / 3600.0
+
+            prev_sample = sample
+
+        # Store results
+        self.energy_total_phase[p][ph] = E_total
+        self.energy_system_phase[p][ph] = E_system
+        self.energy_fpga_phase[p][ph] = E_fpga
+        self.time_phase[p][ph] = float(msg.duration_s)
+
+        self.get_logger().info(
+            f"[PhaseResult] p={p}, ph={ph}, "
+            f"E_total={E_total:.4f}Wh, "
+            f"E_sys={E_system:.4f}Wh, "
+            f"E_fpga={E_fpga:.4f}Wh, "
+            f"t={msg.duration_s:.2f}s"
+        )
 
     # ---------------- Battery aggregation ----------------
 
@@ -305,6 +387,12 @@ class PowerLogger(Node):
                 P_system = self.system.z
                 P_fpga = self.fpga.z
 
+                self.power_samples.append((now, P_system, P_fpga, P_total))
+
+                cutoff = now - self.power_sample_keep_s
+                while self.power_samples and self.power_samples[0][0] < cutoff:
+                    self.power_samples.pop(0)
+
                 # --- Energy increments (Wh) ---
                 E_total = (P_total * dt) / 3600.0
                 E_system = (P_system * dt) / 3600.0
@@ -314,24 +402,25 @@ class PowerLogger(Node):
                 self.episode_energy_total += E_total
                 self.episode_energy_system += E_system
                 self.episode_energy_fpga += E_fpga
+                self.episode_has_data = True
 
-                # --- Phase-based logging ---
-                if (
-                    self.phase_active and
-                    self.current_pickup is not None and
-                    self.current_phase is not None and
-                    0 <= self.current_pickup < 3 and
-                    0 <= self.current_phase < 4
-                ):
-                    p = self.current_pickup
-                    ph = self.current_phase
+                # # --- Phase-based logging ---
+                # if (
+                #     self.phase_active and
+                #     self.current_pickup is not None and
+                #     self.current_phase is not None and
+                #     0 <= self.current_pickup < 3 and
+                #     0 <= self.current_phase < 4
+                # ):
+                #     p = self.current_pickup
+                #     ph = self.current_phase
 
-                    self.energy_total_phase[p][ph] += E_total
-                    self.energy_system_phase[p][ph] += E_system
-                    self.energy_fpga_phase[p][ph] += E_fpga
+                #     self.energy_total_phase[p][ph] += E_total
+                #     self.energy_system_phase[p][ph] += E_system
+                #     self.energy_fpga_phase[p][ph] += E_fpga
 
-                    # time in seconds
-                    self.time_phase[p][ph] += dt
+                #     # time in seconds
+                #     self.time_phase[p][ph] += dt
 
         self.last_time = now
 
@@ -372,15 +461,27 @@ class PowerLogger(Node):
         self.episode_energy_system = 0.0
         self.episode_start_time = self.now_ros_seconds()
 
+        self.power_samples = []
+        self.last_time = None
+        self.episode_has_data = False
+
     # Cleanup on shutdown
     def destroy_node(self):
         if hasattr(self, "file") and not self.file.closed:
+            if self.episode_has_data:
+                self.write_episode_row()
             self.file.close()
+
         super().destroy_node()
 
 def main():
     rclpy.init()
     node = PowerLogger()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Ctrl+C received. Writing final episode row if needed.")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

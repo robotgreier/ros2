@@ -8,13 +8,14 @@
 _globals:
   ros__parameters:
     aruco_n_bins:     &aruco_n_bins     3    # encoding_node/aruco_n_bins         → python_snn_node/object_rec_size
-    proximity_n_bits: &proximity_n_bits 4    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
-    kp_rows:          &kp_rows          4    # img_kp_grid/rows → python_snn_node/kp_rows
-    kp_cols:          &kp_cols          6    # img_kp_grid/cols → python_snn_node/kp_cols
+    proximity_n_bits: &proximity_n_bits 5    # encoding_node/proximity_n_dist_bits → python_snn_node/proximity_size
+    kp_rows:          &kp_rows          3    # img_kp_grid/rows → python_snn_node/kp_rows
+    kp_cols:          &kp_cols          4    # img_kp_grid/cols → python_snn_node/kp_cols
 
 # ── Encoding node ──────────────────────────────────────────────────────────────
 encoding_node:
   ros__parameters:
+    pack_order: ["keypoints_grid", "proximity", "aruco_dir", "aruco_dir", "aruco_dir"]
     output_topic: "/snn/input"
     proximity_topic: "/ultrasonic/front/scan"
     proximity_n_dist_bits: *proximity_n_bits
@@ -26,7 +27,7 @@ img_kp_grid:
   ros__parameters:
     rows: *kp_rows
     cols: *kp_cols
-    response_threshold: 0.02
+    response_threshold: 0.00
     use_clahe: false
 
 # ── SNN node ───────────────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ python_snn_node:
     # Input from encoding_node
     input_mode: "packed"
     input_topic: "/snn/input"
-    pack_order: ["keypoints_grid", "proximity", "object_rec"]
+    pack_order: ["keypoints_grid", "proximity", "object_rec", "object_rec", "object_rec"]
 
     # Channel sizes — kept in sync with encoding/vision nodes via anchors above
     kp_rows: *kp_rows
@@ -44,7 +45,7 @@ python_snn_node:
     object_rec_size: *aruco_n_bins
 
     # Output actions
-    num_actions: 4           # LEFT, FORWARD, RIGHT, BACKWARD
+    num_actions: 3           # LEFT, FORWARD, RIGHT, BACKWARD
 
     # Timer and idle behaviour
     timer_hz: 15.0
@@ -55,20 +56,20 @@ python_snn_node:
     turn_speed: 0.05        # rad/s
 
     # Neuron parameters
-    decay: 150               # membrane potential decay per timestep (higher is faster decay)
-    threshold: 1000          # firing threshold; higher means more synaptic input needed to fire
-    reset: 0
+    decay: 400               # membrane potential decay per timestep (higher is faster decay)
+    threshold: 750          # firing threshold; higher means more synaptic input needed to fire
+    reset: 100
     refractory: 1            # refractory period in timesteps after a spike (0 = disabled)
 
     # Synapse / learning parameters
-    lr_shift: 5             # learning rate = 1 / (2^lr_shift)
+    lr_shift: 5             # learning rate = 1 / (2^lr_shift) - higher is slower learning
     t_pre: 3                # time steps for pre-synaptic trace
-    t_post: 3               # time steps for post-synaptic trace
-    tau_e_shift: 3          # eligibility trace decay = 1 / (2^tau_e_shift)
-    dw_pos: 10              # weight change for causal spike pair (pre before post)
-    dw_neg: 10               # weight change for acausal spike pair (post before pre)
-    min_weight: 40          # minimum synaptic weight (absolute value)
-    max_weight: 254         # maximum synaptic weight (absolute value)
+    t_post: 1               # time steps for post-synaptic trace
+    tau_e_shift: 2          # eligibility trace decay = 1 / (2^tau_e_shift) - higher is slower decay
+    dw_pos: 10               # weight change for causal spike pair (pre before post)
+    dw_neg: 8               # weight change for acausal spike pair (post before pre)
+    min_weight: 16          # minimum synaptic weight
+    max_weight: 254         # maximum synaptic weight
     initial_weight: -1      # -1 = random init, otherwise set to this initial int value
     feedback: true    
     learning_mode: "rstdp"   # none | stdp | rstdp
@@ -99,7 +100,7 @@ motor_control_node:
     #   ang_gain = 40  → saturates at  0.025 rad/s
     lin_gain: 15.0
     ang_gain: 15.0
-    max_pwm: 50              # PWM ceiling (0-255); top-speed cap
+    max_pwm: 40              # PWM ceiling (0-255); top-speed cap
     min_pwm: 10              # PWM floor (scaled with output)
     cmd_vel_timeout: 0.5     # s, stop if no command received
 
@@ -114,7 +115,7 @@ grab_node:
     approach_distance_dropoff: 0.2  # m
     backup_speed: 0.05              # m/s
     backup_distance: 0.1            # m
-    failed_grab_backup_distance: 0.06
+    failed_grab_backup_distance: 0.08
     motion_publish_rate_hz: 15.0
     item_final_distance: -1.0       # -1 = disabled
     dropoff_final_distance: 0.15    # m
@@ -132,7 +133,7 @@ cmd_arbiter:
     source_topics: ["/cmd_vel/grab", "/cmd_vel/teleop", "/cmd_vel/snn"]
     source_priorities: [100, 50, 10]   # higher wins
     source_timeouts_sec: [0.5, 0.5, 0.5]
-    publish_rate_hz: 30.0
+    publish_rate_hz: 15.0
     proximity_stop_active_high: true
     publish_zero_when_idle: true
 
@@ -142,7 +143,7 @@ proximity_stop:
     scan_topic: "/ultrasonic/front/scan"
     state_topic: "/task/state"
     stop_topic: "/proximity_stop"
-    distance_threshold: 0.25         # m
+    distance_threshold: 0.30         # m
     disabled_states: [1, 3]          # 1=APPROACH_ITEM, 3=APPROACH_DROPOFF
 
 # ── ArUco / image recognition node ────────────────────────────────────────────
@@ -161,5 +162,5 @@ img_recog:
     lost_frames: 12
     enable_state_auto: true
     grab_event_topic: "/grab_node/event"
-    episode_reset_delay_sec: 5.0
+    episode_reset_delay_sec: 30.0
     set_state_service: "/task/set_state"

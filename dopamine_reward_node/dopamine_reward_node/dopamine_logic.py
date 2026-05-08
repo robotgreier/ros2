@@ -19,7 +19,9 @@ class DopamineComputer:
     @staticmethod
     def decode_object_bits(obj_bits: List[int]) -> Tuple[bool, Optional[int]]:
         """
-        Decode one-hot lateral position.
+        Decode one-hot lateral position into three zones: left (-1),
+        center (0), right (+1). Works for any n_aruco_bins by splitting
+        the bin range into equal thirds.
 
         [1,0,0] -> left   (-1)
         [0,1,0] -> center ( 0)
@@ -30,7 +32,13 @@ class DopamineComputer:
 
         for i, bit in enumerate(obj_bits):
             if bit == 1:
-                return True, i - (n // 2)
+                third = n / 3.0
+                if i < third:
+                    return True, -1
+                elif i < 2.0 * third:
+                    return True, 0
+                else:
+                    return True, 1
 
         return False, None
 
@@ -55,21 +63,19 @@ class DopamineComputer:
 
         # Priority 1: wall avoidance
         if proximity_stop:
-            if action_idx == 3:         # BACKWARD — escape
+            if action_idx == 1:         # BACKWARD — escape
                 dopamine = 3
             elif action_idx in (0, 2):  # LEFT / RIGHT — escape
-                dopamine = 3
+                dopamine = 2
             else:                       # FORWARD — into the wall
-                dopamine = -2
+                dopamine = 0
             comps["proximity"] = dopamine
 
         # Priority 2: ArUco visible — alignment rewards.
         elif seen:
             if pos == 0:
-                if action_idx == 1:     # centered → drive forward
-                    dopamine = 3
-                elif action_idx == 3:   # centered → backing away
-                    dopamine = -2
+                if action_idx == 1:     # centered → drive backward
+                    dopamine = -5
                 else:                   # turning in place when centered
                     dopamine = -2
             elif pos is not None and pos < 0:   # target is left
@@ -88,12 +94,12 @@ class DopamineComputer:
         # Weak shaping so the SNN has a gradient during search instead of
         # silent zeros that produce no learning signal at all.
         else:
-            if action_idx == 1:         # FORWARD — explore open space
-                dopamine = 2
+            if action_idx == 1:         # BACKWARD — explore open space
+                dopamine = -2
             elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
                 dopamine = 2
-            else:                       # BACKWARD — retreating during search
-                dopamine = -2
+            else:                       # NOTHING — retreating during search
+                dopamine = 0
             comps[f"search_{self.search_phase}"] = dopamine
 
         return dopamine, comps

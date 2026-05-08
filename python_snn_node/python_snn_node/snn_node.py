@@ -403,7 +403,7 @@ class SNNNode(Node):
         winner_idx = self.network.winner_takes_all(output_spikes=output_spikes)
         
         # Normal actuation
-        decision = self.publish_cmd_from_winner(int(winner_idx), force_stop=False)
+        decision = self.publish_cmd_from_winner(int(winner_idx))
 
         # Debug publish winners and spikes
         self.pub_winner.publish(Int32(data=int(winner_idx)))
@@ -548,31 +548,60 @@ class SNNNode(Node):
 
     #### Publishing helpers ####
 
-    def publish_cmd_from_winner(self, winner_idx: int, force_stop: bool = False):
+    def publish_cmd_from_winner(self, winner_idx: int):
         cmd = Twist()
         decision = "IDLE"
+        
+        if self.proximity_stop:
+            if winner_idx == 0:      # LEFT
+                cmd.linear.x = 0.0
+                cmd.angular.z = +self.turn_speed
+                decision = ACTION_NAMES[0]
 
-        if force_stop:
-            decision = "STOP_PROXIMITY"
+            elif winner_idx == 1:    # BACKWARDS
+                cmd.linear.x = -self.forward_speed
+                cmd.angular.z = 0.0
+                decision = ACTION_NAMES[1]
+
+            elif winner_idx == 2:    # RIGHT
+                cmd.linear.x = 0.0
+                cmd.angular.z = -self.turn_speed
+                decision = ACTION_NAMES[2]
+
+            elif winner_idx < 0:
+                decision = "IDLE"
+                cmd.linear.x = -self.forward_speed
+                cmd.angular.z = 0.0
+
+            else:
+                decision = "STOP_PROXIMITY"
+
         elif winner_idx < 0:
             decision = "IDLE"
+            cmd.linear.x = self.forward_speed
+            cmd.angular.z = 0.0
+
         else:
             if winner_idx == 0:      # LEFT
                 cmd.linear.x = 0.0
                 cmd.angular.z = +self.turn_speed
                 decision = ACTION_NAMES[0]
-            elif winner_idx == 1:    # FORWARD
-                cmd.linear.x = self.forward_speed
+
+            elif winner_idx == 1:    # BACKWARDS
+                cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[1]
+
             elif winner_idx == 2:    # RIGHT
                 cmd.linear.x = 0.0
                 cmd.angular.z = -self.turn_speed
                 decision = ACTION_NAMES[2]
+
             elif winner_idx == 3:    # BACKWARD
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[3]
+
             else:
                 decision = "UNKNOWN"
 

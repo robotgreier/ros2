@@ -7,8 +7,11 @@ class EnergyPhaseResult:
     pickup_idx: int
     phase_idx: int
     energy_joules: float
+    duration_s: float
     average_joules: Optional[float]
     delta_joules: Optional[float]
+    start_time_s: float = 0.0
+    end_time_s: float = 0.0
 
 
 class EnergyTracker:
@@ -50,6 +53,8 @@ class EnergyTracker:
             [0, 0, 0, 0],
         ]
 
+        self.phase_start_time_s: Optional[float] = None
+
         # Episode/phase state
         self.current_pickup_idx: int = 0
         self.current_phase_idx: Optional[int] = None
@@ -78,6 +83,7 @@ class EnergyTracker:
         self.last_power_time_s = None
         self.prev_task_state = None
         self.next_phase_idx = 0
+        self.phase_start_time_s = None
 
     def update_power(self, power_w: float, now_s: float) -> None:
         """
@@ -113,14 +119,23 @@ class EnergyTracker:
                     self.current_phase_idx = phase_to_start
                     self.phase_active = True
                     self.phase_energy_joules = 0.0
+                    self.phase_start_time_s = self.last_power_time_s
 
         result = None
 
-        # If a phase is active, see if it has reached its first valid end state
+        print(
+            f"[EnergyTracker] state={task_state}, "
+            f"active={self.phase_active}, "
+            f"pickup={self.current_pickup_idx}, "
+            f"phase={self.current_phase_idx}, "
+            f"expected_end={self.PHASE_END_STATES[self.current_phase_idx] if self.current_phase_idx is not None else None}"
+        )
+
         if self.phase_active and self.current_phase_idx is not None:
-            end_state = self.PHASE_END_STATES[self.current_phase_idx]
-            if task_state == end_state:
-                result = self._complete_current_phase()
+            if self.current_phase_idx != 3:
+                end_state = self.PHASE_END_STATES[self.current_phase_idx]
+                if task_state == end_state:
+                    result = self._complete_current_phase()
 
         self.prev_task_state = task_state
         return result
@@ -132,6 +147,15 @@ class EnergyTracker:
         if 0 <= self.current_pickup_idx <= 2 and 0 <= self.next_phase_idx <= 3:
             return self.next_phase_idx
         return None
+    
+    def force_complete_phase(self, expected_phase_idx: Optional[int] = None) -> Optional[EnergyPhaseResult]:
+        if not self.phase_active or self.current_phase_idx is None:
+            return None
+
+        if expected_phase_idx is not None and self.current_phase_idx != expected_phase_idx:
+            return None
+
+        return self._complete_current_phase()
 
     def _complete_current_phase(self) -> EnergyPhaseResult:
         """
@@ -154,12 +178,25 @@ class EnergyTracker:
         self.running_avg[pickup][phase] = new_avg
         self.sample_count[pickup][phase] = prev_count + 1
 
+        end_time_s = self.last_power_time_s
+
+        if self.phase_start_time_s is not None and end_time_s is not None:
+            start_time_s = self.phase_start_time_s
+            duration_s = max(0.0, end_time_s - start_time_s)
+        else:
+            start_time_s = 0.0
+            end_time_s = 0.0
+            duration_s = 0.0
+
         result = EnergyPhaseResult(
             pickup_idx=pickup,
             phase_idx=phase,
             energy_joules=energy,
+            duration_s=duration_s,
             average_joules=prev_avg,
             delta_joules=delta,
+            start_time_s=start_time_s,
+            end_time_s=end_time_s,
         )
 
         # Advance to next phase / pickup
@@ -174,5 +211,6 @@ class EnergyTracker:
         self.phase_active = False
         self.current_phase_idx = None
         self.phase_energy_joules = 0.0
+        self.phase_start_time_s = None
 
         return result

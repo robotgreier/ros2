@@ -28,11 +28,11 @@ class DistanceSensorNode(Node):
         self.echo_line.request(consumer="echo", type=gpiod.LINE_REQ_DIR_IN)
 
         # Filters
-        self.median_window = deque(maxlen=3) # Used in median filter
+        self.median_window = deque(maxlen=5) # Used in median filter
         self.filtered_value = None
 
         self.publisher = self.create_publisher(Range, "/ultrasonic/front/raw_range", 10)
-        self.timer = self.create_timer(0.20, self.measure)   # 5 Hz
+        self.timer = self.create_timer(0.0666, self.measure)   # 15 Hz
 
         self.get_logger().info("HC-SR04 libgpiod-node startet.")
 

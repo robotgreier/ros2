@@ -11,6 +11,9 @@ from .energy_tracker import EnergyTracker
 
 from .dopamine_logic import DopamineComputer
 
+from dopamine_interfaces.msg import PhaseEnergyResult
+
+EVENT_DROPPED = 2
 
 class DopamineRewardNode(Node):
     def __init__(self) -> None:
@@ -20,6 +23,7 @@ class DopamineRewardNode(Node):
         self.reward_pub = self.create_publisher(Int16, "/reward/dopamine", 10)
         self.debug_pub = self.create_publisher(String, "/reward/debug", 10)
         self.phase_pub = self.create_publisher(UInt8MultiArray, "/task/phase", 10)
+        self.phase_result_pub = self.create_publisher(PhaseEnergyResult, "/task/phase_result", 10)
 
         # Subscribers
         self.create_subscription(UInt8, "/task/state", self.task_state_cb, 10)
@@ -28,6 +32,7 @@ class DopamineRewardNode(Node):
         self.create_subscription(Int32, "/snn/winner", self.winner_cb, 10)
         self.create_subscription(Vector3, "/battery/status", self.battery_cb, 10)
         self.create_subscription(Empty, "/episode_complete", self.episode_cb, 10)
+        self.create_subscription(UInt8, "/grab_node/event", self.grab_event_cb, 10)
 
         # Latest inputs
         self.task_state: Optional[int] = None
@@ -59,6 +64,8 @@ class DopamineRewardNode(Node):
         state = int(msg.data)
         self.task_state = state
 
+        self.get_logger().info(f"[TaskState] received state={state}")
+
         result = self.energy_tracker.on_task_state(state)
 
         if result is not None:
@@ -68,6 +75,8 @@ class DopamineRewardNode(Node):
                 f"E={result.energy_joules:.2f}J, "
                 f"avg={result.average_joules}"
             )
+
+            self.publish_phase_result(result)
 
             self.pending_energy_reward = 0
             self.pending_energy_debug = ""
@@ -159,6 +168,30 @@ class DopamineRewardNode(Node):
         self.get_logger().info("Episode complete → resetting energy tracker")
         self.energy_tracker.reset_episode()
 
+    def grab_event_cb(self, msg: UInt8) -> None:
+        event = int(msg.data)
+
+        if event != EVENT_DROPPED:
+            return
+
+        result = self.energy_tracker.force_complete_phase(
+            expected_phase_idx=3
+        )
+
+        if result is None:
+            return
+
+        self.get_logger().info(
+            f"[Energy] drop event completed phase: "
+            f"pickup={result.pickup_idx}, "
+            f"phase={result.phase_idx}, "
+            f"E={result.energy_joules:.2f}J, "
+            f"duration={result.duration_s:.2f}s"
+        )
+
+        self.publish_phase_result(result)
+        self.publish_phase()
+
     def publish_phase(self) -> None:
         msg = UInt8MultiArray()
 
@@ -173,6 +206,32 @@ class DopamineRewardNode(Node):
 
         msg.data = [pickup_idx, phase_idx, phase_active]
         self.phase_pub.publish(msg)
+    
+    def publish_phase_result(self, result) -> None:
+        msg = PhaseEnergyResult()
+
+        msg.pickup_idx = int(result.pickup_idx)
+        msg.phase_idx = int(result.phase_idx)
+
+        msg.reward_energy_joules = float(result.energy_joules)
+        msg.reward_energy_wh = float(result.energy_joules) / 3600.0
+        msg.start_time_s = float(result.start_time_s)
+        msg.end_time_s = float(result.end_time_s)
+        msg.duration_s = float(result.duration_s)
+
+        msg.average_joules = (
+            float(result.average_joules)
+            if result.average_joules is not None
+            else -1.0
+        )
+
+        msg.delta_joules = (
+            float(result.delta_joules)
+            if result.delta_joules is not None
+            else -1.0
+        )
+
+        self.phase_result_pub.publish(msg)
 
 
 def main(args=None) -> None:

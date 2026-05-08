@@ -63,20 +63,18 @@ class DopamineComputer:
 
         # Priority 1: wall avoidance
         if proximity_stop:
-            if action_idx == 3:         # BACKWARD — escape
-                dopamine = 2
+            if action_idx == 1:         # BACKWARD — escape
+                dopamine = 3
             elif action_idx in (0, 2):  # LEFT / RIGHT — escape
                 dopamine = 2
             else:                       # FORWARD — into the wall
-                dopamine = -2
+                dopamine = 0
             comps["proximity"] = dopamine
 
         # Priority 2: ArUco visible — alignment rewards.
         elif seen:
             if pos == 0:
-                if action_idx == 1:     # centered → drive forward
-                    dopamine = -5
-                elif action_idx == 3:   # centered → backing away
+                if action_idx == 1:     # centered → drive backward
                     dopamine = -5
                 else:                   # turning in place when centered
                     dopamine = -2
@@ -96,12 +94,12 @@ class DopamineComputer:
         # Weak shaping so the SNN has a gradient during search instead of
         # silent zeros that produce no learning signal at all.
         else:
-            if action_idx == 1:         # FORWARD — explore open space
-                dopamine = 2
+            if action_idx == 1:         # BACKWARD — explore open space
+                dopamine = -2
             elif action_idx in (0, 2):  # LEFT / RIGHT — scan for target
-                dopamine = 1
-            else:                       # BACKWARD — retreating during search
-                dopamine = -5
+                dopamine = 2
+            else:                       # NOTHING — retreating during search
+                dopamine = 0
             comps[f"search_{self.search_phase}"] = dopamine
 
         return dopamine, comps

@@ -203,6 +203,11 @@ class PowerLogger(Node):
         self.writer.writerow(row)
         self.file.flush()
 
+        self.get_logger().info(
+            f"[CSV] Wrote episode {self.episode_id}: "
+            f"E_total={self.episode_energy_total:.4f}Wh"
+        )
+
         #self.get_logger().info(
         #    f"[EPISODE {self.episode_id}] "
         #    f"E_total={self.episode_energy_total:.3f}Wh, "
@@ -472,6 +477,11 @@ class PowerLogger(Node):
 def main():
     rclpy.init()
     node = PowerLogger()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Ctrl+C received. Writing final episode row if needed.")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

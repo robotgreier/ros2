@@ -98,7 +98,12 @@ class FpgaActionDecoderNode(Node):
 
             elif winner_idx < 0:
                 decision = "IDLE"
-                cmd.linear.x = -self.forward_speed
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
+
+            elif winner_idx == None:
+                decision = "IDLE"
+                cmd.linear.x = self.forward_speed
                 cmd.angular.z = 0.0
 
             else:
@@ -129,6 +134,11 @@ class FpgaActionDecoderNode(Node):
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[3]
+
+            elif winner_idx == None:
+                decision = "IDLE"
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
 
             else:
                 decision = "UNKNOWN"

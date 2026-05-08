@@ -42,6 +42,7 @@ class PowerLogger(Node):
         # CSV setup
         self.file = open(self.filename, 'w', newline='')
         self.writer = csv.writer(self.file)
+        self.episode_has_data = False
 
         header = [
             "run_id",
@@ -283,7 +284,8 @@ class PowerLogger(Node):
         self.phase_active = bool(active)
 
     def episode_cb(self, msg: Empty):
-        self.write_episode_row()
+        if self.episode_has_data:
+            self.write_episode_row()
         self.episode_id += 1
         self.reset_episode_data()
 
@@ -395,6 +397,7 @@ class PowerLogger(Node):
                 self.episode_energy_total += E_total
                 self.episode_energy_system += E_system
                 self.episode_energy_fpga += E_fpga
+                self.episode_has_data = True
 
                 # # --- Phase-based logging ---
                 # if (
@@ -455,12 +458,13 @@ class PowerLogger(Node):
 
         self.power_samples = []
         self.last_time = None
+        self.episode_has_data = False
 
     # Cleanup on shutdown
     def destroy_node(self):
         if hasattr(self, "file") and not self.file.closed:
-            # Write the current unfinished episode before shutdown
-            self.write_episode_row()
+            if self.episode_has_data:
+                self.write_episode_row()
             self.file.close()
 
         super().destroy_node()

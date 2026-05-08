@@ -133,7 +133,7 @@ cmd_arbiter:
     source_topics: ["/cmd_vel/grab", "/cmd_vel/teleop", "/cmd_vel/snn"]
     source_priorities: [100, 50, 10]   # higher wins
     source_timeouts_sec: [0.5, 0.5, 0.5]
-    publish_rate_hz: 30.0
+    publish_rate_hz: 15.0
     proximity_stop_active_high: true
     publish_zero_when_idle: true
 
@@ -162,5 +162,5 @@ img_recog:
     lost_frames: 12
     enable_state_auto: true
     grab_event_topic: "/grab_node/event"
-    episode_reset_delay_sec: 5.0
+    episode_reset_delay_sec: 30.0
     set_state_service: "/task/set_state"

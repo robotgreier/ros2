@@ -1,137 +1,203 @@
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.stats import ttest_ind, mannwhitneyu
 
 # Configuration of directories for CSV logs inputs and figure outputs
-CSV_DIR = Path(__file__).parent / "csv_logs"
-FIG_DIR = Path(__file__).parent / "figures"
+
+BASE_DIR = Path(__file__).parent
+DATASETS = {
+    "FPGA": BASE_DIR / "csv_logs/FPGA",
+    "Python": BASE_DIR / "csv_logs/Python"
+}
+
+FIG_DIR = BASE_DIR / "figures"
 FIG_DIR.mkdir(exist_ok=True)
 
+# Load data
+# Label data
+# combine data
+# Save plots to folder /figures
 
-# Episode-level columns (as logged by power_logger_node)
-EPISODE_COLS = [
+def load_dataset(folder, label):
+    files = list(folder.glob("*.csv"))
+    df_list = []
+
+    for file in files:
+        try:
+            df = pd.read_csv(file)
+            df["system_type"] = label  # tag system
+            df_list.append(df)
+        except Exception as e:
+            print(f"Error reading {file}: {e}")
+
+    if df_list:
+        return pd.concat(df_list, ignore_index=True)
+    else:
+        return pd.DataFrame()
+
+
+# Load data
+df_all = pd.concat(
+    [load_dataset(path, name) for name, path in DATASETS.items()],
+    ignore_index=True
+)
+
+# Statistical tests
+
+# Split data
+fpga = df_all[df_all["system_type"] == "FPGA"]
+python_sys = df_all[df_all["system_type"] == "Python"]
+
+def run_tests(metric):
+    x = fpga[metric].dropna()
+    y = python_sys[metric].dropna()
+
+    print(f"\n=== {metric} ===")
+
+    # Welch’s t-test
+    t_stat, p_t = ttest_ind(x, y, equal_var=False)
+
+    # Mann-Whitney U (non-parametric)
+    u_stat, p_u = mannwhitneyu(x, y, alternative='two-sided')
+
+    print(f"T-test p-value: {p_t:.5f}")
+    print(f"Mann Whitney p-value: {p_u:.5f}")
+
+    # Interpretation
+    if p_t < 0.05:
+        print("→ Significant difference (t-test)")
+    else:
+        print("→ No significant difference (t-test)")
+
+    if p_u < 0.05:
+        print("→ Significant difference (Mann Whitney)")
+    else:
+        print("→ No significant difference (Mann Whitney)")
+
+
+# Efficiency test
+df_all["efficiency"] = df_all["episode_energy_total_Wh"] / df_all["episode_total_time_s"]
+
+run_tests("episode_energy_total_Wh")
+run_tests("avg_power_total_W")
+run_tests("efficiency")
+
+# Save results to file
+results = []
+
+def collect_tests(metric):
+    x = fpga[metric].dropna()
+    y = python_sys[metric].dropna()
+
+    t_stat, p_t = ttest_ind(x, y, equal_var=False)
+    u_stat, p_u = mannwhitneyu(x, y, alternative='two-sided')
+
+    results.append({
+        "metric": metric,
+        "t_test_p": p_t,
+        "mannwhitney_p": p_u
+    })
+
+
+collect_tests("episode_energy_total_Wh")
+collect_tests("avg_power_total_W")
+collect_tests("efficiency")
+
+df_results = pd.DataFrame(results)
+df_results.to_csv(FIG_DIR / "statistical_tests.csv", index=False)
+
+print(df_results)
+
+
+# Clean and sort
+df_all = df_all.dropna(subset=["episode_energy_total_Wh"])
+df_all = df_all.sort_values(by="episode_start_ros_time_s")
+df_all["episode_index"] = df_all.groupby("system_type").cumcount()
+
+# Plot 1: Energy comparison FPGA and CPU
+plt.figure()
+
+for system in df_all["system_type"].unique():
+    subset = df_all[df_all["system_type"] == system]
+
+    plt.plot(
+        subset["episode_index"],
+        subset["episode_energy_total_Wh"],
+        marker='o',
+        label=system
+    )
+
+plt.xlabel("Episode")
+plt.ylabel("Energy (Wh)")
+plt.title("Energy per Episode Comparison")
+plt.legend()
+
+plt.savefig(FIG_DIR / "energy_per_episode.png")
+plt.close()
+
+# Plot 2: Boxplot
+plt.figure()
+
+df_all.boxplot(
+    column="episode_energy_total_Wh",
+    by="system_type"
+)
+
+plt.ylabel("Energy (Wh)")
+plt.title("Energy Distribution per System")
+plt.suptitle("")
+
+plt.savefig(FIG_DIR / "energy_boxplot.png")
+plt.close()
+
+# Plot 3: Average Power
+
+plt.figure()
+
+for system in df_all["system_type"].unique():
+    subset = df_all[df_all["system_type"] == system]
+
+    plt.scatter(
+        subset["episode_total_time_s"],
+        subset["avg_power_total_W"],
+        label=system
+    )
+
+plt.xlabel("Episode Time (s)")
+plt.ylabel("Average Power (W)")
+plt.title("Power vs Time")
+plt.legend()
+
+plt.savefig(FIG_DIR / "power_vs_time.png")
+plt.close()
+
+# Plot 4: Mean comparison
+
+grouped = df_all.groupby("system_type")[[
     "episode_energy_total_Wh",
-    "episode_energy_system_Wh",
-    "episode_energy_fpga_Wh",
-    "search_energy_total_Wh",
-    "approach_energy_total_Wh",
-    "search_time_total_s",
-    "approach_time_total_s",
-]
+    "avg_power_total_W"
+]].mean()
 
+grouped.plot(kind="bar")
 
-def load_episode_data(csv_dir: Path) -> pd.DataFrame:
-    csv_files = sorted(csv_dir.glob("power_log_*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {csv_dir}")
+plt.ylabel("Average Value")
+plt.title("Mean Energy and Power per System")
 
-    dfs = []
-    for csv in csv_files:
-        df = pd.read_csv(csv)
-        df["series"] = csv.stem
-        dfs.append(df)
+plt.savefig(FIG_DIR / "mean_comparison.png")
+plt.close()
 
-    return pd.concat(dfs, ignore_index=True)
+# Plot 5: Efficiency
 
+df_all["efficiency"] = df_all["episode_energy_total_Wh"] / df_all["episode_total_time_s"]
 
-# ---------------- Plot 1: Episode energy ----------------
+plt.figure()
 
-def plot_episode_energy(df: pd.DataFrame):
-    fig, ax = plt.subplots(figsize=(9, 4))
+df_all.boxplot(column="efficiency", by="system_type")
 
-    ax.plot(df.index, df["episode_energy_total_Wh"],
-            marker="o", label="Total")
-    ax.plot(df.index, df["episode_energy_system_Wh"],
-            marker="s", linestyle="--", label="System")
-    ax.plot(df.index, df["episode_energy_fpga_Wh"],
-            marker="^", linestyle="--", label="FPGA")
+plt.ylabel("Wh per second")
+plt.title("Energy Efficiency Comparison")
+plt.suptitle("")
 
-    ax.set_xlabel("Episode index")
-    ax.set_ylabel("Energy [Wh]")
-    ax.set_title("Episode energy consumption")
-    ax.legend()
-    ax.grid(True)
-
-    out = FIG_DIR / "episode_energy_breakdown.png"
-    fig.tight_layout()
-    fig.savefig(out, dpi=200)
-    plt.show()
-
-    print(f"Saved {out}")
-
-
-# ---------------- Plot 2: Search vs approach energy ----------------
-
-def plot_search_vs_approach_energy(df: pd.DataFrame):
-    fig, ax = plt.subplots(figsize=(9, 4))
-
-    ax.plot(df.index, df["search_energy_total_Wh"],
-            marker="o", label="Search")
-    ax.plot(df.index, df["approach_energy_total_Wh"],
-            marker="s", label="Approach")
-
-    ax.set_xlabel("Episode index")
-    ax.set_ylabel("Energy [Wh]")
-    ax.set_title("Search vs approach energy per episode")
-    ax.legend()
-    ax.grid(True)
-
-    out = FIG_DIR / "search_vs_approach_energy.png"
-    fig.tight_layout()
-    fig.savefig(out, dpi=200)
-    plt.show()
-
-    print(f"Saved {out}")
-
-
-# ---------------- Plot 3: Search vs approach time ----------------
-
-def plot_search_vs_approach_time(df: pd.DataFrame):
-    fig, ax = plt.subplots(figsize=(9, 4))
-
-    ax.plot(df.index, df["search_time_total_s"],
-            marker="o", label="Search")
-    ax.plot(df.index, df["approach_time_total_s"],
-            marker="s", label="Approach")
-
-    ax.set_xlabel("Episode index")
-    ax.set_ylabel("Time [s]")
-    ax.set_title("Search vs approach time per episode")
-    ax.legend()
-    ax.grid(True)
-
-    out = FIG_DIR / "search_vs_approach_time.png"
-    fig.tight_layout()
-    fig.savefig(out, dpi=200)
-    plt.show()
-
-    print(f"Saved {out}")
-
-
-# ---------------- Numeric summary ----------------
-
-def print_summary(df: pd.DataFrame):
-    print("\n=== Episode summary ===")
-    for i, row in df.iterrows():
-        print(
-            f"Episode {i:02d} | "
-            f"E_total={row.episode_energy_total_Wh:.3f} Wh "
-            f"(sys={row.episode_energy_system_Wh:.3f}, "
-            f"fpga={row.episode_energy_fpga_Wh:.3f}) | "
-            f"Search: {row.search_energy_total_Wh:.3f} Wh / "
-            f"{row.search_time_total_s:.1f} s | "
-            f"Approach: {row.approach_energy_total_Wh:.3f} Wh / "
-            f"{row.approach_time_total_s:.1f} s"
-        )
-
-
-# ---------------- Main ----------------
-
-if __name__ == "__main__":
-    df = load_episode_data(CSV_DIR)
-
-    plot_episode_energy(df)
-    plot_search_vs_approach_energy(df)
-    plot_search_vs_approach_time(df)
-
-    print_summary(df)
+plt.savefig(FIG_DIR / "efficiency_boxplot.png")
+plt.close()

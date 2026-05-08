@@ -459,7 +459,10 @@ class PowerLogger(Node):
     # Cleanup on shutdown
     def destroy_node(self):
         if hasattr(self, "file") and not self.file.closed:
+            # Write the current unfinished episode before shutdown
+            self.write_episode_row()
             self.file.close()
+
         super().destroy_node()
 
 def main():

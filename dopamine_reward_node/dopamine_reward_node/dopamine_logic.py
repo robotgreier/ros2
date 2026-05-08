@@ -67,7 +67,7 @@ class DopamineComputer:
         elif seen:
             if pos == 0:
                 if action_idx == 1:     # centered → drive forward
-                    dopamine = 5
+                    dopamine = -5
                 elif action_idx == 3:   # centered → backing away
                     dopamine = -5
                 else:                   # turning in place when centered

@@ -552,6 +552,8 @@ class SNNNode(Node):
         cmd = Twist()
         decision = "IDLE"
 
+        force_stop = self.proximity_stop
+
         if force_stop:
             decision = "STOP_PROXIMITY"
         elif winner_idx < 0:
@@ -577,8 +579,6 @@ class SNNNode(Node):
                 decision = ACTION_NAMES[3]
             else:
                 decision = "UNKNOWN"
-                cmd.linear.x = self.forward_speed
-                cmd.angular.z = 0.0
 
         self.cmd_vel_pub.publish(cmd)
         self.pub_decision.publish(String(data=decision))

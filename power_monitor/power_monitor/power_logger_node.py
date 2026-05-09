@@ -354,6 +354,8 @@ class PowerLogger(Node):
         self.energy_fpga_phase[p][ph] = E_fpga
         self.time_phase[p][ph] = float(msg.duration_s)
 
+        self.episode_has_data = True
+
         self.get_logger().info(
             f"[PhaseResult] p={p}, ph={ph}, "
             f"E_total={E_total:.4f}Wh, "
@@ -377,6 +379,9 @@ class PowerLogger(Node):
 
         # Energy integration
         now = self.now_ros_seconds()
+
+        if self.last_time is None:
+            self.power_samples.append((now, self.system.z, self.fpga.z, P))
 
         if self.last_time is not None:
             dt = now - self.last_time

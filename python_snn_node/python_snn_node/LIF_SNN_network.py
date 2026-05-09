@@ -42,7 +42,7 @@ class LIF:
         return self.spk
 
 
-class RSTDPSynapse:
+class Synapse:
     """
     Reward-modulated STDP synapse with rectangular window.
 
@@ -149,7 +149,7 @@ class RSTDPSynapse:
         self.weight = max(self.w_min, min(self.w_max, new_weight))
 
 
-class SNNLayer:
+class Layer:
     """
     Fully-connected SNN layer with vectorised NumPy state arrays.
 
@@ -157,7 +157,7 @@ class SNNLayer:
         n_inputs: Number of pre-synaptic input neurons
         n_outputs: Number of post-synaptic output neurons
         neuron_params: Dict passed to LIF constructor
-        synapse_params: Dict passed to RSTDPSynapse constructor;
+        synapse_params: Dict passed to Synapse constructor;
                         include 'mode': 'stdp' or 'rstdp' (default)
         feedback: If True, adds one extra input driven by NOR of previous outputs
     """

@@ -12,7 +12,7 @@ Spike pattern is calibrated from the user's captured membrane traces
 import random
 import numpy as np
 
-from python_snn_node.LIF_SNN_network import RSTDPSynapse
+from python_snn_node.LIF_SNN_network import Synapse
 
 
 N_TICKS = 4000
@@ -26,7 +26,7 @@ def run_synapse(params, lr_shift, n_ticks=N_TICKS, seed=0):
     """Run one synapse for n_ticks with random pre/post spikes; return list of
     eligibility values across the run."""
     rng = random.Random(seed)
-    syn = RSTDPSynapse(lr_shift=lr_shift, w_init=128, **params)
+    syn = Synapse(lr_shift=lr_shift, w_init=128, **params)
     elig_trace = np.empty(n_ticks, dtype=np.int32)
     for t in range(n_ticks):
         syn.update_eligibility(

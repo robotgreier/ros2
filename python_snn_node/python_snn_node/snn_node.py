@@ -15,7 +15,7 @@ from sensor_msgs.msg import Range
 
 from geometry_msgs.msg import Twist
 
-from .LIF_SNN_network import SNNLayer
+from .LIF_SNN_network import Layer
 from .csv_logger import CsvAsyncLogger
 
 from ament_index_python.packages import get_package_share_directory
@@ -209,7 +209,7 @@ class SNNNode(Node):
             "mode": self.learning_mode
         }
 
-        self.network = SNNLayer(
+        self.network = Layer(
             n_inputs=self.input_size,
             n_outputs=self.output_size,
             neuron_params=neuron_params,

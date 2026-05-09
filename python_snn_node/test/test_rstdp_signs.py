@@ -1,9 +1,9 @@
-"""Verify RSTDPSynapse produces correct LTP/LTD weight changes for the four
+"""Verify Synapse produces correct LTP/LTD weight changes for the four
 combinations of pairing direction (causal/acausal) x dopamine sign (reward/
 punishment). Uses params from my_ros2_bringup/config/params.yaml.
 """
 
-from python_snn_node.LIF_SNN_network import RSTDPSynapse
+from python_snn_node.LIF_SNN_network import Synapse
 
 
 PARAMS = dict(
@@ -21,7 +21,7 @@ W_INIT = 128
 
 
 def _fresh():
-    return RSTDPSynapse(w_init=W_INIT, **PARAMS)
+    return Synapse(w_init=W_INIT, **PARAMS)
 
 
 def _causal_pair(syn):
@@ -102,12 +102,12 @@ def test_zero_dopamine_is_noop():
 
 
 def test_weight_clamps():
-    syn = RSTDPSynapse(w_init=PARAMS['w_max'], **PARAMS)
+    syn = Synapse(w_init=PARAMS['w_max'], **PARAMS)
     _causal_pair(syn)
     syn.apply_reward(dopamine=+50)
     assert syn.weight == PARAMS['w_max']
 
-    syn = RSTDPSynapse(w_init=PARAMS['w_min'], **PARAMS)
+    syn = Synapse(w_init=PARAMS['w_min'], **PARAMS)
     _causal_pair(syn)
     syn.apply_reward(dopamine=-50)
     assert syn.weight == PARAMS['w_min']

@@ -46,6 +46,9 @@ df_all = pd.concat(
 # Statistical tests
 
 # Split data
+
+df_all["efficiency"] = df_all["episode_energy_total_Wh"] / df_all["episode_total_time_s"]
+
 fpga = df_all[df_all["system_type"] == "FPGA"]
 python_sys = df_all[df_all["system_type"] == "Python"]
 
@@ -77,7 +80,7 @@ def run_tests(metric):
 
 
 # Efficiency test
-df_all["efficiency"] = df_all["episode_energy_total_Wh"] / df_all["episode_total_time_s"]
+
 
 run_tests("episode_energy_total_Wh")
 run_tests("avg_power_total_W")

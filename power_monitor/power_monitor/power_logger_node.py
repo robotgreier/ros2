@@ -31,8 +31,8 @@ class PowerLogger(Node):
         self.run_id = str(uuid.uuid4())
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
-        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
+        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
+        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
         os.makedirs(log_dir, exist_ok=True)
         self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 

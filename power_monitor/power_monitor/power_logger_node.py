@@ -31,8 +31,8 @@ class PowerLogger(Node):
         self.run_id = str(uuid.uuid4())
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
-        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
+        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
+        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
         os.makedirs(log_dir, exist_ok=True)
         self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 
@@ -42,6 +42,7 @@ class PowerLogger(Node):
         # CSV setup
         self.file = open(self.filename, 'w', newline='')
         self.writer = csv.writer(self.file)
+        self.episode_has_data = False
 
         header = [
             "run_id",
@@ -202,6 +203,11 @@ class PowerLogger(Node):
         self.writer.writerow(row)
         self.file.flush()
 
+        self.get_logger().info(
+            f"[CSV] Wrote episode {self.episode_id}: "
+            f"E_total={self.episode_energy_total:.4f}Wh"
+        )
+
         #self.get_logger().info(
         #    f"[EPISODE {self.episode_id}] "
         #    f"E_total={self.episode_energy_total:.3f}Wh, "
@@ -283,7 +289,8 @@ class PowerLogger(Node):
         self.phase_active = bool(active)
 
     def episode_cb(self, msg: Empty):
-        self.write_episode_row()
+        if self.episode_has_data:
+            self.write_episode_row()
         self.episode_id += 1
         self.reset_episode_data()
 
@@ -395,6 +402,7 @@ class PowerLogger(Node):
                 self.episode_energy_total += E_total
                 self.episode_energy_system += E_system
                 self.episode_energy_fpga += E_fpga
+                self.episode_has_data = True
 
                 # # --- Phase-based logging ---
                 # if (
@@ -455,16 +463,25 @@ class PowerLogger(Node):
 
         self.power_samples = []
         self.last_time = None
+        self.episode_has_data = False
 
     # Cleanup on shutdown
     def destroy_node(self):
         if hasattr(self, "file") and not self.file.closed:
+            if self.episode_has_data:
+                self.write_episode_row()
             self.file.close()
+
         super().destroy_node()
 
 def main():
     rclpy.init()
     node = PowerLogger()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("Ctrl+C received. Writing final episode row if needed.")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

@@ -260,8 +260,11 @@ class GrabNode(Node):
         # Keep the latest trigger state from the gripper sensor.
         self.proximity_triggered = bool(msg.data)
 
-        # Object detected without active grab sequence 
-        if (not self.sequence_active and 
+        # Object detected without active grab sequence.
+        # Only valid during the item-pickup phase; the sensor stays
+        # triggered while carrying an object during dropoff.
+        if (not self.sequence_active and
+            self.current_task_state in [SEARCH_ITEM, APPROACH_ITEM] and
             self.state not in [
             GrabState.CREEPING_TO_ITEM,
             GrabState.EXECUTING_FORWARD,

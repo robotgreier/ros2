@@ -88,7 +88,7 @@ class GripperNode(Node):
 
         # ---- Parameters ----
         self.servo_channel = 2          # MotorHAT servo channel
-        self.open_angle = 75.0
+        self.open_angle = 78.0
         self.closed_angle = 110.0
 
         self.step_size_deg = 2.0          # degrees per step

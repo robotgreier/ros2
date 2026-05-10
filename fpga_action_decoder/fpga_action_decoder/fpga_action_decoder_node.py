@@ -3,13 +3,19 @@ from typing import List
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import UInt8MultiArray, Bool, Int32, String
+from std_msgs.msg import UInt8, UInt8MultiArray, Bool, Int32, String
 from geometry_msgs.msg import Twist
 
 from .action_decoder import ActionDecoder
 
 
-ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT", "BACKWARD"]  # index 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
+ACTION_NAMES = ["LEFT", "BACKWARD", "RIGHT", "FORWARD"]  # index 0=LEFT, 1=BACKWARD, 2=RIGHT, 3=FORWARD
+
+# Task states (mirrors grab_node)
+SEARCH_ITEM = 0
+APPROACH_ITEM = 1
+SEARCH_DROPOFF = 2
+APPROACH_DROPOFF = 3
 
 
 class FpgaActionDecoderNode(Node):
@@ -23,11 +29,13 @@ class FpgaActionDecoderNode(Node):
         # Topic parameters
         self.declare_parameter("cmd_vel_topic", "/cmd_vel/snn")
         self.declare_parameter("proximity_stop_topic", "/proximity_stop")
+        self.declare_parameter("task_state_topic", "/task/state")
 
         self.forward_speed = float(self.get_parameter("forward_speed").value)
         self.turn_speed = float(self.get_parameter("turn_speed").value)
 
         self.proximity_stop: bool = False
+        self.task_state: int | None = None
 
         # Decoder
         self.decoder = ActionDecoder()
@@ -52,11 +60,20 @@ class FpgaActionDecoderNode(Node):
             self._on_proximity_stop,
             10,
         )
+        self.create_subscription(
+            UInt8,
+            self.get_parameter("task_state_topic").value,
+            self._on_task_state,
+            10,
+        )
 
         self.get_logger().info("fpga_action_decoder_node started")
 
     def _on_proximity_stop(self, msg: Bool) -> None:
         self.proximity_stop = bool(msg.data)
+
+    def _on_task_state(self, msg: UInt8) -> None:
+        self.task_state = int(msg.data)
 
     def spikes_cb(self, msg: UInt8MultiArray) -> None:
         spikes: List[int] = list(msg.data)
@@ -90,7 +107,7 @@ class FpgaActionDecoderNode(Node):
                 cmd.angular.z = +self.turn_speed
                 decision = ACTION_NAMES[0]
 
-            elif winner_idx == 1:    # BACKWARDS
+            elif winner_idx == 1:    # BACKWARD
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[1]
@@ -100,18 +117,44 @@ class FpgaActionDecoderNode(Node):
                 cmd.angular.z = -self.turn_speed
                 decision = ACTION_NAMES[2]
 
-            elif winner_idx < 0:
+            elif winner_idx < 0:     # IDLE under proximity -> reverse to escape
                 decision = "IDLE"
-                cmd.linear.x = self.forward_speed
+                cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
 
-            elif winner_idx == None:
-                decision = "IDLE"
-                cmd.linear.x = self.forward_speed
-                cmd.angular.z = 0.0
+            elif winner_idx == 3:    # FORWARD blocked by proximity
+                decision = "STOP_PROXIMITY"
 
             else:
                 decision = "STOP_PROXIMITY"
+
+        elif self.task_state in (APPROACH_ITEM, APPROACH_DROPOFF):
+            # Approach modes: always carry forward motion so the robot
+            # closes distance to the target while turning.
+            if winner_idx == 0:      # LEFT + creep forward
+                cmd.linear.x = 0.5 * self.forward_speed
+                cmd.angular.z = +self.turn_speed
+                decision = ACTION_NAMES[0]
+
+            elif winner_idx == 1:    # BACKWARD (kept for recovery)
+                cmd.linear.x = -self.forward_speed
+                cmd.angular.z = 0.0
+                decision = ACTION_NAMES[1]
+
+            elif winner_idx == 2:    # RIGHT + creep forward
+                cmd.linear.x = 0.5 * self.forward_speed
+                cmd.angular.z = -self.turn_speed
+                decision = ACTION_NAMES[2]
+
+            elif winner_idx == 3:    # FORWARD
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
+                decision = ACTION_NAMES[3]
+
+            else:                    # IDLE / no winner -> creep forward
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
+                decision = "IDLE"
 
         elif winner_idx < 0:
             decision = "IDLE"
@@ -124,7 +167,7 @@ class FpgaActionDecoderNode(Node):
                 cmd.angular.z = +self.turn_speed
                 decision = ACTION_NAMES[0]
 
-            elif winner_idx == 1:    # BACKWARDS
+            elif winner_idx == 1:    # BACKWARD
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[1]
@@ -134,15 +177,10 @@ class FpgaActionDecoderNode(Node):
                 cmd.angular.z = -self.turn_speed
                 decision = ACTION_NAMES[2]
 
-            elif winner_idx == 3:    # BACKWARD
-                cmd.linear.x = -self.forward_speed
-                cmd.angular.z = 0.0
-                decision = ACTION_NAMES[3]
-
-            elif winner_idx == None:
-                decision = "IDLE"
+            elif winner_idx == 3:    # FORWARD
                 cmd.linear.x = self.forward_speed
                 cmd.angular.z = 0.0
+                decision = ACTION_NAMES[3]
 
             else:
                 decision = "UNKNOWN"

@@ -57,6 +57,7 @@ class GrabNode(Node):
         self.declare_parameter("center_threshold", 0.15)
         self.declare_parameter("item_distance_threshold", 0.3)
         self.declare_parameter("dropoff_distance_threshold", 0.3)
+        self.declare_parameter("min_valid_distance", 0.2)
 
         self.declare_parameter("approach_speed", 0.1)
         self.declare_parameter("approach_distance_item", 0.4)
@@ -85,6 +86,7 @@ class GrabNode(Node):
         self.center_threshold = self.get_parameter("center_threshold").value
         self.item_dist_thresh = self.get_parameter("item_distance_threshold").value
         self.drop_dist_thresh = self.get_parameter("dropoff_distance_threshold").value
+        self.min_valid_distance = self.get_parameter("min_valid_distance").value
 
         self.approach_speed = self.get_parameter("approach_speed").value
         self.approach_item_dist = self.get_parameter("approach_distance_item").value
@@ -258,8 +260,11 @@ class GrabNode(Node):
         # Keep the latest trigger state from the gripper sensor.
         self.proximity_triggered = bool(msg.data)
 
-        # Object detected without active grab sequence 
-        if (not self.sequence_active and 
+        # Object detected without active grab sequence.
+        # Only valid during the item-pickup phase; the sensor stays
+        # triggered while carrying an object during dropoff.
+        if (not self.sequence_active and
+            self.current_task_state in [SEARCH_ITEM, APPROACH_ITEM] and
             self.state not in [
             GrabState.CREEPING_TO_ITEM,
             GrabState.EXECUTING_FORWARD,
@@ -302,7 +307,7 @@ class GrabNode(Node):
         centered = abs(self.x_norm) < self.center_threshold
 
         # Optional: enforce a minimum valid distance (more robust)
-        distance_valid = self.distance > 0.2
+        distance_valid = self.distance > self.min_valid_distance
 
         if self.current_task_state == APPROACH_ITEM:
             close_enough = self.distance < self.item_dist_thresh

@@ -28,7 +28,13 @@ from pathlib import Path
 
 EVENT_IDLE = 0
 
-ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT", "BACKWARD"]  # index 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
+# Task states (mirrors grab_node)
+SEARCH_ITEM = 0
+APPROACH_ITEM = 1
+SEARCH_DROPOFF = 2
+APPROACH_DROPOFF = 3
+
+ACTION_NAMES = ["LEFT", "BACKWARD", "RIGHT", "FORWARD"]  # index 0=LEFT, 1=BACKWARD, 2=RIGHT, 3=FORWARD
 
 class SNNNode(Node):
     """
@@ -36,7 +42,7 @@ class SNNNode(Node):
     - Reads packed spikes (0/1) from /snn/input (UInt8MultiArray)
     - Runs LIF SNN with dopamine learning and publishes:
         * /cmd_vel/snn (geometry_msgs/Twist) for robot control
-        * /snn/decision (string) with the action name (LEFT, FORWARD, RIGHT, BACKWARD)
+        * /snn/decision (string) with the action name (LEFT, BACKWARD, RIGHT, FORWARD)
         * /snn/winner (Int32)
         * /snn/spikes (INT32MuliArray) for debugging (spikes of output neurons)
     - Training mode: listens to /snn/correct_output (Int32), uses dopamine learning to adjust synaptic weights.
@@ -573,8 +579,39 @@ class SNNNode(Node):
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
 
+            elif winner_idx == 3:    # FORWARD blocked by proximity
+                decision = "STOP_PROXIMITY"
+
             else:
                 decision = "STOP_PROXIMITY"
+
+        elif self.task_state in (APPROACH_ITEM, APPROACH_DROPOFF):
+            # Approach modes: always carry forward motion so the robot
+            # closes distance to the target while turning.
+            if winner_idx == 0:      # LEFT + creep forward
+                cmd.linear.x = +self.forward_speed
+                cmd.angular.z = +self.turn_speed
+                decision = ACTION_NAMES[0]
+
+            elif winner_idx == 1:    # BACKWARD (kept for recovery)
+                #cmd.linear.x = -self.forward_speed
+                #cmd.angular.z = 0.0
+                decision = ACTION_NAMES[1]
+
+            elif winner_idx == 2:    # RIGHT + creep forward
+                cmd.linear.x = +self.forward_speed
+                cmd.angular.z = -self.turn_speed
+                decision = ACTION_NAMES[2]
+
+            elif winner_idx == 3:    # FORWARD
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
+                decision = ACTION_NAMES[3]
+
+            else:                    # IDLE / no winner -> creep forward
+                cmd.linear.x = self.forward_speed
+                cmd.angular.z = 0.0
+                decision = "IDLE"
 
         elif winner_idx < 0:
             decision = "IDLE"
@@ -587,7 +624,7 @@ class SNNNode(Node):
                 cmd.angular.z = +self.turn_speed
                 decision = ACTION_NAMES[0]
 
-            elif winner_idx == 1:    # BACKWARDS
+            elif winner_idx == 1:    # BACKWARD
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[1]
@@ -597,8 +634,8 @@ class SNNNode(Node):
                 cmd.angular.z = -self.turn_speed
                 decision = ACTION_NAMES[2]
 
-            elif winner_idx == 3:    # BACKWARD
-                cmd.linear.x = -self.forward_speed
+            elif winner_idx == 3:    # FORWARD
+                cmd.linear.x = self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[3]
 

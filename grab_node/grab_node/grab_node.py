@@ -258,7 +258,6 @@ class GrabNode(Node):
         # Keep the latest trigger state from the gripper sensor.
         self.proximity_triggered = bool(msg.data)
 
-        # ---------TEST CODE WHEN OBJECT IS IN GRAB WHEN NO GRAB SEQUENSE IS ACTIVE
         # Object detected without active grab sequence 
         if (not self.sequence_active and 
             self.state not in [
@@ -284,7 +283,7 @@ class GrabNode(Node):
                 duration=duration,
                 new_state=GrabState.EXECUTING_BACKUP,
             )
-        # ---------TEST CODE END
+        
 
     # =====================================================
     # ------------------ Logic ----------------------------

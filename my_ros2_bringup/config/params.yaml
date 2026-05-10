@@ -114,7 +114,7 @@ grab_node:
     # ---- Grab-mode entry gates (checked while WAITING_ALIGNMENT) ----
     center_threshold: 0.25            # normalized x offset from image center under which the target counts as "centered"
     item_distance_threshold: 0.15     # m, aruco distance under which APPROACH_ITEM transitions into the creep-to-grab sequence
-    dropoff_distance_threshold: 0.15  # m, aruco distance under which APPROACH_DROPOFF transitions into the forward-and-drop sequence
+    dropoff_distance_threshold: 0.20  # m, aruco distance under which APPROACH_DROPOFF transitions into the forward-and-drop sequence
     min_valid_distance: 0.05           # m, hard floor on aruco distance; readings <= this are treated as invalid and never trigger grab mode
 
     # ---- APPROACH_ITEM: creep until proximity sensor trips ----
@@ -125,7 +125,7 @@ grab_node:
     # Duration = clamp(measured_distance - dropoff_final_distance, min_forward_distance, max_forward_distance) / approach_speed
     approach_speed: 0.05              # m/s, forward speed during the timed dropoff approach
     dropoff_final_distance: 0.15      # m, desired remaining gap between robot and dropoff marker after the forward motion
-    min_forward_distance: 0.1         # m, lower clamp on the computed forward travel distance (prevents zero/negative motion)
+    min_forward_distance: 0.02        # m, safety floor on the computed forward travel distance (prevents zero/negative motion). Keep small so dropoff_final_distance actually governs the stopping point.
     max_forward_distance: 0.45        # m, upper clamp on the computed forward travel distance (safety cap if aruco distance is wildly wrong)
 
     # ---- Backup motions ----

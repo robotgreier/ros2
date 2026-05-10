@@ -50,7 +50,7 @@ Every change made under these conventions is a **refactor**, not a rewrite. The 
 - Module filenames are `snake_case.py`. No `PascalCase`, no `ALL_CAPS`, no mixed casing.
 - One node per file; the file name matches the executable name in `setup.py` `entry_points`.
 - Parameter names are `snake_case`, full words preferred over abbreviations. If you abbreviate one (`kp_rows`), abbreviate all peers consistently.
-- Subscription callbacks are prefixed `_on_<topic>`. Service handlers are `_handle_<service>`. Timers are `_on_timer` or `_on_<purpose>_timer`. Pick one prefix scheme per file and never mix.
+- Subscription callbacks are prefixed `_on_<topic>` workspace-wide. Service handlers are `_handle_<service>`. Timers are `_on_timer` or `_on_<purpose>_timer`. Legacy `cb_*` and `*_cb` schemes are migrated to `_on_*` when their file is touched.
 - Topic and service names the node owns are declared as parameters with sensible defaults. Hardcoded topic strings are allowed only for well-known external topics (`/tf`, `/clock`); document why.
 
 ## 3. Node constructor structure
@@ -77,21 +77,28 @@ def __init__(self):
 ## 4. Parameter discipline
 
 - Every parameter declared must be read. Every parameter read must have been declared. No silent dead parameters.
-- Default values exist in **one** authoritative place — the package YAML in `my_ros2_bringup`. `declare_parameter` defaults are safety nets only, and must not contradict the YAML.
-- Class-level defaults inside reusable algorithm classes are kept in sync with node-level defaults, or the class is changed to require the dict.
+- **All user-tunable parameters live in `my_ros2_bringup/config/params.yaml` and nowhere else.** This is the single source of truth for the workspace. Do not create per-package `config/*.yaml` files; do not duplicate values in launch files; do not bury defaults in code that contradict the YAML.
+- `declare_parameter` defaults inside the node are safety nets only — they must match the YAML, and the YAML wins on disagreement.
+- When adding a new parameter: declare it in code, add it to `params.yaml` under the node's section, and (if it is a value shared across nodes) define it as a YAML anchor in `_globals` so all consumers stay in sync automatically.
+- Class-level defaults inside reusable algorithm classes are kept in sync with node-level defaults, or the class is changed to require the dict with no fallback.
 - Path parameters use `pathlib.Path(...).expanduser()` and `mkdir(parents=True, exist_ok=True)` once. Never duplicate the resolution logic.
 
 ## 5. Constants & shared types
 
-- Cross-node enums (task states, event codes, action indices) live in **one** module — preferably a shared interfaces package or a `constants.py` inside the producing node. Importers re-import; they do not redefine.
-- When two files must share an ordering (e.g. `ACTION_NAMES` and the reward system's action interpretation), it is defined once and imported. Re-declaring with a different order is a bug.
-- Magic numbers in callbacks are named constants or parameters.
+- Cross-node enums live in **one** module that all consumers import. The current owners are:
+  - **Task states** (`SEARCH_ITEM`, `APPROACH_ITEM`, `SEARCH_DROPOFF`, `APPROACH_DROPOFF`) — owned by `task_manager`/`task_manager_interfaces`.
+  - **Grab event codes** (`EVENT_IDLE`, `EVENT_GRABBED`, `EVENT_DROPPED`, `EVENT_BUSY`) — owned by `grab_node` (or promoted to `taskbot_interfaces` when reused).
+  - **Action indices and `ACTION_NAMES`** — owned by `python_snn_node`.
+- Importers re-import; they do not redefine. Re-declaring an enum with a different ordering is a bug, not a style issue.
+- Magic numbers in callbacks (e.g. message field offsets like `data[2]`, `data[6]`, length checks like `len(data) < 14`) are named constants at module top.
 
 ## 6. Callback & timer hygiene
 
-- Subscription callbacks do the minimum: validate, store on `self`, return. Heavy work happens in the timer.
-- Timer callbacks must complete within their period. Never call `get_logger().info(...)` per tick at >1 Hz — use `debug` or a throttled logger.
-- Every publisher and subscriber declares an explicit `QoSProfile` matched to its data semantics: sensor streams are `BEST_EFFORT` + `KEEP_LAST(1)`; commands and state transitions are `RELIABLE` + `KEEP_LAST(10)`. Do not reuse one `qos_sensor` for unrelated topics.
+- **Two valid node shapes:**
+  - *Timer-driven* (`python_snn_node`, `cmd_arbiter`, `motor_control`): subscription callbacks validate, store on `self`, return. The timer does the work. This is the default for any node that produces a continuous output stream.
+  - *Event-driven* (`proximity_stop`, `dopamine_reward_node`): no control timer; logic runs in callbacks. Allowed when the node only emits in response to inputs. Each callback must be bounded, idempotent, and free of long-running work.
+- Timer callbacks must complete within their period. Never call `get_logger().info(...)` per tick at >1 Hz — use `debug` or a throttled logger. The same applies to event-driven callbacks that fire at high rate.
+- Every publisher and subscriber declares an **explicit** `QoSProfile` that matches the publisher on the other end. Default profile is `BEST_EFFORT` + `KEEP_LAST(1)` for high-rate sensor streams and `RELIABLE` + `KEEP_LAST(10)` for commands and state transitions. **Deviate from the default only when the upstream publisher's profile forces it, and add a one-line comment explaining why.** Do not reuse one `qos_sensor` profile object for unrelated topics.
 - A timer that consumes inputs checks input freshness against `idle_timeout_sec` and publishes a safe-state command on staleness. The safe state is one helper, not duplicated logic.
 
 ## 7. Control flow in actuation
@@ -133,7 +140,8 @@ def __init__(self):
 
 ## 13. Launch files
 
-- Launch files load parameters from the central YAML in `my_ros2_bringup` via the `p(node_name)` helper pattern. Do not redeclare defaults inside the launch file.
+- Launch files load parameters from `my_ros2_bringup/config/params.yaml` via the `p(node_name)` helper pattern. Do not redeclare defaults inside the launch file, and do not load any other YAML.
+- If a launch file needs to override a value for a specific run, do it via a CLI argument (`DeclareLaunchArgument`) that the user can set at launch time — not by adding a second YAML.
 - One launch file per logical unit; compose larger systems via `IncludeLaunchDescription`, not by copy-pasting `Node(...)` blocks.
 
 ---
@@ -144,7 +152,7 @@ Before opening any file for edit, confirm you can answer:
 
 - [ ] Which other files import from this one? (`grep -r "from <module>" ~/ros2_ws/src/`)
 - [ ] Which topics, services, and parameters does this node expose?
-- [ ] Which YAML files set parameters for this node?
+- [ ] Are this node's parameters all in `my_ros2_bringup/config/params.yaml`? (Reject any per-package YAML you find — flag it for consolidation.)
 - [ ] Are there bag recordings, dashboards, or external scripts that depend on the current names?
 
 ## Post-change checklist

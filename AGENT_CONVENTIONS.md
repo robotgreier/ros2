@@ -1,4 +1,4 @@
-# Agent Brief — ROS 2 Python Node Conventions
+# Agent Brief — Project Conventions
 
 You are working in a ROS 2 workspace at `~/ros2_ws/src/ros2/`. Apply the rules below to any Python node or package you touch. This document is the source of truth for style and structural decisions in this repo.
 

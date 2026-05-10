@@ -7,9 +7,9 @@ class ActionDecoder:
 
     Action convention:
       0 = LEFT
-      1 = FORWARD
+      1 = BACKWARD
       2 = RIGHT
-      3 = BACKWARD
+      3 = FORWARD
     """
 
     VALID_ACTIONS = {0, 1, 2, 3}

@@ -11,7 +11,7 @@ class LIF:
         reset: Membrane reset value after spike
     """
 
-    def __init__(self, decay=256, threshold=2048, reset=0, refractory=0):
+    def __init__(self, decay=400, threshold=750, reset=100, refractory=0):
         self.decay = decay
         self.threshold = threshold
         self.reset = reset
@@ -42,7 +42,7 @@ class LIF:
         return self.spk
 
 
-class RSTDPSynapse:
+class Synapse:
     """
     Reward-modulated STDP synapse with rectangular window.
 
@@ -63,9 +63,9 @@ class RSTDPSynapse:
 
     DISABLED = -1
 
-    def __init__(self, lr_shift=7, w_init=None,
-                 t_pre=3, t_post=3, tau_e_shift=3,
-                 dw_pos=32, dw_neg=16,
+    def __init__(self, lr_shift=5, w_init=None,
+                 t_pre=3, t_post=1, tau_e_shift=2,
+                 dw_pos=10, dw_neg=9,
                  w_min=16, w_max=254,
                  mode='rstdp'):
 
@@ -149,7 +149,7 @@ class RSTDPSynapse:
         self.weight = max(self.w_min, min(self.w_max, new_weight))
 
 
-class SNNLayer:
+class Layer:
     """
     Fully-connected SNN layer with vectorised NumPy state arrays.
 
@@ -157,7 +157,7 @@ class SNNLayer:
         n_inputs: Number of pre-synaptic input neurons
         n_outputs: Number of post-synaptic output neurons
         neuron_params: Dict passed to LIF constructor
-        synapse_params: Dict passed to RSTDPSynapse constructor;
+        synapse_params: Dict passed to Synapse constructor;
                         include 'mode': 'stdp' or 'rstdp' (default)
         feedback: If True, adds one extra input driven by NOR of previous outputs
     """
@@ -175,9 +175,9 @@ class SNNLayer:
         self.n_inputs = n_inputs + 1 if feedback else n_inputs
 
         # Neuron state (n_outputs,)
-        self.decay     = neuron_params.get('decay',     256)
-        self.threshold = neuron_params.get('threshold', 2048)
-        self.reset_val = neuron_params.get('reset',     0)
+        self.decay     = neuron_params.get('decay',     400)
+        self.threshold = neuron_params.get('threshold', 750)
+        self.reset_val = neuron_params.get('reset',     100)
         self.refractory = neuron_params.get('refractory', 0)
 
         self.mem              = np.zeros(n_outputs, dtype=np.int32)
@@ -187,12 +187,12 @@ class SNNLayer:
         self.refractory_timer = np.zeros(n_outputs, dtype=np.int32)
 
         # Synapse state (n_outputs, n_inputs)
-        self.lr_shift    = synapse_params.get('lr_shift',    7)
+        self.lr_shift    = synapse_params.get('lr_shift',    5)
         self.t_pre       = synapse_params.get('t_pre',       3)
-        self.t_post      = synapse_params.get('t_post',      3)
-        self.tau_e_shift = synapse_params.get('tau_e_shift', 3)
-        self.dw_pos      = synapse_params.get('dw_pos',      32)
-        self.dw_neg      = synapse_params.get('dw_neg',      16)
+        self.t_post      = synapse_params.get('t_post',      1)
+        self.tau_e_shift = synapse_params.get('tau_e_shift', 2)
+        self.dw_pos      = synapse_params.get('dw_pos',      10)
+        self.dw_neg      = synapse_params.get('dw_neg',      9)
         self.w_min       = synapse_params.get('w_min',       16)
         self.w_max       = synapse_params.get('w_max',       254)
 

@@ -28,7 +28,7 @@ from pathlib import Path
 
 EVENT_IDLE = 0
 
-ACTION_NAMES = ["LEFT", "FORWARD", "RIGHT", "BACKWARD"]  # index 0=LEFT, 1=FORWARD, 2=RIGHT, 3=BACKWARD
+ACTION_NAMES = ["LEFT", "BACKWARD", "RIGHT", "FORWARD"]  # index 0=LEFT, 1=BACKWARD, 2=RIGHT, 3=FORWARD
 
 class SNNNode(Node):
     """
@@ -36,7 +36,7 @@ class SNNNode(Node):
     - Reads packed spikes (0/1) from /snn/input (UInt8MultiArray)
     - Runs LIF SNN with dopamine learning and publishes:
         * /cmd_vel/snn (geometry_msgs/Twist) for robot control
-        * /snn/decision (string) with the action name (LEFT, FORWARD, RIGHT, BACKWARD)
+        * /snn/decision (string) with the action name (LEFT, BACKWARD, RIGHT, FORWARD)
         * /snn/winner (Int32)
         * /snn/spikes (INT32MuliArray) for debugging (spikes of output neurons)
     - Training mode: listens to /snn/correct_output (Int32), uses dopamine learning to adjust synaptic weights.
@@ -573,6 +573,9 @@ class SNNNode(Node):
                 cmd.linear.x = -self.forward_speed
                 cmd.angular.z = 0.0
 
+            elif winner_idx == 3:    # FORWARD blocked by proximity
+                decision = "STOP_PROXIMITY"
+
             else:
                 decision = "STOP_PROXIMITY"
 
@@ -597,8 +600,8 @@ class SNNNode(Node):
                 cmd.angular.z = -self.turn_speed
                 decision = ACTION_NAMES[2]
 
-            elif winner_idx == 3:    # BACKWARD
-                cmd.linear.x = -self.forward_speed
+            elif winner_idx == 3:    # Forward
+                cmd.linear.x = self.forward_speed
                 cmd.angular.z = 0.0
                 decision = ACTION_NAMES[3]
 

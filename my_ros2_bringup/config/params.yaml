@@ -114,7 +114,7 @@ grab_node:
     # ---- Grab-mode entry gates (checked while WAITING_ALIGNMENT) ----
     center_threshold: 0.25            # normalized x offset from image center under which the target counts as "centered"
     item_distance_threshold: 0.15     # m, aruco distance under which APPROACH_ITEM transitions into the creep-to-grab sequence
-    dropoff_distance_threshold: 0.20  # m, aruco distance under which APPROACH_DROPOFF transitions into the forward-and-drop sequence
+    dropoff_distance_threshold: 0.25  # m, aruco distance under which APPROACH_DROPOFF transitions into the forward-and-drop sequence
     min_valid_distance: 0.05           # m, hard floor on aruco distance; readings <= this are treated as invalid and never trigger grab mode
 
     # ---- APPROACH_ITEM: creep until proximity sensor trips ----

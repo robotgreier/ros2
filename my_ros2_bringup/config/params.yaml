@@ -105,24 +105,42 @@ motor_control_node:
     cmd_vel_timeout: 0.5     # s, stop if no command received
 
 # ── Grab node ──────────────────────────────────────────────────────────────────
+# Two grab paths exist:
+#   APPROACH_ITEM    → creep slowly until proximity sensor trips, then grip
+#   APPROACH_DROPOFF → timed forward motion to a target final gap, then drop + back up
+# Entry into either path requires: target centered AND distance < threshold AND distance > min_valid_distance.
 grab_node:
   ros__parameters:
-    center_threshold: 0.2
-    item_distance_threshold: 0.3    # m
-    dropoff_distance_threshold: 0.3 # m
-    approach_speed: 0.05            # m/s
-    approach_distance_item: 0.25     # m
-    approach_distance_dropoff: 0.2  # m
-    backup_speed: 0.05              # m/s
-    backup_distance: 0.1            # m
-    failed_grab_backup_distance: 0.08
-    motion_publish_rate_hz: 15.0
-    item_final_distance: -1.0       # -1 = disabled
-    dropoff_final_distance: 0.15    # m
-    min_forward_distance: 0.1       # m
-    max_forward_distance: 0.45      # m
-    creep_speed: 0.05                # m/s
-    use_sim_gripper: false
+    # ---- Grab-mode entry gates (checked while WAITING_ALIGNMENT) ----
+    center_threshold: 0.25            # normalized x offset from image center under which the target counts as "centered"
+    item_distance_threshold: 0.15     # m, aruco distance under which APPROACH_ITEM transitions into the creep-to-grab sequence
+    dropoff_distance_threshold: 0.15  # m, aruco distance under which APPROACH_DROPOFF transitions into the forward-and-drop sequence
+    min_valid_distance: 0.05           # m, hard floor on aruco distance; readings <= this are treated as invalid and never trigger grab mode
+
+    # ---- APPROACH_ITEM: creep until proximity sensor trips ----
+    creep_speed: 0.05                 # m/s, forward speed during the slow creep toward the item
+    grip_timeout_sec: 4.0             # s, max creep duration before giving up and starting failed-grab recovery backup
+
+    # ---- APPROACH_DROPOFF: timed forward motion to a target gap ----
+    # Duration = clamp(measured_distance - dropoff_final_distance, min_forward_distance, max_forward_distance) / approach_speed
+    approach_speed: 0.05              # m/s, forward speed during the timed dropoff approach
+    dropoff_final_distance: 0.15      # m, desired remaining gap between robot and dropoff marker after the forward motion
+    min_forward_distance: 0.1         # m, lower clamp on the computed forward travel distance (prevents zero/negative motion)
+    max_forward_distance: 0.45        # m, upper clamp on the computed forward travel distance (safety cap if aruco distance is wildly wrong)
+
+    # ---- Backup motions ----
+    backup_speed: 0.05                # m/s, reverse speed used by both backup paths below
+    backup_distance: 0.1              # m, distance to back up after a successful dropoff (before returning to SEARCH_ITEM)
+    failed_grab_backup_distance: 0.08 # m, distance to back up after a failed grab (creep timeout, or proximity trip outside an active sequence)
+
+    # ---- Misc ----
+    motion_publish_rate_hz: 15.0      # Hz, rate at which /cmd_vel/grab is republished while a motion is active
+    use_sim_gripper: false            # true: drive gripper via /gripper/grab + /gripper/drop services (sim). false: publish UInt8 to /gripper/command and wait for /gripper/state (real hw)
+
+    # ---- Declared but currently unused (kept for backwards compat / future use) ----
+    approach_distance_item: 0.25      # unused
+    approach_distance_dropoff: 0.2    # unused
+    item_final_distance: -1.0         # unused (-1 sentinel originally meant "disabled")
 
 # ── Command arbiter ────────────────────────────────────────────────────────────
 cmd_arbiter:

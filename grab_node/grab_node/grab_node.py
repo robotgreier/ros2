@@ -257,7 +257,34 @@ class GrabNode(Node):
     def cb_proximity_trigger(self, msg: Bool):
         # Keep the latest trigger state from the gripper sensor.
         self.proximity_triggered = bool(msg.data)
-    
+
+        # ---------TEST CODE WHEN OBJECT IS IN GRAB WHEN NO GRAB SEQUENSE IS ACTIVE
+        # Object detected without active grab sequence 
+        if (not self.sequence_active and 
+            self.state not in [
+            GrabState.CREEPING_TO_ITEM,
+            GrabState.EXECUTING_FORWARD,
+            GrabState.EXECUTING_BACKUP,
+            GrabState.ACTUATING,
+            GrabState.WAITING_SERVICE
+            ]):
+            
+            self.get_logger().warn(
+                "Proximity triggered without active approach."
+                "Starting recovery backup."
+            )
+
+            self.backup_after_failed_grab = True
+            self.sequence_active = True
+
+            duration = float(self.failed_grab_backup_distance) / float(self.backup_speed)
+
+            self.start_timed_motion(
+                linear_x=-float(self.backup_speed),
+                duration=duration,
+                new_state=GrabState.EXECUTING_BACKUP,
+            )
+        # ---------TEST CODE END
 
     # =====================================================
     # ------------------ Logic ----------------------------

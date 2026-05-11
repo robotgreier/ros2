@@ -223,37 +223,42 @@ class SNNNode(Node):
             feedback=self.feedback
         )
 
-        # ---- Shared weights location (used by both Python SNN and FPGA system) ----
+        # ---- Weights paths ----
+        # weights_base_dir is where /save_weights writes (this node's own
+        # snapshots). initial_weights_file, if set and present, is read once
+        # on startup as the seed — letting the comparison launch start the
+        # Python SNN and the FPGA SNN from identical weights while still
+        # writing their saves to separate directories.
         self.declare_parameter(
             'weights_base_dir',
             '/opt/robot_ws/src/ros2/weights_logs'
         )
+        self.declare_parameter('initial_weights_file', '')
 
         weights_base_dir = Path(
             self.get_parameter('weights_base_dir').value
         ).expanduser()
-
         weights_base_dir.mkdir(parents=True, exist_ok=True)
 
         self.weights_current_file = weights_base_dir / "weights_current.mem"
         self.weights_log_dir = weights_base_dir / "episode_logs"
         self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
-        weight_path = str(self.weights_current_file)
+        initial_weights_file = str(
+            self.get_parameter('initial_weights_file').value
+        ).strip()
+        load_path = initial_weights_file or str(self.weights_current_file)
 
-        if os.path.exists(weight_path):
+        if os.path.exists(load_path):
             try:
-                self.network.load_weights(weight_file=weight_path)
-                self.get_logger().info(f"Loaded weights from {weight_path}")
+                self.network.load_weights(weight_file=load_path)
+                self.get_logger().info(f"Loaded weights from {load_path}")
             except Exception as e:
                 self.get_logger().error(f"Failed to load weights: {e}")
         else:
             self.get_logger().warn(
-                f"No weights file found at {weight_path}, using initial weights"
+                f"No weights file found at {load_path}, using initial weights"
             )
-
-        self.weights_log_dir = self.weights_current_file.parent / "episode_logs"
-        self.weights_log_dir.mkdir(parents=True, exist_ok=True)
 
         ###########################################
 

@@ -27,6 +27,7 @@ setup(
             # This registers: ros2 run python_snn_node snn_node
             'snn_node = python_snn_node.snn_node:main',
             'weights_logger = python_snn_node.weights_logger:main',
+            'snn_comparator = python_snn_node.snn_comparator:main',
         ],
     },
 )

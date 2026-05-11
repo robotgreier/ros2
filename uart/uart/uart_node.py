@@ -35,9 +35,16 @@ class UartBridgeNode(Node):
         # -----------------------------
         # Parameters
         # -----------------------------
+        _default_weights = "/opt/robot_ws/src/ros2/weights_logs/weights_current.mem"
+
         self.declare_parameter("port", "/dev/ttyAMA3")
         self.declare_parameter("baudrate", 250000)
-        self.declare_parameter("weights_file",str(Path.home() / "/opt/robot_ws/src/ros2/weights_logs/weights_current.mem"))
+        # Path read once on startup and pushed to the FPGA via CMD_INIT.
+        self.declare_parameter("initial_weights_file", _default_weights)
+        # Path written to when the FPGA returns updated weights at episode end.
+        # In the side-by-side comparison launch this is pointed at an
+        # FPGA-only directory so it never overwrites the shared seed file.
+        self.declare_parameter("save_weights_file", _default_weights)
         self.declare_parameter("response_timeout_sec", 1.0)
         self.declare_parameter("max_retry_count", 2)
         self.declare_parameter("poll_period_sec", 0.01)
@@ -45,7 +52,8 @@ class UartBridgeNode(Node):
 
         self.port_name = self.get_parameter("port").value
         self.baudrate = self.get_parameter("baudrate").value
-        self.weights_file = self.get_parameter("weights_file").value
+        self.initial_weights_file = self.get_parameter("initial_weights_file").value
+        self.save_weights_file = self.get_parameter("save_weights_file").value
         self.response_timeout_sec = self.get_parameter("response_timeout_sec").value
         self.max_retry_count = self.get_parameter("max_retry_count").value
         self.poll_period_sec = self.get_parameter("poll_period_sec").value
@@ -61,8 +69,11 @@ class UartBridgeNode(Node):
 
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
         self.create_subscription(Int16, "/reward/dopamine", self.dopamine_callback, 10)
+        # /episode_complete is the only trigger for the CMD_STOP + weight save
+        # round-trip. uart_node also *publishes* /episode_reset at the end of
+        # handle_update — subscribing here would re-trigger itself and create
+        # an infinite CMD_STOP loop with weights_logger in the chain.
         self.create_subscription(Empty, "/episode_complete", self.episode_complete_callback, 10)
-        self.create_subscription(Empty, "/episode_reset", self.episode_reset_callback, 10)
 
         # -----------------------------
         # Internal state
@@ -79,8 +90,9 @@ class UartBridgeNode(Node):
 
         self.episode_counter = 1
 
-        self.weights_path = Path(self.weights_file)
-        self.episode_log_dir = self.weights_path.parent / "episode_logs"
+        # Episode archives live next to the saved file so each FPGA run keeps
+        # its own history. The shared initial_weights_file is read-only.
+        self.episode_log_dir = Path(self.save_weights_file).parent / "episode_logs"
         self.episode_log_dir.mkdir(parents=True, exist_ok=True)
 
         # -----------------------------
@@ -243,11 +255,11 @@ class UartBridgeNode(Node):
             self.publish_error(f"Unknown FPGA command: {cmd}")
 
     def save_weights(self):
-        if not self.weights_file:
+        if not self.save_weights_file:
             return
 
         try:
-            current_path = Path(self.weights_file)
+            current_path = Path(self.save_weights_file)
             current_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 1. Update current weights
@@ -357,16 +369,16 @@ class UartBridgeNode(Node):
 
         self.initialized = True
         self.publish_status(
-            f"Sent CMD_INIT with {len(self.weights)} weights from {self.weights_file}"
+            f"Sent CMD_INIT with {len(self.weights)} weights from {self.initial_weights_file}"
         )
 
     def load_weights(self):
-        if not self.weights_file:
-            self.publish_error("No weights_file parameter set")
+        if not self.initial_weights_file:
+            self.publish_error("No initial_weights_file parameter set")
             self.weights = []
             return
 
-        path = Path(self.weights_file)
+        path = Path(self.initial_weights_file)
 
         if not path.is_file():
             self.publish_error(f"Weights file not found: {path}")
@@ -402,21 +414,6 @@ class UartBridgeNode(Node):
         except Exception as e:
             self.weights = []
             self.publish_error(f"Failed to load weights from {path}: {e}")
-
-    def episode_reset_callback(self, msg: Empty):
-        self.publish_status(f"Received /episode_reset while state={self.state}")
-
-        if not self.initialized:
-            self.publish_error("Ignoring episode reset: UART node not initialized")
-            return
-
-        if self.state != STATE_READY:
-            self.publish_error(f"Ignoring episode reset: node is busy in state {self.state}")
-            return
-
-        self.publish_status("Episode ended: sending CMD_STOP to request weights")
-        self.send_packet(CMD_STOP, [])
-        self.state = STATE_WAIT_WEIGHT
 
     def episode_complete_callback(self, msg: Empty):
         self.publish_status(f"Received /episode_complete while state={self.state}")

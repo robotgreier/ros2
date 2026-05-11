@@ -7,11 +7,14 @@ from scipy.stats import ttest_ind, mannwhitneyu
 
 BASE_DIR = Path(__file__).parent
 DATASETS = {
-    "FPGA": BASE_DIR / "csv_logs/FPGA",
-    "Python": BASE_DIR / "csv_logs/Python"
+    #"FPGA": BASE_DIR / "csv_logs/FPGA",
+    #"Python": BASE_DIR / "csv_logs/Python"
+    "FPGA": BASE_DIR / "TEST_CPUvsFPGA_energy/csv_logs/FPGA",
+    "Python": BASE_DIR / "TEST_CPUvsFPGA_energy/csv_logs/Python"
 }
 
-FIG_DIR = BASE_DIR / "figures"
+#FIG_DIR = BASE_DIR / "figures"
+FIG_DIR = BASE_DIR / "TEST_CPUvsFPGA_energy/figures"
 FIG_DIR.mkdir(exist_ok=True)
 
 # Load data

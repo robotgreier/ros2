@@ -66,6 +66,7 @@ from launch_ros.substitutions import FindPackageShare
 DEFAULT_INITIAL_WEIGHTS = '/opt/robot_ws/src/ros2/weights_logs/weights_current.mem'
 PYTHON_WEIGHTS_DIR = '/opt/robot_ws/src/ros2/weights_logs/python_snn'
 FPGA_WEIGHTS_FILE = '/opt/robot_ws/src/ros2/weights_logs/fpga_snn/weights_current.mem'
+POWER_LOG_DIR = '/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Comparison'
 
 
 def _check_seed(context, *_args, **_kwargs):
@@ -115,6 +116,7 @@ def generate_launch_description():
         LogInfo(msg=f'[comparison] Python SNN saves under: {PYTHON_WEIGHTS_DIR}'),
         LogInfo(msg=f'[comparison] FPGA   SNN saves under: {os.path.dirname(FPGA_WEIGHTS_FILE)}'),
         LogInfo(msg='[comparison] Per-tick decisions CSV: ~/.ros/snn_comparison_logs/'),
+        LogInfo(msg=f'[comparison] Per-episode power CSV: {POWER_LOG_DIR}'),
 
         # ── Camera + TF ───────────────────────────────────────────────────────
         Node(
@@ -326,5 +328,9 @@ def generate_launch_description():
             executable='power_logger',
             name='power_logger',
             output='screen',
+            parameters=[
+                p('power_logger'),
+                {'log_dir': POWER_LOG_DIR},
+            ],
         ),
     ])

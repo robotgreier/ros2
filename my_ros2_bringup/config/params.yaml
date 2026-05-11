@@ -200,6 +200,14 @@ uart_bridge_node:
     poll_period_sec: 0.01
     dopamine_timeout_sec: 1.0
 
+# ── Power logger ──────────────────────────────────────────────────────────────
+# log_dir is where one CSV per run lands. The comparison launch overrides
+# this to a Comparison/ subdir so side-by-side rows do not mix with
+# Python-only or FPGA-only history.
+power_logger:
+  ros__parameters:
+    log_dir: "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
+
 # ── SNN comparator (side-by-side logger) ──────────────────────────────────────
 # Subscribes to /snn/input plus the Python and FPGA winner/decision/spikes
 # streams and writes one CSV row per Python tick. Used by the

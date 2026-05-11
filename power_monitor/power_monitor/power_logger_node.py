@@ -30,9 +30,16 @@ class PowerLogger(Node):
         # Run metadata for logging
         self.run_id = str(uuid.uuid4())
 
+        # log_dir is the directory that receives one CSV per run. Set per
+        # launch — e.g. .../csv_logs/Python, .../csv_logs/FPGA, or
+        # .../csv_logs/Comparison — so runs from different setups stay sorted.
+        self.declare_parameter(
+            "log_dir",
+            "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA",
+        )
+        log_dir = str(self.get_parameter("log_dir").value)
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        #log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/Python"
-        log_dir = "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
         os.makedirs(log_dir, exist_ok=True)
         self.filename = f"{log_dir}/power_log_{timestamp}.csv"
 

@@ -91,7 +91,7 @@ class SnnComparator(Node):
         self.fpga_spikes: list[int] = [-1] * self.num_actions
 
     def _setup_logger(self):
-        log_dir = self.log_dir or os.path.expanduser('~/.ros/snn_comparison_logs')
+        log_dir = self.log_dir or '/opt/robot_ws/src/ros2/logs/snn_comparison'
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         filepath = os.path.join(log_dir, f'snn_comparison_{ts}.csv')
 

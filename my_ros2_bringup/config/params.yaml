@@ -87,9 +87,10 @@ python_snn_node:
 
     seed: 42
 
-    # CSV logging
+    # CSV logging — lands in <repo>/logs/snn/snn_log_<ts>.csv
     log_enable: false
     log_mode: "A"            # A = log on new input, B = every tick, C = state changes
+    log_dir: "/opt/robot_ws/src/ros2/logs/snn"
 
     # Weights: load source vs. save root
     # - initial_weights_file: path read once on startup. Shared with the FPGA
@@ -202,11 +203,11 @@ uart_bridge_node:
 
 # ── Power logger ──────────────────────────────────────────────────────────────
 # log_dir is where one CSV per run lands. The comparison launch overrides
-# this to a Comparison/ subdir so side-by-side rows do not mix with
-# Python-only or FPGA-only history.
+# this to logs/power/Comparison so side-by-side rows do not mix with
+# Python-only or FPGA-only history. All log roots live under <repo>/logs/.
 power_logger:
   ros__parameters:
-    log_dir: "/opt/robot_ws/src/ros2/power_monitor/analysis/csv_logs/FPGA"
+    log_dir: "/opt/robot_ws/src/ros2/logs/power/FPGA"
 
 # ── SNN comparator (side-by-side logger) ──────────────────────────────────────
 # Subscribes to /snn/input plus the Python and FPGA winner/decision/spikes
@@ -225,7 +226,7 @@ snn_comparator:
     # = 3*4 + 5 + 3*3 = 26 with the defaults above.
     input_size: 26
     num_actions: 4
-    log_dir: ""          # empty → ~/.ros/snn_comparison_logs
+    log_dir: "/opt/robot_ws/src/ros2/logs/snn_comparison"
     log_queue_size: 5000
     log_flush_hz: 10.0
 

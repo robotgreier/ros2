@@ -6,6 +6,7 @@ Subscribed topics:
   - /snn/winner             Int32             (Python SNN winner)
   - /snn/spikes             Int32MultiArray   (Python SNN output spikes)
   - /snn/decision           String            (Python SNN action name)
+  - /snn/fpga/input_echo    UInt8MultiArray   (input that produced the FPGA response)
   - /snn/fpga/winner        Int32             (FPGA decoded winner)
   - /snn/fpga/decision      String            (FPGA decoded action name)
   - /fpga/action_spikes     UInt8MultiArray   (FPGA raw output spike vector)
@@ -13,10 +14,22 @@ Subscribed topics:
 Published topics:
   (none — this node writes a CSV only)
 
-One CSV row is appended on every Python /snn/winner event. The row snapshots
-the latest input and latest FPGA outputs at that moment, together with their
-arrival timestamps so offline analysis can compute per-side lag and
-agreement statistics.
+Row-emit strategy:
+  Each CSV row is triggered by the FPGA response arriving for a specific input
+  vector. uart_node publishes that input vector on /snn/fpga/input_echo
+  immediately before publishing /fpga/action_spikes, so by the time
+  /snn/fpga/winner arrives at this node, the echo is already stored.
+
+  The Python SNN results are buffered in _py_buffer keyed by the input vector
+  tuple. The Python SNN has no UART latency so it always processes an input
+  before the FPGA response for that same input arrives (~107 ms later). When
+  the FPGA response arrives the comparator looks up the Python result for the
+  matching input and emits a row — guaranteeing both sides processed the same
+  input vector.
+
+  Rows where the FPGA responds but no Python result is buffered for that input
+  (e.g. the input was never processed by the Python SNN in time) are logged
+  with Python fields set to -1 and flagged with matched=0.
 
 Parameters live under the snn_comparator section in
 my_ros2_bringup/config/params.yaml.
@@ -31,6 +44,8 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Int32, Int32MultiArray, String, UInt8MultiArray
 
 from .csv_logger import CsvAsyncLogger
+
+_PY_BUFFER_MAX = 32  # max buffered Python results; oldest evicted when full
 
 
 class SnnComparator(Node):
@@ -55,6 +70,7 @@ class SnnComparator(Node):
         self.declare_parameter('py_winner_topic', '/snn/winner')
         self.declare_parameter('py_spikes_topic', '/snn/spikes')
         self.declare_parameter('py_decision_topic', '/snn/decision')
+        self.declare_parameter('fpga_echo_topic', '/snn/fpga/input_echo')
         self.declare_parameter('fpga_winner_topic', '/snn/fpga/winner')
         self.declare_parameter('fpga_decision_topic', '/snn/fpga/decision')
         self.declare_parameter('fpga_spikes_topic', '/fpga/action_spikes')
@@ -69,6 +85,7 @@ class SnnComparator(Node):
         self.py_winner_topic = str(self.get_parameter('py_winner_topic').value)
         self.py_spikes_topic = str(self.get_parameter('py_spikes_topic').value)
         self.py_decision_topic = str(self.get_parameter('py_decision_topic').value)
+        self.fpga_echo_topic = str(self.get_parameter('fpga_echo_topic').value)
         self.fpga_winner_topic = str(self.get_parameter('fpga_winner_topic').value)
         self.fpga_decision_topic = str(self.get_parameter('fpga_decision_topic').value)
         self.fpga_spikes_topic = str(self.get_parameter('fpga_spikes_topic').value)
@@ -79,12 +96,26 @@ class SnnComparator(Node):
         self.log_flush_hz = float(self.get_parameter('log_flush_hz').value)
 
     def _init_state(self):
+        # Latest input snapshot (used only as fallback if echo is missing)
         self.t_input_ns: int = 0
         self.last_input: list[int] = [-1] * self.input_size
-        self.t_py_ns: int = 0
-        self.py_winner: int = -1
-        self.py_decision: str = ''
-        self.py_spikes: list[int] = [-1] * self.num_actions
+
+        # Python results: input_tuple → {t_py_ns, winner, decision, spikes, t_input_ns}
+        # Ordered dict so we can evict oldest when full.
+        self._py_buffer: dict[tuple, dict] = {}
+
+        # Staging area for current Python tick (populated across several callbacks)
+        self._py_staged: dict = {
+            't_py_ns': 0,
+            'winner': -1,
+            'decision': '',
+            'spikes': [-1] * self.num_actions,
+            't_input_ns': 0,
+            'input': [-1] * self.input_size,
+        }
+
+        # FPGA side — echo sets the key; winner/decision/spikes fill the values
+        self._fpga_echo: tuple | None = None   # input tuple from the latest echo
         self.t_fpga_ns: int = 0
         self.fpga_winner: int = -1
         self.fpga_decision: str = ''
@@ -101,7 +132,7 @@ class SnnComparator(Node):
         header += [f'py_spike_{i}' for i in range(self.num_actions)]
         header += ['t_fpga_ns', 'fpga_winner', 'fpga_decision']
         header += [f'fpga_spike_{i}' for i in range(self.num_actions)]
-        header += ['agree']
+        header += ['agree', 'matched']  # matched=1 means same input confirmed
 
         self.logger_csv = CsvAsyncLogger(
             filepath=filepath,
@@ -112,7 +143,6 @@ class SnnComparator(Node):
         self.get_logger().info(f"Logging comparison rows to {filepath}")
 
     def _setup_io(self):
-        # Match python_snn_node's RELIABLE input QoS so we see every encoder tick.
         qos_input = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
@@ -130,6 +160,9 @@ class SnnComparator(Node):
         )
         self.create_subscription(
             String, self.py_decision_topic, self._on_py_decision, 10
+        )
+        self.create_subscription(
+            UInt8MultiArray, self.fpga_echo_topic, self._on_fpga_echo, qos_input
         )
         self.create_subscription(
             Int32, self.fpga_winner_topic, self._on_fpga_winner, 10
@@ -157,22 +190,46 @@ class SnnComparator(Node):
         self.last_input = data
 
     def _on_py_winner(self, msg: Int32):
-        self.t_py_ns = self._now_ns()
-        self.py_winner = int(msg.data)
-        # Python's tick is the row trigger.
-        self._emit_row()
+        t = self._now_ns()
+        self._py_staged['t_py_ns'] = t
+        self._py_staged['winner'] = int(msg.data)
+        # Snapshot the input that was active at this tick.
+        self._py_staged['t_input_ns'] = self.t_input_ns
+        self._py_staged['input'] = list(self.last_input)
+        self._buffer_py_result()
 
     def _on_py_spikes(self, msg: Int32MultiArray):
         data = [int(x) for x in msg.data]
         if len(data) >= self.num_actions:
-            self.py_spikes = data[: self.num_actions]
+            self._py_staged['spikes'] = data[: self.num_actions]
 
     def _on_py_decision(self, msg: String):
-        self.py_decision = str(msg.data)
+        self._py_staged['decision'] = str(msg.data)
+
+    def _buffer_py_result(self):
+        key = tuple(self._py_staged['input'])
+        # Evict oldest entry when buffer is full (keeps memory bounded).
+        if len(self._py_buffer) >= _PY_BUFFER_MAX and key not in self._py_buffer:
+            oldest_key = next(iter(self._py_buffer))
+            del self._py_buffer[oldest_key]
+        self._py_buffer[key] = {
+            't_py_ns': self._py_staged['t_py_ns'],
+            'winner': self._py_staged['winner'],
+            'decision': self._py_staged['decision'],
+            'spikes': list(self._py_staged['spikes']),
+            't_input_ns': self._py_staged['t_input_ns'],
+        }
+
+    def _on_fpga_echo(self, msg: UInt8MultiArray):
+        data = [int(x) for x in msg.data]
+        self._fpga_echo = tuple(data)
 
     def _on_fpga_winner(self, msg: Int32):
         self.t_fpga_ns = self._now_ns()
         self.fpga_winner = int(msg.data)
+        # FPGA winner is the row trigger: pair with the Python result for the
+        # same input that was echoed by uart_node.
+        self._emit_row()
 
     def _on_fpga_decision(self, msg: String):
         self.fpga_decision = str(msg.data)
@@ -183,14 +240,43 @@ class SnnComparator(Node):
             self.fpga_spikes = data[: self.num_actions]
 
     def _emit_row(self):
-        agree = int(self.py_winner == self.fpga_winner)
-        row = [self._now_ns(), self.t_input_ns]
-        row += list(self.last_input)
-        row += [self.t_py_ns, self.py_winner, self.py_decision]
-        row += list(self.py_spikes)
+        echo_key = self._fpga_echo
+
+        if echo_key is not None and echo_key in self._py_buffer:
+            py = self._py_buffer.pop(echo_key)
+            matched = 1
+            input_vec = list(echo_key)
+            t_input_ns = py['t_input_ns']
+            t_py_ns = py['t_py_ns']
+            py_winner = py['winner']
+            py_decision = py['decision']
+            py_spikes = py['spikes']
+        else:
+            # Fallback: echo missing or no Python result for this input.
+            # Log what we have; marked unmatched so it can be filtered in analysis.
+            matched = 0
+            input_vec = list(echo_key) if echo_key is not None else self.last_input
+            t_input_ns = self.t_input_ns
+            t_py_ns = -1
+            py_winner = -1
+            py_decision = ''
+            py_spikes = [-1] * self.num_actions
+            if echo_key is None:
+                self.get_logger().warn('FPGA winner arrived without input echo')
+            else:
+                self.get_logger().warn(
+                    'No Python result buffered for FPGA input — input may have been skipped'
+                )
+
+        agree = int(py_winner == self.fpga_winner) if matched else 0
+
+        row = [self._now_ns(), t_input_ns]
+        row += input_vec
+        row += [t_py_ns, py_winner, py_decision]
+        row += py_spikes
         row += [self.t_fpga_ns, self.fpga_winner, self.fpga_decision]
         row += list(self.fpga_spikes)
-        row += [agree]
+        row += [agree, matched]
         self.logger_csv.push(row)
 
     def destroy_node(self):

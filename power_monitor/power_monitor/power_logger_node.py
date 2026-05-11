@@ -95,7 +95,6 @@ class PowerLogger(Node):
         self.system_time = None
         self.fpga_time = None
         self.current_state = None
-        #self.episode_id = None
         self.last_time = None
         self.power_samples = []
         self.power_sample_keep_s = 1800.0  # keep last 30 minutes
@@ -112,6 +111,10 @@ class PowerLogger(Node):
         self.create_subscription(
             Vector3, "/fpga/power", self.cb_fpga, 10
         )
+
+        # Warn once if INA219 sensors haven't published after startup.
+        # An empty power log is almost always a sensor connectivity issue.
+        self._sensor_check_timer = self.create_timer(10.0, self._check_sensor_health)
 
         self.create_subscription(
             UInt8, "/task/state", self.cb_state, 10
@@ -264,6 +267,20 @@ class PowerLogger(Node):
         return (remaining_wh / power) * 60.0
 
     # ---------------- Callbacks ----------------
+
+    def _check_sensor_health(self):
+        missing = []
+        if self.system is None:
+            missing.append('/system/power (system_power_node)')
+        if self.fpga is None:
+            missing.append('/fpga/power (fpga_power_node)')
+        if missing:
+            self.get_logger().warn(
+                'No data received from: ' + ', '.join(missing) + '. '
+                'Power log rows will be empty. Check INA219 wiring and that '
+                'sensor nodes started without I2C errors.'
+            )
+        self._sensor_check_timer.cancel()
 
     def cb_state(self, msg: UInt8):
         self.current_state = msg.data

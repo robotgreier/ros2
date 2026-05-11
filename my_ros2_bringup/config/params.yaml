@@ -21,7 +21,7 @@ _globals:
     # `initial_weights:=/path/to/seed.mem` launch arg. Each side saves to its
     # own directory afterwards (see python_snn_node.weights_base_dir and
     # uart_bridge_node.save_weights_file below).
-    initial_weights_file: &initial_weights_file "/opt/robot_ws/src/ros2/weights_logs/weights_current.mem"
+    initial_weights_file: &initial_weights_file "/opt/robot_ws/src/ros2/weights_logs/DEFAULT_WEIGHTS.mem"
 
 # ── Encoding node ──────────────────────────────────────────────────────────────
 encoding_node:
@@ -219,6 +219,7 @@ snn_comparator:
     py_winner_topic: "/snn/winner"
     py_spikes_topic: "/snn/spikes"
     py_decision_topic: "/snn/decision"
+    fpga_echo_topic: "/snn/fpga/input_echo"
     fpga_winner_topic: "/snn/fpga/winner"
     fpga_decision_topic: "/snn/fpga/decision"
     fpga_spikes_topic: "/fpga/action_spikes"

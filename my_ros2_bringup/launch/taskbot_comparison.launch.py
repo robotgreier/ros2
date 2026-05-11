@@ -250,6 +250,7 @@ def generate_launch_description():
             executable='weights_logger',
             name='weights_logger',
             output='screen',
+            parameters=[{'weights_base_dir': PYTHON_WEIGHTS_DIR}],
         ),
 
         # ── Reward + comparator ───────────────────────────────────────────────

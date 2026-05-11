@@ -65,6 +65,7 @@ class UartBridgeNode(Node):
         self.status_pub = self.create_publisher(String, "/uart/status", 10)
         self.error_pub = self.create_publisher(String, "/uart/error", 10)
         self.fpga_action_pub = self.create_publisher(UInt8MultiArray, "/fpga/action_spikes", 10)
+        self.fpga_input_echo_pub = self.create_publisher(UInt8MultiArray, "/snn/fpga/input_echo", 10)
         self.episode_reset_pub = self.create_publisher(Empty, "/episode_reset", 10)
 
         self.create_subscription(UInt8MultiArray, "/snn/input", self.snn_input_callback, 10)
@@ -87,6 +88,7 @@ class UartBridgeNode(Node):
         self.rx_buffer = bytearray()
         self.state = STATE_READY
         self.waiting_for_dopamine = False
+        self._pending_input: list = []  # input sent with last CMD_SPIKE, echoed on response
 
         self.episode_counter = 1
 
@@ -156,6 +158,7 @@ class UartBridgeNode(Node):
         self.publish_status(f"Packed SPIKE payload length: {len(payload)}")
         self.publish_status(f"Packed SPIKE payload: {payload}")
 
+        self._pending_input = raw_spikes  # echoed alongside FPGA response in handle_out
         self.send_packet(CMD_SPIKE, payload)
         self.state = STATE_WAIT_OUT
 
@@ -306,6 +309,12 @@ class UartBridgeNode(Node):
             return
 
         action_spikes = unpack_output_spikes(payload[0], expected_len=4)
+
+        # Publish the input that produced these spikes before the spikes themselves
+        # so snn_comparator receives the echo before the derived /snn/fpga/winner.
+        echo_msg = UInt8MultiArray()
+        echo_msg.data = list(self._pending_input)
+        self.fpga_input_echo_pub.publish(echo_msg)
 
         msg = UInt8MultiArray()
         msg.data = action_spikes

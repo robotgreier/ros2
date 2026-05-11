@@ -11,7 +11,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/python_snn_node/config', [
-        '../weights_logs/weights_current.mem',
+        '../weights_logs/DEFAULT_WEIGHTS.mem',
         ]),
         ('share/python_snn_node/launch', glob('launch/*.launch.py')),
     ],

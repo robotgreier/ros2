@@ -52,9 +52,9 @@ class DopamineComputer:
         """
         action_idx convention:
           0 = LEFT
-          1 = FORWARD
+          1 = BACKWARDS
           2 = RIGHT
-          3 = BACKWARD
+          3 = FORWARD
         """
 
         seen, pos = self.decode_object_bits(obj_bits)
@@ -76,16 +76,22 @@ class DopamineComputer:
             if pos == 0:
                 if action_idx == 1:     # centered → drive backward
                     dopamine = -5
+                elif action_idx == 3:   # correct: drive forward
+                    dopamine = 5
                 else:                   # turning in place when centered
                     dopamine = -2
             elif pos is not None and pos < 0:   # target is left
                 if action_idx == 0:     # correct: turn left
                     dopamine = 3
+                elif action_idx == 3:
+                    dopamine = 2
                 elif action_idx == 2:   # wrong: turn right
                     dopamine = -2
             elif pos is not None and pos > 0:   # target is right
                 if action_idx == 2:     # correct: turn right
                     dopamine = 3
+                elif action_idx == 3:
+                    dopamine = 2
                 elif action_idx == 0:   # wrong: turn left
                     dopamine = -2
             comps["align"] = dopamine

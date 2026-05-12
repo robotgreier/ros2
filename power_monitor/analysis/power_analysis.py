@@ -83,8 +83,6 @@ def run_tests(metric):
 
 
 # Efficiency test
-
-
 run_tests("episode_energy_total_Wh")
 run_tests("avg_power_total_W")
 run_tests("efficiency")
@@ -121,7 +119,128 @@ df_all = df_all.dropna(subset=["episode_energy_total_Wh"])
 df_all = df_all.sort_values(by="episode_start_ros_time_s")
 df_all["episode_index"] = df_all.groupby("system_type").cumcount()
 
-# Plot 1: Energy comparison FPGA and CPU
+# ---------- identify baselines to isolate snn energy ----------
+# FPGA idle (when Python runs SNN)
+fpga_idle_mean = python_sys["episode_energy_fpga_Wh"].mean()
+
+# CPU/system baseline (when FPGA runs SNN)
+cpu_idle_mean = fpga["episode_energy_system_Wh"].mean()
+
+print(f"\nFPGA idle mean energy: {fpga_idle_mean:.4f} Wh")
+print(f"CPU baseline mean energy: {cpu_idle_mean:.4f} Wh")
+
+
+# ---------- Isolated SNN energy ----------
+# FPGA SNN energy
+fpga["snn_energy_fpga_Wh"] = (
+    fpga["episode_energy_fpga_Wh"] - fpga_idle_mean
+)
+
+# CPU SNN energy
+python_sys["snn_energy_cpu_Wh"] = (
+    python_sys["episode_energy_system_Wh"] - cpu_idle_mean
+)
+# ---------- combine snn energy for comparison ----------
+snn_df = pd.concat([
+    fpga[["snn_energy_fpga_Wh"]].rename(columns={"snn_energy_fpga_Wh": "snn_energy_Wh"}).assign(system="FPGA"),
+    python_sys[["snn_energy_cpu_Wh"]].rename(columns={"snn_energy_cpu_Wh": "snn_energy_Wh"}).assign(system="CPU")
+])
+
+# ---------- statistical test on isolated SNN ----------
+x = snn_df[snn_df["system"] == "FPGA"]["snn_energy_Wh"].dropna()
+y = snn_df[snn_df["system"] == "CPU"]["snn_energy_Wh"].dropna()
+
+t_stat, p_t = ttest_ind(x, y, equal_var=False)
+u_stat, p_u = mannwhitneyu(x, y, alternative='two-sided')
+
+print("\n=== SNN ENERGY COMPARISON ===")
+print(f"T-test p-value: {p_t:.5f}")
+print(f"Mann Whitney p-value: {p_u:.5f}")
+
+# Boxplot: isolated SNN
+plt.figure()
+snn_df.boxplot(column="snn_energy_Wh", by="system")
+plt.ylabel("SNN Energy (Wh)")
+plt.title("Isolated SNN Energy Consumption")
+plt.suptitle("")
+plt.savefig(FIG_DIR / "snn_energy_boxplot.png")
+plt.close()
+
+
+# Add episode index for both systems
+fpga = fpga.sort_values(by="episode_start_ros_time_s").copy()
+python_sys = python_sys.sort_values(by="episode_start_ros_time_s").copy()
+
+fpga["episode_index"] = range(len(fpga))
+python_sys["episode_index"] = range(len(python_sys))
+
+# Lineplot: SNN energy per episode
+plt.figure()
+
+plt.plot(
+    fpga["episode_index"],
+    fpga["snn_energy_fpga_Wh"],
+    marker='o',
+    label="FPGA SNN"
+)
+
+plt.plot(
+    python_sys["episode_index"],
+    python_sys["snn_energy_cpu_Wh"],
+    marker='o',
+    label="CPU SNN"
+)
+
+plt.xlabel("Episode")
+plt.ylabel("SNN Energy (Wh)")
+plt.title("SNN Energy per Episode")
+plt.legend()
+
+plt.savefig(FIG_DIR / "snn_energy_per_episode.png")
+plt.close()
+
+
+python_sys["snn_power_cpu_W"] = (
+    python_sys["snn_energy_cpu_Wh"] / python_sys["episode_total_time_s"]
+)
+
+# Compute power
+fpga["snn_power_fpga_W"] = (
+    fpga["snn_energy_fpga_Wh"] / fpga["episode_total_time_s"]
+)
+
+python_sys["snn_power_cpu_W"] = (
+    python_sys["snn_energy_cpu_Wh"] / python_sys["episode_total_time_s"]
+)
+
+# Plot: SNN power per episode
+plt.figure()
+
+plt.plot(
+    fpga["episode_index"],
+    fpga["snn_power_fpga_W"],
+    marker='o',
+    label="FPGA SNN"
+)
+
+plt.plot(
+    python_sys["episode_index"],
+    python_sys["snn_power_cpu_W"],
+    marker='o',
+    label="CPU SNN"
+)
+
+plt.xlabel("Episode")
+plt.ylabel("SNN Power (W)")
+plt.title("SNN Power per Episode")
+plt.legend()
+
+plt.savefig(FIG_DIR / "snn_power_per_episode.png")
+plt.close()
+
+
+
+# Plot: Energy comparison FPGA and CPU
 plt.figure()
 
 for system in df_all["system_type"].unique():
@@ -142,7 +261,7 @@ plt.legend()
 plt.savefig(FIG_DIR / "energy_per_episode.png")
 plt.close()
 
-# Plot 2: Boxplot
+# Plot: Boxplot - Energy Distribution per System
 plt.figure()
 
 df_all.boxplot(
@@ -157,8 +276,7 @@ plt.suptitle("")
 plt.savefig(FIG_DIR / "energy_boxplot.png")
 plt.close()
 
-# Plot 3: Average Power
-
+# Scatterlot: Average Power
 plt.figure()
 
 for system in df_all["system_type"].unique():
@@ -178,8 +296,7 @@ plt.legend()
 plt.savefig(FIG_DIR / "power_vs_time.png")
 plt.close()
 
-# Plot 4: Mean comparison
-
+# Barplot: Mean comparison
 grouped = df_all.groupby("system_type")[[
     "episode_energy_total_Wh",
     "avg_power_total_W"
@@ -193,7 +310,7 @@ plt.title("Mean Energy and Power per System")
 plt.savefig(FIG_DIR / "mean_comparison.png")
 plt.close()
 
-# Plot 5: Efficiency
+# Boxplot: Efficiency
 
 df_all["efficiency"] = df_all["episode_energy_total_Wh"] / df_all["episode_total_time_s"]
 

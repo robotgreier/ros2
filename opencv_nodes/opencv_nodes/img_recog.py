@@ -294,6 +294,8 @@ class ImgRecog(Node):
 
         self.reset_pending = False
 
+        self.episode_end_sent = False
+
         self.delivered_item_ids.clear()
         self.held_item_id = None
         self.locked_item_id = None
@@ -312,7 +314,9 @@ class ImgRecog(Node):
     def _valid_ids_for_state(self) -> set:
         # During reset delay, ignore all targets
         if self.reset_pending:
+            self.get_logger().warn("RESET ACTIVE: ignoring all ArUco detections")
             return set()
+            
 
         if self.current_state in (SEARCH_ITEM, APPROACH_ITEM):
             # Ignore items already delivered in this episode

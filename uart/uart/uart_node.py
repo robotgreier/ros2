@@ -19,6 +19,7 @@ from .protocol import (
     CMD_OUT,
     CMD_WEIGHT,
     CMD_ERR,
+    CMD_RESET,
 )
 
 from .spike_codec import pack_input_spikes, unpack_output_spikes
@@ -352,12 +353,21 @@ class UartBridgeNode(Node):
             self.publish_error("INIT not sent: no weights loaded")
             return
 
-        packet = build_packet(CMD_INIT, self.weights)
-
-        self.ser.write(packet)
+        # 1. Send RESET
+        self.publish_status("Sending CMD_RESET")
+        reset_packet = build_packet(CMD_RESET, [])
+        self.ser.write(reset_packet)
         self.ser.flush()
 
-        time.sleep(1.0)
+        time.sleep(0.5)  # allow FPGA to reset
+
+        # 2. Send INIT
+        self.publish_status("Sending CMD_INIT")
+        init_packet = build_packet(CMD_INIT, self.weights)
+        self.ser.write(init_packet)
+        self.ser.flush()
+
+        time.sleep(1.0)  # allow FPGA to load weights
 
         self.initialized = True
 

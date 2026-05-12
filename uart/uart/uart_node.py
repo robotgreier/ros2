@@ -316,7 +316,13 @@ class UartBridgeNode(Node):
             elapsed = (self.get_clock().now() - self.wait_start_time).nanoseconds / 1e9
 
             if elapsed > self.dopamine_timeout_sec:
-                self.publish_error("Timed out waiting for dopamine reward")
+                self.publish_error(
+                    "Timed out waiting for dopamine reward — sending neutral dopamine 0"
+                )
+
+                # Fallback: still send exactly one dopamine packet for this FPGA OUT
+                self.send_packet(CMD_DOPAMINE, [0])
+
                 self.waiting_for_dopamine = False
                 self.state = STATE_READY
                 self.wait_start_time = None

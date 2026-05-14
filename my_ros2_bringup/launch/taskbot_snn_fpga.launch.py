@@ -209,8 +209,8 @@ def generate_launch_description():
 
         Node(
             package='power_monitor',
-            executable='power_logger',
-            name='power_logger',
+            executable='snn_logger_node',
+            name='snn_logger_node',
             output='screen'
         ),
 

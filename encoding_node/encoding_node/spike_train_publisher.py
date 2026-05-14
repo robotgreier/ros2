@@ -46,7 +46,7 @@ class SpikeTrainPublisher(Node):
         self.start_time = self.now()
 
         # ---- System size ----
-        self.num_neurons = 26   # remember to adjust according to the system (see my_ros2_bringup/config-> params.yaml)
+        self.num_neurons = 27   # remember to adjust according to the system (see my_ros2_bringup/config-> params.yaml)
         self.spike_prob = 0.1
 
         # Reproducibility

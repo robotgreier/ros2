@@ -7,7 +7,7 @@ from std_msgs.msg import UInt8MultiArray, String
 
 class SpikeTrainPublisher(Node):
     """
-    Publishes spike trains to /snn/input for controlled energy testing.
+    Publishes spike trains to /snn/input for controlled snn energy measurements on the different snn implementations.
 
     Phases:
     1. idle_pre  (zeros)
@@ -36,17 +36,17 @@ class SpikeTrainPublisher(Node):
         )
 
         # ---- Timing ----
-        self.freq = 15.0
+        self.freq = 15.0                # Same frequence as fps on camera
         self.period = 1.0 / self.freq
 
-        self.idle_pre_duration = 30.0
-        self.active_duration = 60.0
-        self.idle_post_duration = 30.0
+        self.idle_pre_duration = 30.0   # 0.5 min
+        self.active_duration = 300.0    # 5.0 min
+        self.idle_post_duration = 30.0  # 0.5 min
 
         self.start_time = self.now()
 
         # ---- System size ----
-        self.num_neurons = 26
+        self.num_neurons = 26   # remember to adjust according to the system (see my_ros2_bringup/config-> params.yaml)
         self.spike_prob = 0.1
 
         # Reproducibility

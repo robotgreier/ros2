@@ -30,6 +30,7 @@ setup(
             'system_power_node = power_monitor.system_power_node:main',
             'fpga_power_node = power_monitor.fpga_power_node:main',
             'power_logger = power_monitor.power_logger_node:main',
+            'snn_logger_node = power_monitor.snn_logger_node:main',
         ],
     },
 )

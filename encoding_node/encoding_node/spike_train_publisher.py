@@ -1,27 +1,37 @@
+
 import rclpy
 from rclpy.node import Node
 import numpy as np
-from std_msgs.msg import UInt8MultiArray
+from std_msgs.msg import UInt8MultiArray, String
 
 
 class SpikeTrainPublisher(Node):
     """
-    Publishes spike trains to /snn/input for controlled energy testing of SNN network on FPGA and CPU.
+    Publishes spike trains to /snn/input for controlled energy testing.
 
     Phases:
-    1. Idle (all zeros)
-    2. Active (random spikes)
-    3. Idle (all zeros)
-
-    Keeps constant publish rate to avoid triggering idle timeout in snn_node.
+    1. idle_pre  (zeros)
+    2. active    (random spikes)
+    3. idle_post (zeros)
     """
 
     def __init__(self):
         super().__init__('spike_train_publisher')
 
-        self.publisher_ = self.create_publisher(
+        # ---- Logging helpers ----
+        self.last_logged_sec = -1
+        self.total_spikes = 0
+
+        # ---- Publishers ----
+        self.spike_pub = self.create_publisher(
             UInt8MultiArray,
             '/snn/input',
+            10
+        )
+
+        self.phase_pub = self.create_publisher(
+            String,
+            '/experiment/phase',
             10
         )
 
@@ -29,16 +39,14 @@ class SpikeTrainPublisher(Node):
         self.freq = 15.0
         self.period = 1.0 / self.freq
 
-        self.idle_pre_duration = 30.0   # seconds
-        self.active_duration = 60.0     # seconds
-        self.idle_post_duration = 30.0  # seconds
+        self.idle_pre_duration = 30.0
+        self.active_duration = 60.0
+        self.idle_post_duration = 30.0
 
         self.start_time = self.now()
 
-        # ---- Match parameters to system ----
-        self.num_neurons = 26 
-
-        # Spike probability (can tune)
+        # ---- System size ----
+        self.num_neurons = 26
         self.spike_prob = 0.1
 
         # Reproducibility
@@ -49,7 +57,7 @@ class SpikeTrainPublisher(Node):
         self.get_logger().info("SpikeTrainPublisher started")
 
     def now(self):
-        return self.get_clock().now().nanoseconds / 1e9
+        return self.get_clock().now().nanoseconds * 1e-9
 
     def get_phase(self, t):
         if t < self.idle_pre_duration:
@@ -66,25 +74,35 @@ class SpikeTrainPublisher(Node):
         phase = self.get_phase(t)
 
         if phase == "done":
-            self.get_logger().info("Experiment finished")
+            self.get_logger().info(
+                f"Experiment finished. Total spikes: {self.total_spikes}"
+            )
             self.timer.cancel()
             return
 
-        # ---- Generate spikes based on phase ----
+        # ---- Publish phase ----
+        phase_msg = String()
+        phase_msg.data = phase
+        self.phase_pub.publish(phase_msg)
+
+        # ---- Generate spikes ----
         if phase.startswith("idle"):
             spikes = np.zeros(self.num_neurons, dtype=np.uint8)
-
-        elif phase == "active":
+        else:
             spikes = (np.random.rand(self.num_neurons) < self.spike_prob).astype(np.uint8)
 
-        # ---- Publish ----
+        self.total_spikes += int(spikes.sum())
+
+        # ---- Publish spikes ----
         msg = UInt8MultiArray()
         msg.data = spikes.tolist()
-        self.publisher_.publish(msg)
+        self.spike_pub.publish(msg)
 
-        # Optional: log transitions
-        if int(t) % 10 == 0:  # log every 10 sec
+        # ---- Clean logging every 10 seconds ----
+        current_sec = int(t)
+        if current_sec % 10 == 0 and current_sec != self.last_logged_sec:
             self.get_logger().info(f"Phase: {phase}, t={t:.1f}s")
+            self.last_logged_sec = current_sec
 
 
 def main():

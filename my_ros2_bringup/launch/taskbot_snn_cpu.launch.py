@@ -206,13 +206,13 @@ def generate_launch_description():
 #            output='screen'
 #        ),
 
-        # Encoding node
+        # Spike train publisher (synthetic, deterministic SNN workload)
         Node(
             package='encoding_node',
             executable='spike_train_publisher',
             name='spike_train_publisher',
             output='screen',
-            parameters=[p('encoding_node')],
+            parameters=[p('spike_train_publisher')],
         ),
 
     ])

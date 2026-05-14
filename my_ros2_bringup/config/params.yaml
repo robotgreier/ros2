@@ -22,6 +22,22 @@ encoding_node:
     proximity_dist_max_m: 1.0
     aruco_n_bins: *aruco_n_bins
 
+# ── Spike train publisher (SNN energy measurement workload) ────────────────────
+# Deterministic spike source used in place of the real encoder for FPGA-vs-CPU
+# energy comparisons. Keep seed/durations identical between runs so both
+# backends see the same workload.
+spike_train_publisher:
+  ros__parameters:
+    output_topic: "/snn/input"
+    phase_topic: "/experiment/phase"
+    freq: 15.0                  # Hz, matches camera fps in the real pipeline
+    num_neurons: 26             # must match the SNN input layer size under test
+    spike_prob: 0.1             # per-neuron, per-tick spike probability during "active"
+    idle_pre_duration: 30.0     # s, baseline window before active
+    active_duration: 300.0      # s, measurement window
+    idle_post_duration: 30.0    # s, baseline window after active
+    seed: 42                    # fixed RNG seed — keep identical across FPGA and CPU runs
+
 # ── Keypoint grid node ─────────────────────────────────────────────────────────
 img_kp_grid:
   ros__parameters:

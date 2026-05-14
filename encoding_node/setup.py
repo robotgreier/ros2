@@ -25,7 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'encoding_node = encoding_node.encoding_node:main',
-            'spike_train_publisher = encoding_node.spike_train_node:main',
+            'spike_train_publisher = encoding_node.spike_train_publisher:main',
         ],
     },
 )

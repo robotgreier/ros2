@@ -67,7 +67,7 @@ class WeightsLogger(Node):
             if response.success:
                 self.get_logger().info(f"Episode weight save successful: {response.message}")
 
-                # ---- NEW: update current weights file ----
+                # update current weights file
                 req_current = SaveWeights.Request()
                 req_current.filename = "weights_current.mem"
 

@@ -225,7 +225,7 @@ class EncodingNode(Node):
         # store in channels
         self.channels["aruco_dir"] = code
 
-        # NEW: publish for reward node
+        # publish for reward node
         msg = UInt8MultiArray()
         msg.data = code
         self.aruco_dir_pub.publish(msg)

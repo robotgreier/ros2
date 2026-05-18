@@ -3,7 +3,7 @@ import csv
 import os
 
 # ==============================================================================
-# SNN CORE CLASSES (Configured with User Parameters)
+# SNN CORE CLASSES
 # ==============================================================================
 
 class Layer:
@@ -11,7 +11,7 @@ class Layer:
         self.n_outputs = n_outputs
         self.n_inputs = n_inputs
         
-        # Neuron parameters (updated to your specific request)
+        # Neuron parameters
         self.decay     = neuron_params['decay']
         self.threshold = neuron_params['threshold']
         self.reset_val = neuron_params['reset']

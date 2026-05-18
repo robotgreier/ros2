@@ -143,7 +143,7 @@ class OccupancyGridNode(Node):
                 center_y = msg.data[base_idx + 2]
                 
                 # Determine object type based on marker ID
-                # This should match your aruco_detector object_database
+                # This should match the aruco_detector object_database
                 object_info = self.get_object_info(marker_id)
                 
                 detection = {

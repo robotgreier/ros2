@@ -250,8 +250,7 @@ class ArucoObjectDetector:
             return target, 'approach_object'
         
         elif current_task == 'deliver':
-            # This would require knowing what object we're carrying
-            # For now, return None - implement based on your state machine
+            # Requires knowing what object is being carried; not yet implemented
             return None, None
         
         return None, None

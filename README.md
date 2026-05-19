@@ -3,4 +3,4 @@
 
 >
 >## Launch files -> my_ros2_bringup -> launch
->Terminal command: ros2 launch my_ros2_bringup <launchfilename>.launch.py
+>Terminal command: ros2 launch my_ros2_bringup launchfilename.launch.py

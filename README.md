@@ -41,9 +41,9 @@
 --FPGA measurements: power_monitor -> fpga_power_node  
 --Logging of measurements: power_monitor -> power_logger_node  
 >  
--Python LIF SNN
---Software emulation: python_snn_node -> snn_node
+-Python LIF SNN  
+--Software emulation: python_snn_node -> snn_node  
 >
--LIF SNN reward system
---Dopamine logic tuning: dopamine_reward_node -> dopamine_logic
---Dopamine reward: dopamine_reward_node -> dopamine_reward_node
+-LIF SNN reward system  
+--Dopamine logic tuning: dopamine_reward_node -> dopamine_logic  
+--Dopamine reward: dopamine_reward_node -> dopamine_reward_node  
